@@ -1,0 +1,7 @@
+# só entra no build o que a imagem usa: pyproject.toml, uv.lock, src/ e docker/
+*
+!pyproject.toml
+!uv.lock
+!src/
+!docker/
+**/__pycache__

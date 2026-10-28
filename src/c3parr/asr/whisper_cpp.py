@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from c3parr.asr.faster_whisper import FasterWhisperConfig, flags_for, merge_tokens
 from c3parr.audio.ffmpeg import normalize_lang
@@ -35,6 +35,12 @@ from c3parr.interfaces.transcription import AudioRef, TranscriptionRequest
 from c3parr.providers.base import Health, ModelDownload, ProviderInfo, Requirements
 
 log = logging.getLogger("c3parr.asr")
+
+
+def default_cache_dir() -> Path:
+    """O mesmo cache do `Settings` (variável `C3PARR_CACHE_DIR`), sem carregar o `Settings`."""
+    env = os.environ.get("C3PARR_CACHE_DIR")
+    return Path(env).expanduser() if env else Path.home() / ".cache" / "c3parr"
 MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{name}.bin"
 VAD_URL = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
 SPEED_FILE = "whisper-cpp-speed.json"
@@ -45,7 +51,8 @@ _PROGRESS = re.compile(r"progress\s*=\s*(\d+)%")
 class WhisperCppConfig(BaseModel):
     binary: str = "whisper-cli"
     model: str = "large-v3-turbo-q8_0"
-    model_dir: Path = Path.home() / ".cache" / "c3parr" / "models"
+    model_dir: Path = Field(default_factory=lambda: default_cache_dir() / "models")
+    """No cache do c3parr (`C3PARR_CACHE_DIR`): no Docker, fica no volume ao atualizar."""
     device: Literal["auto", "cpu"] = "auto"
     """`auto`: o acelerador com que o binário foi feito (Metal, Vulkan, CUDA); `cpu`: força CPU."""
     threads: int = 0

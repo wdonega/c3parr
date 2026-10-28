@@ -1,0 +1,175 @@
+# Builds the c3parr image in two variants (cuda, vulkan) for x86 (linux/amd64) and ARM
+# (linux/arm64), publishes them to ghcr.io/wdonega/c3parr and creates a GitHub Release.
+# N = number of commits up to this one, so it grows with the history (same scheme as bigos-image):
+#   cuda (the default)  revN, revN-cuda, latest, latest-cuda, 1.0.N, 1.0.N-cuda
+#   vulkan              revN-vulkan, latest-vulkan, 1.0.N-vulkan
+#   release             v1.0.N (git tag + GitHub Release with the changes since the previous one)
+# Each tag is a multi-arch manifest: docker pulls the amd64 or arm64 image by itself.
+# Every variant/arch builds on a native runner: nvcc under QEMU emulation would take hours.
+# Pull requests only build. To start a new line (1.1.N, 2.0.N…) change VERSION_PREFIX below.
+name: Docker image
+
+# Documentation-only changes (README, docs/, other .md files) don't build, publish or release.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
+      - "LICENSE"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".gitignore"
+      - "LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: write # the release and its git tag
+  packages: write
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  VERSION_PREFIX: "1.0"
+
+jobs:
+  revision:
+    runs-on: ubuntu-latest
+    outputs:
+      n: ${{ steps.rev.outputs.n }}
+      version: ${{ steps.rev.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history: N counts the commits.
+          fetch-depth: 0
+      - id: rev
+        run: |
+          n=$(git rev-list --count HEAD)
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION_PREFIX.$n" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: revision
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [cuda, vulkan]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+
+      # The CUDA devel image plus the build need more than the runner's free disk.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # One tag per variant and arch (revN-cuda-arm64…); the publish job joins them into the
+      # multi-arch tags that people pull.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          build-args: VARIANT=${{ matrix.variant }}
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          tags: ${{ env.IMAGE }}:rev${{ needs.revision.outputs.n }}-${{ matrix.variant }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.revision.outputs.version }}
+            org.opencontainers.image.title=c3parr (${{ matrix.variant }})
+          cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }},mode=max
+
+  publish:
+    needs: [revision, build]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant: [cuda, vulkan]
+    steps:
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Multi-arch tags
+        env:
+          N: ${{ needs.revision.outputs.n }}
+          VERSION: ${{ needs.revision.outputs.version }}
+          VARIANT: ${{ matrix.variant }}
+          DEFAULT_BRANCH: ${{ github.ref_name == github.event.repository.default_branch }}
+        run: |
+          tags="rev$N-$VARIANT $VERSION-$VARIANT"
+          [ "$DEFAULT_BRANCH" = "true" ] && tags="$tags latest-$VARIANT"
+          if [ "$VARIANT" = "cuda" ]; then # cuda is the default: also the bare tags
+            tags="$tags rev$N $VERSION"
+            [ "$DEFAULT_BRANCH" = "true" ] && tags="$tags latest"
+          fi
+          args=""
+          for t in $tags; do args="$args -t $IMAGE:$t"; done
+          docker buildx imagetools create $args \
+            "$IMAGE:rev$N-$VARIANT-amd64" "$IMAGE:rev$N-$VARIANT-arm64"
+          docker buildx imagetools inspect "$IMAGE:rev$N-$VARIANT"
+
+  release:
+    needs: [revision, publish]
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      # Tags created with GITHUB_TOKEN don't trigger workflows, so this doesn't loop.
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.revision.outputs.version }}
+          N: ${{ needs.revision.outputs.n }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "$tag already exists (re-run of the same commit): nothing to do"
+            exit 0
+          fi
+          printf '%s\n' \
+            "Docker images for x86 (amd64) and ARM (arm64):" \
+            "" \
+            '```bash' \
+            "# NVIDIA (RTX 20xx-50xx, Jetson Orin/Thor, DGX Spark): the default" \
+            "docker pull $IMAGE:$VERSION          # also rev$N, rev$N-cuda, latest, latest-cuda" \
+            "" \
+            "# AMD, Intel and others through Vulkan (Mesa)" \
+            "docker pull $IMAGE:$VERSION-vulkan   # also rev$N-vulkan, latest-vulkan" \
+            '```' \
+            "" \
+            "Without a GPU both transcribe on the CPU; a cloud LLM is the recommended translator." \
+            "" \
+            "Commit: $GITHUB_SHA" > notes.md
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file notes.md --generate-notes --latest

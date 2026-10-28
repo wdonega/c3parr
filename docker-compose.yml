@@ -1,0 +1,29 @@
+# Exemplo: c3parr ao lado do Radarr/Sonarr/Bazarr. Monte a mídia no MESMO caminho que o Radarr e o
+# Sonarr usam (aqui /data/media), assim não precisa de Path Mappings. Depois abra
+# http://<host>:8484/settings/library/radarr e coloque o endereço e a API key de cada um.
+services:
+  c3parr:
+    # NVIDIA (o padrão). Para AMD/Intel use ghcr.io/wdonega/c3parr:latest-vulkan e o bloco abaixo.
+    image: ghcr.io/wdonega/c3parr:latest
+    container_name: c3parr
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    environment:
+      PUID: "1000" # o mesmo usuário dos arquivos do Radarr/Sonarr
+      PGID: "1000"
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./c3parr:/config # banco, configs, chaves e modelos do whisper.cpp (~900 MB)
+      - /data/media:/data/media # a legenda é gravada ao lado do vídeo
+    # NVIDIA (precisa do nvidia-container-toolkit no host)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # AMD/Intel com a imagem latest-vulkan: troque o bloco deploy acima por
+    # devices:
+    #   - /dev/dri:/dev/dri
