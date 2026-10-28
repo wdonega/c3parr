@@ -1,0 +1,332 @@
+{% extends "base.html" %}{% block content %}
+<script src="/static/settings.js" defer></script>
+<form data-settings hx-post="/settings/{{ page }}" hx-target="#toast" hx-swap="outerHTML">
+<nav class="wrap">
+  <button type="submit"><i>save</i><span>Save</span></button>
+  <button type="reset" class="border"><i>undo</i><span>Discard</span></button>
+</nav>
+
+{% macro secret(name, label, hidden=True) %}
+<div class="field label {{ 'suffix ' if hidden }}border round top-margin">
+  <input type="{{ 'password' if hidden else 'text' }}" name="{{ name }}" autocomplete="off" placeholder=" " value="{{ secret_values.get(name, '') }}">
+  <label>{{ label }}{% if secret_state[name] == "environment" %} (from .env){% endif %}</label>
+  {% if hidden %}<i class="front" role="button" tabindex="0" title="Show" data-reveal>visibility</i>{% endif %}
+</div>
+{% endmacro %}
+
+{% if page == "library" %}
+{% set a = config[tab] %}{% set name = tab | capitalize %}{% set items = "movies" if tab == "radarr" else "series" %}
+{% macro arrswitch(field, label, help="") %}
+<div class="row top-margin top-align">
+  <label class="switch"><input type="checkbox" name="{{ tab }}_{{ field }}" value="1" {% if a[field] %}checked{% endif %}><span></span></label>
+  <div class="max"><div>{{ label }}</div>{% if help %}<div class="small-text outline-text">{{ help }}</div>{% endif %}</div>
+</div>
+{% endmacro %}
+<div class="tabs left-align top-margin">
+  {% for k in ["radarr", "sonarr"] %}<a href="/settings/library/{{ k }}" class="{% if k == tab %}active{% endif %}">
+    <i class="tiny {{ 'primary-text' if config[k].enabled else 'outline-text' }}">{{ 'check_circle' if config[k].enabled else 'radio_button_unchecked' }}</i><span>{{ k | capitalize }}</span></a>{% endfor %}
+</div>
+<article class="round top-margin">
+  <h6 class="small">Use {{ name }}</h6>
+  <p class="small-text">c3parr reads its {{ items }} from {{ name }}, like Bazarr does: {{ name }} keeps the metadata and the file names in order.
+    The <b>Sync with {{ name }}</b> task runs every {{ config.sync_interval_minutes }} minutes and right after you save.</p>
+  {{ arrswitch("enabled", "Enabled") }}
+</article>
+<article class="round top-margin">
+  <h6 class="small">Host</h6>
+  <div class="field label border round">
+    <input name="{{ tab }}_host" value="{{ a.host }}" placeholder=" "><label>Address</label>
+    <span class="helper">Hostname or IP ({{ tab }}, 192.168.1.10), or the full URL (https://{{ tab }}.example.com)</span>
+  </div>
+  <div class="grid small-space top-margin">
+    <div class="s12 m4 field label border round"><input type="number" name="{{ tab }}_port" min="1" max="65535" value="{{ a.port or '' }}" placeholder=" "><label>Port</label></div>
+    <div class="s12 m4 field label border round"><input name="{{ tab }}_base_url" value="{{ a.base_url }}" placeholder=" "><label>Base URL</label></div>
+    <div class="s12 m4 field label suffix border round">
+      <select name="{{ tab }}_timeout_s">{% for t in [30, 60, 120, 300] %}<option value="{{ t }}" {% if a.timeout_s == t %}selected{% endif %}>{{ t }} s</option>{% endfor %}</select>
+      <label>HTTP timeout</label><i>arrow_drop_down</i>
+    </div>
+  </div>
+  {{ secret(arr_keys[tab], "API key (" ~ name ~ " → Settings → General)") }}
+  {{ arrswitch("ssl", "SSL", "Ignored when the address is a full URL.") }}
+  <nav class="top-margin"><button type="button" class="border" hx-post="/settings/test/{{ tab }}" hx-include="closest form"
+    hx-target="#toast" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next progress"><i>network_check</i><span>Test connection</span></button>
+    <progress class="circle small htmx-indicator"></progress></nav>
+</article>
+<article class="round top-margin">
+  <h6 class="small">Options</h6>
+  {{ arrswitch("only_monitored", "Only monitored " ~ ("movies" if tab == "radarr" else "series and episodes"),
+               "What is not monitored in " ~ name ~ " stays out of c3parr.") }}
+  <div class="field label border round top-margin">
+    <input name="{{ tab }}_excluded_tags" value="{{ a.excluded_tags | join(', ') }}" placeholder=" "><label>Excluded tags</label>
+    <span class="helper">Comma separated, as written in {{ name }} (case sensitive). {{ items | capitalize }} with them stay out.</span>
+  </div>
+  {% if tab == "sonarr" %}
+  <div class="top-margin small-text">Excluded series types</div>
+  <nav class="wrap small-space">{% for t in series_types %}<label class="checkbox"><input type="checkbox" name="sonarr_excluded_series_types" value="{{ t }}" {% if t in a.excluded_series_types %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</nav>
+  {{ arrswitch("exclude_season_zero", "Exclude season zero (extras)") }}
+  {% endif %}
+</article>
+<article class="round top-margin">
+  <h6 class="small">Path Mappings</h6>
+  <p class="small-text">Only when {{ name }} and c3parr see the same files under different paths (different hosts or container volumes):
+    the start of the {{ name }} path is replaced by the c3parr one. If both see the same paths, leave it empty.</p>
+  <div id="{{ tab }}-maps">
+    {% for remote, local in a.path_mappings %}
+    <div class="row map-row">
+      <div class="field label border round max"><input name="{{ tab }}_map_remote" value="{{ remote }}" placeholder=" "><label>{{ name }} path</label></div>
+      <i>arrow_forward</i>
+      <div class="field label border round max"><input name="{{ tab }}_map_local" value="{{ local }}" placeholder=" "><label>c3parr path</label></div>
+      <button type="button" class="transparent circle" title="Remove" onclick="this.closest('.map-row').remove()"><i>delete</i></button>
+    </div>
+    {% endfor %}
+  </div>
+  <template id="{{ tab }}-map-row">
+    <div class="row map-row">
+      <div class="field label border round max"><input name="{{ tab }}_map_remote" placeholder=" "><label>{{ name }} path</label></div>
+      <i>arrow_forward</i>
+      <div class="field label border round max"><input name="{{ tab }}_map_local" placeholder=" "><label>c3parr path</label></div>
+      <button type="button" class="transparent circle" title="Remove" onclick="this.closest('.map-row').remove()"><i>delete</i></button>
+    </div>
+  </template>
+  <nav class="top-margin"><button type="button" class="border" onclick="document.getElementById('{{ tab }}-maps').append(document.getElementById('{{ tab }}-map-row').content.cloneNode(true))">
+    <i>add</i><span>Add</span></button></nav>
+</article>
+<article class="round top-margin">
+  <h6 class="small">Both</h6>
+  <div class="row top-margin top-align">
+    <label class="switch icon"><input type="checkbox" name="monitor_new" value="1" {% if config.monitor_new %}checked{% endif %}>
+      <span><i>bookmark</i></span></label>
+    <div class="max"><div>Monitor new movies and shows</div>
+      <div class="small-text outline-text">Items that show up in Radarr/Sonarr get their missing subtitles in the routine.</div></div>
+  </div>
+  <div class="field label border round top-margin">
+    <input type="number" name="sync_interval_minutes" min="5" value="{{ config.sync_interval_minutes }}" placeholder=" "><label>Sync with Radarr and Sonarr every (minutes)</label>
+  </div>
+</article>
+
+{% elif page == "integrations" %}
+<article class="round top-margin">
+  <h6 class="small">LLM (translation)</h6>
+  <p class="small-text">Translates the subtitles and builds the bible (characters, gender, formality). A cloud provider receives the subtitle text.</p>
+  <div class="field label suffix border round">
+    <select name="llm_provider" id="llm-provider" onchange="llmChanged()">
+      {% for v, l in llm_providers %}<option value="{{ v }}" data-model="{{ llm_defaults[v][1] }}" data-key="{{ llm_keys[v] }}" data-site="{{ llm_sites.get(v, "") }}" data-effort="{{ "1" if v in llm_effort_flavors else "" }}" {% if config.llm_provider == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select><label>Provider</label><i>arrow_drop_down</i>
+  </div>
+  <p class="small-text" id="llm-site"><a class="link" target="_blank" rel="noopener" href="#"><span></span> <i class="tiny">open_in_new</i></a></p>
+  <div class="field label border round" id="llm-url-field">
+    <input name="llm_base_url" value="{{ config.llm_base_url or llm_defaults["custom"][0] }}" placeholder=" "><label>URL (OpenAI-compatible, ends in /v1){% if llm_url_from_env %} (from .env){% endif %}</label>
+  </div>
+  <div class="field label border round">
+    <input name="llm_model" id="llm-model" value="{{ config.llm_model or llm_defaults[config.llm_provider][1] }}" placeholder=" "><label>Model<span id="llm-model-env">{% if llm_model_from_env %} (from .env){% endif %}</span></label>
+  </div>
+  <div class="field label suffix border round" id="llm-effort-field">
+    <select name="llm_effort">
+      {% for v, l in [("low", "Low (cheaper, same quality in our test)"), ("medium", "Medium")] %}<option value="{{ v }}" {% if config.llm_effort == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select><label>Reasoning effort</label><i>arrow_drop_down</i>
+  </div>
+  {% for v, l in llm_providers %}<div class="llm-key" data-provider="{{ v }}">{{ secret(llm_keys[v], "API key" if v != "custom" else "API key (optional)") }}</div>{% endfor %}
+  <nav class="top-margin"><button type="button" class="border" hx-post="/settings/test/llm" hx-include="closest form"
+    hx-target="#toast" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next progress"><i>network_check</i><span>Test connection</span></button>
+    <progress class="circle small htmx-indicator"></progress></nav>
+  <script>
+  let llmPrev = null;
+  function llmChanged() {
+    const sel = document.getElementById("llm-provider");
+    const v = sel.value, opt = sel.options[sel.selectedIndex];
+    document.getElementById("llm-url-field").style.display = v === "custom" ? "" : "none";
+    // trocou de provedor: o modelo padrão do anterior vira o padrão do novo; um modelo escolhido à mão fica
+    const model = document.getElementById("llm-model");
+    const prevDefault = llmPrev && sel.querySelector('option[value="' + llmPrev + '"]').dataset.model;
+    if (llmPrev && (!model.value || model.value === prevDefault)) model.value = opt.dataset.model;
+    llmPrev = v;
+    // onde pegar a chave; no servidor próprio, o Ollama é o jeito mais fácil de subir um
+    const site = document.getElementById("llm-site"), link = site.querySelector("a");
+    link.href = opt.dataset.site || "#";
+    link.querySelector("span").textContent = v === "custom" ? "No server yet? Ollama runs one locally"
+      : "Get an API key at " + (opt.dataset.site || "").replace(/^https:\/\/|\/$/g, "");
+    site.style.display = opt.dataset.site ? "" : "none";
+    document.getElementById("llm-effort-field").style.display = opt.dataset.effort ? "" : "none";
+    document.getElementById("llm-model-env").style.display = v === "custom" ? "" : "none";  // o .env só vale para o servidor próprio
+    document.querySelectorAll(".llm-key").forEach(el => { el.style.display = el.dataset.provider === v ? "" : "none"; });
+  }
+  llmChanged();
+  </script>
+</article>
+<article class="round top-margin">
+  <h6 class="small">Transcription (ASR)</h6>
+  <p class="small-text">Turns the audio into text when there is no usable subtitle. It can run here or on a separate server (another container, a machine with a GPU).</p>
+  <div class="field label suffix border round">
+    <select name="asr_mode" id="asr-mode" onchange="asrChanged()">
+      {% for v, l in [("local", "Local (this machine)"), ("openai", "Server: OpenAI-compatible"), ("asr-webservice", "Server: whisper-asr-webservice (as in Bazarr)")] %}<option value="{{ v }}" {% if config.asr_mode == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select><label>Where it runs</label><i>arrow_drop_down</i>
+  </div>
+  <p class="small-text asr-help" data-mode="local">Uses the engine in <a class="link" href="/settings/engines">Settings → Engines</a>. On the CPU it takes about 10 min or more per hour of video; with a GPU build of whisper.cpp, 1-2 min.</p>
+  <p class="small-text asr-help" data-mode="openai">Any server with <code>/v1/audio/transcriptions</code>: whisper.cpp (<code>ghcr.io/ggml-org/whisper.cpp:main-vulkan</code> running <code>whisper-server --inference-path /v1/audio/transcriptions</code>), speaches or LocalAI. The URL ends in /v1.</p>
+  <p class="small-text asr-help" data-mode="asr-webservice">The <code>onerahmet/openai-whisper-asr-webservice</code> image (<code>:latest-gpu</code> for NVIDIA). If Bazarr already uses one, point to the same server. The URL is the server root, e.g. http://whisper:9000.</p>
+  <div class="asr-remote">
+    <div class="field label border round">
+      <input name="asr_url" value="{{ config.asr_url }}" placeholder=" "><label>Server URL</label>
+    </div>
+    <div class="field label border round asr-openai">
+      <input name="asr_model" value="{{ config.asr_model }}" placeholder=" "><label>Model (empty = whisper-1)</label>
+    </div>
+    {{ secret("C3PARR_ASR_API_KEY", "API key (optional)") }}
+  </div>
+  <nav class="top-margin"><button type="button" class="border" hx-post="/settings/test/asr" hx-include="closest form"
+    hx-target="#toast" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next progress"><i>network_check</i><span>Test connection</span></button>
+    <progress class="circle small htmx-indicator"></progress></nav>
+  <script>
+  function asrChanged() {
+    const v = document.getElementById("asr-mode").value;
+    document.querySelectorAll(".asr-help").forEach(el => { el.style.display = el.dataset.mode === v ? "" : "none"; });
+    document.querySelector(".asr-remote").style.display = v === "local" ? "none" : "";
+    document.querySelector(".asr-openai").style.display = v === "openai" ? "" : "none";
+  }
+  asrChanged();
+  </script>
+</article>
+<article class="round top-margin">
+  <h6 class="small">TMDb (metadata)</h6>
+  <p class="small-text">Used in the first step of every item: the original language (which subtitle becomes the main one, which language the
+    transcription expects), the cast (right names in the translation), and season/episode.
+    {% if tmdb_builtin %}c3parr has its own key: leave the field empty to use it, or put yours (themoviedb.org → Settings → API).
+    {% else %}Get a read access token at themoviedb.org → Settings → API.{% endif %}</p>
+  {{ secret("TMDB_READ_ACCESS_TOKEN", "Read access token" ~ (" (empty = c3parr's key)" if tmdb_builtin and not secret_state["TMDB_READ_ACCESS_TOKEN"] else "")) }}
+  <p class="small-text outline-text row"><img class="tmdb-logo" src="/static/tmdb.svg" alt="TMDB"><span>{{ tmdb_attribution }}</span></p>
+  <nav class="top-margin"><button type="button" class="border" hx-post="/settings/test/tmdb" hx-include="closest form"
+    hx-target="#toast" hx-swap="outerHTML" hx-disabled-elt="this" hx-indicator="next progress"><i>network_check</i><span>Test connection</span></button>
+    <progress class="circle small htmx-indicator"></progress></nav>
+</article>
+
+{% elif page == "languages" %}
+{% macro picker(name, title, help, chosen) %}
+<article class="round top-margin">
+  <h6 class="small">{{ title }}</h6>
+  <p class="small-text">{{ help }}</p>
+  <div class="row wrap small-space lang-chips" id="{{ name }}-chips">
+    {% for code in chosen %}<span class="chip" data-code="{{ code }}"><span>{{ language_names.get(code, code) }} ({{ code }})</span>
+      <input type="hidden" name="{{ name }}" value="{{ code }}">
+      <i class="small" role="button" tabindex="0" title="Remove" onclick="removeLang(this)">close</i></span>{% endfor %}
+  </div>
+  <div class="row top-margin">
+    <div class="field label suffix border round max">
+      <select id="{{ name }}-pick">{% for code, label in languages %}<option value="{{ code }}">{{ label }} ({{ code }})</option>{% endfor %}</select>
+      <label>Language</label><i>arrow_drop_down</i>
+    </div>
+    <button type="button" class="border" onclick="addLang('{{ name }}')"><i>add</i><span>Add</span></button>
+  </div>
+</article>
+{% endmacro %}
+{{ picker("target_languages", "Target languages", "Every monitored item should end up with a subtitle in each of these. The first one is the main language of the interface.", config.target_languages) }}
+<article class="round top-margin">
+  <h6 class="small">Fallback languages</h6>
+  <p class="small-text">When there is no subtitle in the original language, the main subtitle comes from the first of these that exists
+    (embedded or next to the video). Codes in order of preference, separated by commas.</p>
+  <div class="field label border round">
+    <input name="fallback_languages" value="{{ config.fallback_languages | join(', ') }}" placeholder=" "><label>Language codes, in order (e.g. en, es, fr)</label>
+  </div>
+</article>
+<script>
+// o que já foi escolhido sai do dropdown, então "Add" sempre adiciona algo
+function syncPick(name) {
+  const pick = document.getElementById(name + "-pick");
+  const box = document.getElementById(name + "-chips");
+  const chosen = new Set([...box.querySelectorAll("[data-code]")].map(c => c.dataset.code));
+  for (const opt of pick.options) opt.hidden = opt.disabled = chosen.has(opt.value);
+  if (pick.selectedOptions[0]?.disabled) {
+    const first = [...pick.options].find(o => !o.disabled);
+    pick.value = first ? first.value : "";
+  }
+}
+function removeLang(icon) {
+  const chip = icon.closest(".chip"), name = chip.parentElement.id.replace(/-chips$/, "");
+  chip.remove(); syncPick(name);
+}
+function addLang(name) {
+  const pick = document.getElementById(name + "-pick");
+  const box = document.getElementById(name + "-chips");
+  const code = pick.value;
+  if (!code || box.querySelector('[data-code="' + code + '"]')) return;
+  const chip = document.createElement("span");
+  chip.className = "chip"; chip.dataset.code = code;
+  chip.innerHTML = '<span></span><input type="hidden"><i class="small" role="button" tabindex="0" title="Remove">close</i>';
+  chip.querySelector("span").textContent = pick.options[pick.selectedIndex].text;
+  const input = chip.querySelector("input"); input.name = name; input.value = code;
+  chip.querySelector("i").onclick = () => removeLang(chip.querySelector("i"));
+  box.appendChild(chip);
+  syncPick(name);
+}
+syncPick("target_languages");
+</script>
+
+{% elif page == "subtitles" %}
+{% macro switch(name, label, help) %}
+<div class="row top-margin top-align">
+  <label class="switch"><input type="checkbox" name="{{ name }}" value="1" {% if config[name] %}checked{% endif %}><span></span></label>
+  <div class="max"><div>{{ label }}</div>{% if help %}<div class="small-text outline-text">{{ help }}</div>{% endif %}</div>
+</div>
+{% endmacro %}
+<article class="round top-margin">
+  <h6 class="small">Sources</h6>
+  {{ switch("use_embedded", "Use embedded subtitles", "Text subtitles inside the video can become the main one. Image subtitles (PGS/VobSub) need OCR and are skipped.") }}
+  {{ switch("embedded_resolves", "An embedded subtitle covers its language", "No subtitle of ours is made for a language the video already has.") }}
+  {{ switch("external_resolves", "A subtitle from another source covers its language", "Subtitles next to the video (Bazarr, human) count; ours is named <video>.<lang>.c3parr.srt.") }}
+  {{ switch("forced_resolves", "Forced subtitles cover their language", "Forced subtitles only have signs and foreign lines; off by default.") }}
+</article>
+<article class="round top-margin">
+  <h6 class="small">When a new subtitle shows up</h6>
+  {{ switch("sync_new_external", "Sync it", "Fixes its timing against the audio (or the main subtitle).") }}
+  {{ switch("fix_external_in_place", "Write the fixed timing into the file itself", "Keeps a copy as <file>.orig.c3parr.") }}
+  {{ switch("delete_ours_on_human", "Delete ours in the same language", "Off: keep both tracks.") }}
+  {{ switch("new_external_becomes_main", "It becomes the main subtitle when it is a better source", "Human or embedded > generated from the audio.") }}
+  <div class="field label suffix border round top-margin">
+    <select name="derived_on_main_change">
+      {% for v, l in [("regenerate", "Regenerate the translations"), ("mark", "Mark them as outdated"), ("keep", "Keep them")] %}<option value="{{ v }}" {% if config.derived_on_main_change == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select><label>When the main subtitle changes</label><i>arrow_drop_down</i>
+  </div>
+</article>
+<article class="round top-margin">
+  <h6 class="small">Transcription and translation</h6>
+  {{ switch("asr_enabled", "Transcribe the audio when there is no subtitle", "Without this, items with no usable subtitle are left alone.") }}
+  {{ switch("asr_always", "Transcribe even when a subtitle exists", "More context for the translation; much slower.") }}
+  <div class="field label suffix border round top-margin">
+    <select name="foreign_tag">
+      {% for v, l in [("first", "On the first line of each stretch"), ("every", "On every line"), ("off", "Never")] %}<option value="{{ v }}" {% if config.foreign_tag == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select><label>Mark lines in another language ([em árabe])</label><i>arrow_drop_down</i>
+  </div>
+</article>
+<article class="round top-margin">
+  <h6 class="small">Automation</h6>
+  <p class="small-text">A monitored file waits this long after it shows up before the routine works on it, so a download or copy can finish first. Radarr/Sonarr imports and manual requests skip the wait and go ahead of the routine.</p>
+  <div class="field label border round">
+    <input type="number" name="wait_minutes" min="0" value="{{ config.wait_minutes }}" placeholder=" "><label>Wait time (minutes)</label>
+  </div>
+  <div class="field label border round">
+    <input type="number" name="search_interval_minutes" min="5" value="{{ config.search_interval_minutes }}" placeholder=" "><label>Process the library every (minutes)</label>
+  </div>
+</article>
+
+{% elif page == "engines" %}
+{% for iface in interfaces %}
+<article class="round top-margin">
+  <h6 class="small">{{ iface.label }}</h6>
+  <div class="field label suffix border round">
+    <select name="{{ iface.id }}">{% for p in iface.providers %}<option value="{{ p.id }}" {% if p.id == iface.selected %}selected{% endif %}>{{ p.id }}{% if p.description %} · {{ p.description }}{% endif %}</option>{% endfor %}</select>
+    <label>Provider</label><i>arrow_drop_down</i>
+  </div>
+</article>
+{% endfor %}
+{% endif %}
+</form>
+{# fora do formulário: os botões daqui não contam como alteração #}
+<dialog id="unsaved-dialog" class="round">
+  <h6>Unsaved changes</h6>
+  <p>You have <b data-count>changes</b> on this page. Leave without saving?</p>
+  <nav class="right-align">
+    <button type="button" class="border" data-stay>Stay</button>
+    <button type="button" class="border" data-discard>Discard</button>
+    <button type="button" data-save><i>save</i><span>Save and leave</span></button>
+  </nav>
+</dialog>
+{% endblock %}

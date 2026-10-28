@@ -1,0 +1,3 @@
+{% if pending %}<div class="badge" hx-get="/queue/count" hx-trigger="every 3s" hx-swap="outerHTML"
+  aria-label="{{ pending }} pending tasks">{{ pending }}</div>
+{%- else %}<span hx-get="/queue/count" hx-trigger="every 3s" hx-swap="outerHTML"></span>{% endif %}

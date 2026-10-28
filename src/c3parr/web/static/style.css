@@ -1,0 +1,39 @@
+/* Quase tudo vem do BeerCSS; aqui só o que ele não tem. */
+.spin { animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#detail { position: sticky; top: 1rem; }
+.wordmark { gap: .35rem; padding-block: .75rem; color: var(--primary); }
+.wordmark img { width: 2.25rem; height: 2.25rem; object-fit: contain; }
+.wordmark span { font-family: "Russo One", sans-serif; font-size: 1.6rem; letter-spacing: .02em; line-height: 1; }
+/* no menu expandido o contador fica à direita do item, como no Radarr */
+nav.left.max .badge { position: static; transform: none; margin-inline-start: auto; }
+/* subitens de Settings/System, indentados como no Bazarr */
+nav.left.max a.sub { min-block-size: 2.25rem; padding-block: .25rem; padding-inline-start: 3.25rem; font-size: .875rem; }
+nav.left.max a.sub.selected { color: var(--primary); }
+/* modo seleção das listas: as caixas e o botão de adicionar várias só aparecem nele */
+body:not(.selecting) .selection-only { display: none; }
+/* aviso some sozinho */
+#toast.active { animation: toast-out 4s forwards; }
+@keyframes toast-out { 85% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+.nowrap { white-space: nowrap; }
+/* respiro entre o topo da janela e o conteúdo */
+main.responsive { padding: 1rem 1.5rem 1.5rem 1rem; }
+/* cartão sempre com respiro (alguma regra do BeerCSS zerava o padding de alguns) */
+main article:not(.no-padding) { padding: 1rem; }
+/* campo vazio: o rótulo é dica, não conteúdo — menor, apagado e em itálico */
+.field.label > :is(input, textarea):placeholder-shown:not(:focus) ~ label {
+  color: var(--outline); font-style: italic; font-size: .875rem;
+}
+/* sub-bloco dentro de um cartão (ex.: Radarr e Sonarr) */
+.subblock { border: 1px solid var(--outline-variant); border-radius: .75rem; padding: .75rem 1rem; margin-top: .75rem; }
+.subblock > h6 { margin-top: 0; }
+/* números do dashboard */
+.stat { background: var(--surface-container-high); border-radius: .75rem; padding: .75rem 1rem; display: block; }
+.stat .label { font-size: .8rem; color: var(--on-surface-variant); }
+.stat .value { font-size: 1.6rem; line-height: 1.2; }
+/* o BeerCSS desliga o clique dos ícones dentro de chips; o × de remover precisa dele */
+.lang-chips .chip > i { pointer-events: auto; cursor: pointer; }
+/* logo do TMDb ao lado da atribuição (exigido pelos termos da API) */
+.tmdb-logo { height: .75rem; width: auto; vertical-align: middle; }
+/* diálogo modal: escurece a página atrás (o BeerCSS esconde o backdrop: opacity 0 e hidden) */
+dialog::backdrop { background: rgb(0 0 0 / .5); opacity: 1 !important; visibility: visible !important; }

@@ -1,0 +1,11 @@
+{# barra das listas: modo seleção (mostra as caixas e o botão de adicionar várias) #}
+<nav class="wrap">
+  <button class="border" type="button" onclick="document.body.classList.toggle('selecting')">
+    <i>checklist</i><span>Select</span></button>
+  <button class="selection-only" type="button" hx-post="/library/queue" hx-include="[name=item]:checked"
+          hx-target="#toast" hx-swap="outerHTML"><i>playlist_add</i><span>Add selected to queue</span></button>
+  <div class="max"></div>
+  {% set arr = "radarr" if section == "movies" else "sonarr" %}
+  <button class="transparent" type="button" hx-post="/system/tasks/sync_{{ arr }}/run" hx-target="#toast" hx-swap="outerHTML">
+    <i>sync</i><span>Sync with {{ arr | capitalize }}</span></button>
+</nav>

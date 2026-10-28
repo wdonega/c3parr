@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block content %}
+{% include "_library_toolbar.html" %}
+<article class="round no-padding top-margin">
+{% if rows %}
+<table class="stripes">
+  <thead><tr>
+    <th class="selection-only min"></th><th class="min"></th><th>Title</th><th>Subtitles</th><th class="min">Added</th><th class="min"></th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}{% set item = row.item %}
+  <tr>
+    <td class="selection-only min"><label class="checkbox"><input type="checkbox" name="item" value="movie:{{ item.id }}"><span></span></label></td>
+    <td class="min">{% with kind = "movie" %}{% include "_monitor.html" %}{% endwith %}</td>
+    <td><div>{{ item.title }}{% if item.year %} ({{ item.year }}){% endif %}</div><div class="small-text outline-text">{{ item.folder }}</div></td>
+    <td>{% include "_subs.html" %}</td>
+    <td class="min nowrap small-text">{{ item.added_at | when }}</td>
+    <td class="min">{% with item_key = "movie:" ~ item.id %}{% include "_add_button.html" %}{% endwith %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}{% with what = "movies", setting = "Movie folders" %}{% include "_empty_library.html" %}{% endwith %}{% endif %}
+</article>
+{% endblock %}

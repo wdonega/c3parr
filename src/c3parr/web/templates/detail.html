@@ -1,0 +1,31 @@
+<div
+  {%- if job.status in ('na_fila', 'processando') %} hx-get="/queue/{{ job.id }}" hx-trigger="every 2s" hx-target="#detail" hx-swap="innerHTML"{% endif %}>
+  <span class="chip {{ status_classes[job.status] }}"><i class="{% if job.status == 'processando' %}spin{% endif %}">{{ icons[job.status] }}</i><span>{{ job.label }}</span></span>
+  <h5 class="small">{{ job.name }}</h5>
+  <p class="small-text">{{ job.video }}</p>
+  <progress value="{{ (job.progresso * 100) | round(1) }}" max="100"></progress>
+  <div class="grid small-space top-margin">
+    <div class="s6"><div class="small-text">Step</div><div>{{ job.step_label }}</div></div>
+    <div class="s6"><div class="small-text">Added</div><div>{{ job.criada_em | when }}</div></div>
+    {% if job.iniciada_em %}<div class="s6"><div class="small-text">Started</div><div>{{ job.iniciada_em | when }}</div></div>{% endif %}
+    {% if job.terminada_em %}<div class="s6"><div class="small-text">Finished</div><div>{{ job.terminada_em | when }}</div></div>{% endif %}
+  </div>
+  {% if job.erro %}<article class="error-container round top-margin"><div class="row top-align"><i>error</i><span class="max">{{ job.erro }}</span></div></article>{% endif %}
+  {% for d in job.degradacoes %}<article class="tertiary round top-margin"><div class="row top-align"><i>warning</i>
+    <span class="max"><b>{{ labels.get(d.stage, d.stage) }}:</b> {{ d.reason }}{% if d.effect %}. {{ d.effect }}{% endif %}</span></div></article>{% endfor %}
+  <h6 class="small top-margin">Steps</h6>
+  <ul class="list">
+  {% for s in steps %}
+    <li>
+      <i class="{{ step_classes.get(s.state, 'outline-text') }}{% if s.state == 'running' %} spin{% endif %}">{{ step_icons.get(s.state, 'radio_button_unchecked') }}</i>
+      <div class="max"><div>{{ s.label }}</div><div class="small-text">{{ s.text }}</div></div>
+    </li>
+  {% endfor %}
+  </ul>
+  <nav class="wrap top-margin">
+    {% if job.legenda %}<a class="button" href="/queue/{{ job.id }}/subtitle"><i>download</i><span>Download subtitle</span></a>{% endif %}
+    {% if job.relatorio %}<a class="button secondary-container" href="/queue/{{ job.id }}/report" target="_blank"><i>description</i><span>Report</span></a>{% endif %}
+    {% if job.status in ('na_fila', 'processando') %}<button class="border error-text" hx-post="/queue/{{ job.id }}/cancel" hx-target="#detail" hx-swap="innerHTML"><i>cancel</i><span>Cancel</span></button>{% endif %}
+    {% if job.status in finished %}<button class="transparent" hx-post="/queue/{{ job.id }}/retry" hx-target="#detail" hx-swap="innerHTML"><i>replay</i><span>Run again</span></button>{% endif %}
+  </nav>
+</div>

@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% block content %}
+{# visão geral, no estilo da home do Lingarr: biblioteca, o que o c3parr fez, idiomas e problemas #}
+{% if alerts_open or warnings or setup %}
+<div class="grid small-space">
+  {% for s in setup %}<div class="s12 m6"><a class="stat tertiary-container row" href="{{ s.href }}"><i>settings_alert</i>
+    <span class="max">{{ s.title }}</span><i>chevron_right</i></a></div>{% endfor %}
+  {% if alerts_open %}<div class="s12 m6"><a class="stat error-container row" href="/system/alerts"><i>error</i>
+    <span class="max">{{ alerts_open }} open alert(s): failed steps wait for the next library run.</span><i>chevron_right</i></a></div>{% endif %}
+  {% for w in warnings %}<div class="s12 m6"><a class="stat tertiary-container row" href="/system/status"><i>warning</i>
+    <span class="max">{{ w.title }}</span><i>chevron_right</i></a></div>{% endfor %}
+</div>
+{% endif %}
+
+<article class="round top-margin">
+  <h6 class="small">Library</h6>
+  <div class="grid small-space">
+    {% for card in library_cards %}
+    <div class="s12 m6"><a class="stat" href="{{ card.href }}">
+      <div class="row">
+        <div class="max"><div class="label">{{ card.label }}</div><div class="value">{{ card.total }}</div></div>
+        <div class="right-align"><div class="label">With every subtitle</div><div class="value primary-text">{{ card.done }}</div></div>
+      </div>
+      <progress value="{{ card.done }}" max="{{ card.total or 1 }}"></progress>
+    </a></div>
+    {% endfor %}
+  </div>
+</article>
+
+<div class="grid small-space top-margin">
+  <article class="s12 l6 round">
+    <h6 class="small">Pipeline activity</h6>
+    <div class="grid small-space">
+      {% for label, value in activity %}
+      <div class="s6"><div class="stat"><div class="label">{{ label }}</div><div class="value">{{ value }}</div></div></div>
+      {% endfor %}
+    </div>
+    {% if made %}
+    <div class="small-text outline-text top-margin">Subtitles made by c3parr</div>
+    <div class="row wrap small-space">{% for lang, n in made %}<span class="chip primary"><i>smart_toy</i><span>{{ lang }} · {{ n }}</span></span>{% endfor %}</div>
+    {% endif %}
+  </article>
+  <article class="s12 l6 round">
+    <h6 class="small">Subtitles by language</h6>
+    {% if lang_rows %}
+    <table class="stripes">
+      <thead><tr><th>Language</th><th class="min">Embedded</th><th class="min">Other source</th><th class="min">c3parr</th><th class="min">Missing</th></tr></thead>
+      <tbody>
+      {% for row in lang_rows %}
+      <tr><td>{{ language_names.get(row.lang, row.lang) }} <span class="small-text outline-text">{{ row.lang }}</span>{% if row.target %} <i class="tiny primary-text" title="Target language">flag</i>{% endif %}</td>
+        <td class="min">{{ row.embedded or "" }}</td><td class="min">{{ row.human or "" }}</td><td class="min">{{ row.ours or "" }}</td>
+        <td class="min">{% if row.missing %}<span class="tertiary-text">{{ row.missing }}</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="small-text">Nothing indexed yet. Set the folders in <a class="link" href="/settings/library">Settings → Library</a>.</p>{% endif %}
+  </article>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+{# legendas por idioma: embutida, de outra fonte (humana/Bazarr) ou nossa (c3parr); o que falta em destaque #}
+{% for lang, kind in row.subs %}<span class="chip small {{ {'human': 'surface-container-highest', 'embedded': 'border', 'ours': 'primary'}[kind] }}"
+  title="{{ {'human': 'Subtitle from another source', 'embedded': 'Embedded in the video', 'ours': 'Made by c3parr'}[kind] }}">{% if kind == 'embedded' %}<i>movie</i>{% elif kind == 'ours' %}<i>smart_toy</i>{% endif %}<span>{{ lang }}</span></span>{% endfor %}
+{% for lang in row.missing %}<span class="chip small border tertiary-text" title="Missing {{ lang }} subtitle"><i>subtitles_off</i><span>{{ lang }}</span></span>{% endfor %}

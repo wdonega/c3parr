@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block content %}
+{% for w in warnings %}
+<article class="round {{ 'tertiary-container' if w.level == 'warn' else 'surface-container-high' }} bottom-margin">
+  <div class="row top-align"><i>{{ 'warning' if w.level == 'warn' else 'info' }}</i><div class="max"><div>{{ w.title }}</div><div class="small-text">{{ w.detail }}</div></div></div>
+</article>
+{% endfor %}
+<article class="round">
+  <h6 class="small">About</h6>
+  <div class="grid small-space">
+  {% for label, value in about %}<div class="s4 small-text outline-text">{{ label }}</div><div class="s8">{% if label == "TMDb" %}<img class="tmdb-logo" src="/static/tmdb.svg" alt="TMDB"> {% endif %}{{ value }}</div>{% endfor %}
+  </div>
+</article>
+<article class="round no-padding top-margin">
+  <h6 class="small padding">Providers in use</h6>
+  <table class="stripes">
+    <thead><tr><th>Interface</th><th>Provider</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for p in providers %}
+    <tr><td>{{ p.label }}</td><td>{{ p.provider }}</td>
+      <td>{% if p.ok %}<span class="green-text"><i class="small">check_circle</i> OK</span>{% else %}<span class="error-text"><i class="small">error</i> {{ p.detail }}</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+<article class="round no-padding top-margin">
+  <h6 class="small padding">Secrets</h6>
+  <table class="stripes"><tbody>
+  {% for name, present in secrets %}<tr><td>{{ name }}</td><td>{% if present %}<span class="green-text">set in {{ present }}</span>{% else %}<span class="outline-text">not set</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+</article>
+{% endblock %}

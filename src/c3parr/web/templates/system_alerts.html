@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% block content %}
+{# falhas da pipeline: um alerta por causa; repetição só atualiza contagem e horário #}
+{% if setup %}
+<article class="round tertiary-container">
+  <h6 class="small"><i>settings_alert</i> Setup needed</h6>
+  <p class="small-text">These stay here until they are configured.</p>
+  {% for s in setup %}
+  <div class="row top-margin">
+    <div class="max"><div>{{ s.title }}</div><div class="small-text">{{ s.detail }}</div></div>
+    <a class="button border small round" href="{{ s.href }}"><i>settings</i><span>Configure</span></a>
+  </div>
+  {% endfor %}
+</article>
+{% endif %}
+<article class="round no-padding{% if setup %} top-margin{% endif %}">
+{% if alerts %}
+<table class="stripes">
+  <thead><tr><th class="min"></th><th>Problem</th><th class="min">Times</th><th class="min">Last</th><th class="min">Items</th><th class="min"></th></tr></thead>
+  <tbody>
+  {% for a in alerts %}
+  <tr class="{{ 'outline-text' if a.resolved_at else '' }}">
+    <td class="min">{% if a.resolved_at %}<i class="green-text" title="Resolved {{ a.resolved_at | when }}">check_circle</i>
+      {% else %}<i class="error-text">error</i>{% if not a.seen %} <span class="chip small error">new</span>{% endif %}{% endif %}</td>
+    <td><div>{{ a.message }}</div><div class="small-text outline-text">{{ step_names.get(a.kind, a.kind) }} · {{ a.target }} · first {{ a.first_at | when }}</div></td>
+    <td class="min">{{ a.count }}</td>
+    <td class="min nowrap small-text">{{ a.last_at | when }}</td>
+    <td class="min small-text" title="{{ names.get(a.key, []) | join(', ') }}">{{ a.media_ids | length }}</td>
+    <td class="min">{% if not a.resolved_at %}<button class="border small round nowrap" hx-post="/system/alerts/retry" hx-vals='{"key": "{{ a.key }}"}'
+        hx-target="#toast" hx-swap="outerHTML"><i>replay</i><span>Retry now</span></button>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="center-align large-padding"><i class="extra green-text">check_circle</i><p>No alerts. Failed steps show up here and the next library run tries them again.</p></div>
+{% endif %}
+</article>
+{% endblock %}

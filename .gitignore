@@ -1,0 +1,15 @@
+# segredos
+.env
+.env.*
+
+# tudo que é só local (mídia com direitos autorais, specs, spikes, docs de trabalho)
+.local/
+.claude/
+
+# cache, modelos e artefatos
+.cache/
+.idea/
+models/
+__pycache__/
+.venv/
+.DS_Store

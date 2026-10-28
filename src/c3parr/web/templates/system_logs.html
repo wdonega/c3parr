@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block content %}
+<article class="round no-padding">
+<table class="stripes">
+  <thead><tr><th class="min">Level</th><th class="min">Time</th><th class="min">Component</th><th>Message</th></tr></thead>
+  {% include "_log_rows.html" %}
+</table>
+</article>
+{% endblock %}

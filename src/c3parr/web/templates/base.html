@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>c3parr</title>
+<link rel="icon" href="/static/favicon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap">
+<link rel="stylesheet" href="/static/themes/{{ theme }}.css">
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body class="dark">
+<nav class="left max l left-align">
+  <header class="row center-align wordmark"><img src="/static/favicon.png" alt=""><span>C3PARR</span></header>
+  {% with full = true %}{% include "_nav.html" %}{% endwith %}
+</nav>
+<nav class="left m">
+  <header class="center-align wordmark"><img src="/static/favicon.png" alt="c3parr"></header>
+  {% with full = false %}{% include "_nav.html" %}{% endwith %}
+</nav>
+<nav class="bottom s">
+  {% with full = false %}{% include "_nav.html" %}{% endwith %}
+</nav>
+<div class="snackbar" id="toast"></div>
+<main class="responsive max">{% block content %}{% endblock %}</main>
+</body>
+</html>

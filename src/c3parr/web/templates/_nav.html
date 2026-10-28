@@ -1,0 +1,15 @@
+{# menu lateral como no Bazarr: Settings e System abrem os subitens só quando a página é deles #}
+{% set groups = [
+  ("dashboard", "/dashboard", "dashboard", "Dashboard", []),
+  ("movies", "/movies", "movie", "Movies", []),
+  ("tv", "/tv", "tv", "TV Shows", []),
+  ("queue", "/queue", "list_alt", "Queue", []),
+  ("settings", "/settings/library", "settings", "Settings", settings_pages),
+  ("system", "/system/tasks", "monitor_heart", "System", system_pages),
+] %}
+{% for key, href, icon, label, subs in groups %}
+  <a href="{{ href }}" class="{% if section == key %}active{% endif %}"><i>{{ icon }}</i><span>{{ label }}</span>{% if key == "queue" %}{% include "badge.html" %}{% elif key == "system" and alerts_unseen %}<div class="badge error" title="{{ alerts_unseen }} alert(s) to look at">{{ alerts_unseen }}</div>{% endif %}</a>
+  {% if full and subs and section == key %}
+    {% for slug, sub_label in subs %}<a class="sub{% if page == slug %} selected{% endif %}" href="/{{ key }}/{{ slug }}">{{ sub_label }}{% if slug == "alerts" and alerts_unseen %} <span class="error-text">●</span>{% endif %}</a>{% endfor %}
+  {% endif %}
+{% endfor %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block content %}
+{% include "_library_toolbar.html" %}
+<article class="round no-padding top-margin">
+{% if rows %}
+<table class="stripes">
+  <thead><tr>
+    <th class="selection-only min"></th><th class="min"></th><th>Title</th><th>Episodes with every subtitle</th><th class="min"></th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}{% set item = row.item %}
+  <tr>
+    <td class="selection-only min"><label class="checkbox"><input type="checkbox" name="item" value="series:{{ item.id }}"><span></span></label></td>
+    <td class="min">{% with kind = "series" %}{% include "_monitor.html" %}{% endwith %}</td>
+    <td><a class="link" href="/tv/{{ item.id }}">{{ item.title }}{% if item.year %} ({{ item.year }}){% endif %}</a>
+        <div class="small-text outline-text">{{ item.folder }}</div></td>
+    <td><div class="row small-space"><progress class="max" value="{{ row.done }}" max="{{ row.total or 1 }}"></progress>
+        <span class="small-text nowrap">{{ row.done }}/{{ row.total }}</span></div></td>
+    <td class="min">{% if row.missing %}<button class="border small round nowrap"
+        hx-post="/library/queue" hx-vals='{"item": "series:{{ item.id }}"}' hx-target="#toast" hx-swap="outerHTML" hx-on::after-request="if(event.detail.successful) this.replaceWith(Object.assign(document.createElement('span'),{className:'chip small secondary-container',textContent:'Queued'}))">
+        <i>playlist_add</i><span>Add {{ row.missing }} missing</span></button>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}{% with what = "TV shows", setting = "TV folders" %}{% include "_empty_library.html" %}{% endwith %}{% endif %}
+</article>
+{% endblock %}

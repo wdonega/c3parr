@@ -1,0 +1,80 @@
+[project]
+name = "c3parr"
+version = "0.1.0"
+description = "Gera e ressincroniza legendas a partir do áudio, com tradução que entende o contexto da cena"
+authors = [
+    { name = "william.donega", email = "william.donega@e-ai.com.br" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anthropic>=2.3.0",
+    "httpx>=0.28.1",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.1",
+    "rapidfuzz>=3.14.6",
+    "rich>=15.0.0",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+c3parr = "c3parr:main"
+c3parr-avaliar = "c3parr.report.evaluate:cli"
+c3parr-web = "c3parr.web.app:serve"
+
+[project.optional-dependencies]
+asr = [
+    "faster-whisper>=1.2.1",
+    "soundfile>=0.14.0",
+]
+embed = [
+    "sentence-transformers>=6.2.0",
+]
+web = [
+    "fastapi>=0.162.0",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.32",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170.12",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["spikes"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/c3parr/web/app.py" = ["E501"]  # templates HTML embutidos
+"tests/*" = ["E501"]  # dados de exemplo
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["faster_whisper.*", "soundfile"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not models and not network'"
+markers = [
+    "models: usa modelos reais (lento, baixa pesos)",
+    "network: faz chamadas de rede reais",
+]

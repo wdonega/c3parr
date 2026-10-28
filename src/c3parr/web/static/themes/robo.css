@@ -1,0 +1,42 @@
+/* Tema "robo": esquema escuro "baseline" do Material 3 (o roxo padrão, semente #6750A4), nas
+   variáveis do BeerCSS.
+   Novo tema: copie para themes/<nome>.css, troque o seletor e aponte C3PARR_THEME=<nome>
+   (dá para gerar as cores de outra semente com ui("theme", "#cor") do BeerCSS). */
+[data-theme="robo"] body {
+  --primary: #d0bcff;
+  --on-primary: #381e72;
+  --primary-container: #4f378b;
+  --on-primary-container: #eaddff;
+  --secondary: #ccc2dc;
+  --on-secondary: #332d41;
+  --secondary-container: #4a4458;
+  --on-secondary-container: #e8def8;
+  --tertiary: #efb8c8;
+  --on-tertiary: #492532;
+  --tertiary-container: #633b48;
+  --on-tertiary-container: #ffd8e4;
+  --error: #f2b8b5;
+  --on-error: #601410;
+  --error-container: #8c1d18;
+  --on-error-container: #f9dedc;
+  --surface: #141218;
+  --on-surface: #e6e0e9;
+  --on-surface-variant: #cac4d0;
+  --outline: #938f99;
+  --outline-variant: #49454f;
+  --shadow: #000000;
+  --scrim: #000000;
+  --inverse-surface: #e6e0e9;
+  --inverse-on-surface: #322f35;
+  --inverse-primary: #6750a4;
+  --surface-dim: #141218;
+  --surface-bright: #3b383e;
+  --surface-container-lowest: #0f0d13;
+  --surface-container-low: #1d1b20;
+  --surface-container: #211f26;
+  --surface-container-high: #2b2930;
+  --surface-container-highest: #36343b;
+  --background: #141218;
+  --on-background: #e6e0e9;
+  --surface-variant: #49454f;
+}

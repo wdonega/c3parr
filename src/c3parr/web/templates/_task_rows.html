@@ -1,0 +1,12 @@
+<tbody id="task-rows" hx-get="/system/tasks/rows" hx-trigger="every 3s" hx-swap="outerHTML">
+{% for t in tasks %}
+<tr>
+  <td>{{ t.label }}{% if t.result %}<div class="small-text outline-text">{{ t.result }}</div>{% endif %}</td>
+  <td class="nowrap">every {{ t.interval }}</td>
+  <td class="nowrap">{{ t.last_run | when or "never" }}</td>
+  <td class="nowrap">{% if t.running %}running…{% elif t.requested %}soon{% else %}{{ t.next_run | when }}{% endif %}</td>
+  <td class="min">{% if t.running %}<i class="spin primary-text">progress_activity</i>
+    {% else %}<button class="transparent circle small" title="Run now" hx-post="/system/tasks/{{ t.name }}/run" hx-target="#toast" hx-swap="outerHTML"><i>play_arrow</i></button>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>

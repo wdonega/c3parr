@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block content %}
+{% include "_library_toolbar.html" %}
+<article class="round top-margin">
+  <div class="row">
+    {% with kind = "series", item = show %}{% include "_monitor.html" %}{% endwith %}
+    <div class="max"><h5 class="small">{{ show.title }}{% if show.year %} ({{ show.year }}){% endif %}</h5>
+      <div class="small-text outline-text">{{ show.folder }}</div></div>
+  </div>
+</article>
+{% for season, rows in seasons %}
+<article class="round no-padding top-margin">
+  <h6 class="small padding">{{ "Season %d" % season if season is not none else "Other files" }}</h6>
+  <table class="stripes">
+    <tbody>
+    {% for row in rows %}{% set item = row.item %}
+    <tr>
+      <td class="selection-only min"><label class="checkbox"><input type="checkbox" name="item" value="episode:{{ item.id }}"><span></span></label></td>
+      <td class="min nowrap">{% if item.episode %}{{ "%02d" % item.episode }}{% endif %}</td>
+      <td>{{ row.name }}</td>
+      <td>{% include "_subs.html" %}</td>
+      <td class="min">{% with item_key = "episode:" ~ item.id %}{% include "_add_button.html" %}{% endwith %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endfor %}
+{% endblock %}

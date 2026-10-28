@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block content %}
+<article class="round no-padding">
+<table class="stripes">
+  <thead><tr><th>Name</th><th>Interval</th><th>Last run</th><th>Next run</th><th class="min">Run</th></tr></thead>
+  {% include "_task_rows.html" %}
+</table>
+</article>
+{% endblock %}

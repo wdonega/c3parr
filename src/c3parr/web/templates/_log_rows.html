@@ -1,0 +1,6 @@
+<tbody id="log-rows" hx-get="/system/logs/rows" hx-trigger="every 3s" hx-swap="outerHTML">
+{% for r in records %}
+<tr><td class="min"><span class="chip small {{ level_classes.get(r.level, 'surface-container-highest') }}">{{ r.level }}</span></td>
+  <td class="min nowrap small-text">{{ r.time }}</td><td class="min nowrap small-text">{{ r.name }}</td><td class="small-text">{{ r.message }}</td></tr>
+{% else %}<tr><td colspan="4" class="center-align padding">No log entries yet.</td></tr>{% endfor %}
+</tbody>

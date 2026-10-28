@@ -1,0 +1,3 @@
+<button class="transparent circle small" title="{{ 'Monitored' if item.monitored else 'Not monitored' }}"
+        hx-post="/library/{{ kind }}/{{ item.id }}/monitor" hx-swap="outerHTML">
+  <i class="{{ 'primary-text' if item.monitored else 'outline-text' }}">{{ 'bookmark' if item.monitored else 'bookmark_border' }}</i></button>

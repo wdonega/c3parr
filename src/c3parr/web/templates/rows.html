@@ -1,0 +1,19 @@
+{% for j in jobs %}
+<li class="wave" tabindex="0" hx-get="/queue/{{ j.id }}" hx-target="#detail" hx-swap="innerHTML"
+    hx-trigger="click, keyup[key=='Enter']">
+  <button class="circle {{ status_classes[j.status] }}" tabindex="-1"><i class="{% if j.status == 'processando' %}spin{% endif %}">{{ icons[j.status] }}</i></button>
+  <div class="max">
+    <h6 class="small">{{ j.name }}</h6>
+    <div class="small-text"><b>{{ j.step_label }}</b>{% if j.prioridade %} <i class="tiny primary-text" title="Requested manually or by Radarr/Sonarr">bolt</i>{% endif %} ·
+    {% if j.status == 'processando' -%}
+      {% if not j.acao %}{{ labels.get(j.etapa, j.etapa or 'Starting') }} · {% endif %}{{ (j.progresso * 100) | round | int }}%{% if j.mensagem %} · {{ j.mensagem | truncate(60) }}{% endif %}
+    {%- elif j.erro %}{{ j.erro | truncate(90) }}
+    {%- else %}added {{ j.criada_em | when }}{% endif %}</div>
+    <progress value="{{ (j.progresso * 100) | round(1) }}" max="100"></progress>
+  </div>
+  <span class="chip {{ status_classes[j.status] }} m l">{{ j.label }}</span>
+</li>
+{% else %}
+<li><div class="max center-align padding"><i class="extra">playlist_add</i>
+  <p>The queue is empty. Add movies or episodes from <a class="link" href="/movies">Movies</a> or <a class="link" href="/tv">TV Shows</a>.</p></div></li>
+{% endfor %}
