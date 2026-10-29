@@ -1,0 +1,32 @@
+# Transcription server for c3parr on another machine with a GPU. Builds whisper.cpp from the
+# Dockerfile in this folder and starts it:
+#   docker compose up -d --build
+# Then in c3parr: Settings → Integrations → Transcription → Server: OpenAI-compatible,
+# URL http://<this-machine>:9000/v1, model empty.
+services:
+  whisper:
+    build:
+      context: .
+      args:
+        VARIANT: cuda           # cuda = NVIDIA; vulkan = AMD, Intel and others through Mesa
+        # CUDA only, your GPU: 75 RTX 20xx, 86 RTX 30xx, 87 Jetson Orin, 89 RTX 40xx, 120 RTX 50xx.
+        # Empty builds all of them for the architecture, which takes much longer.
+        CUDA_ARCHS: ""
+    container_name: whisper
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: large-v3-turbo-q8_0
+    volumes:
+      - ./models:/models        # ~900 MB, downloaded on the first start
+    ports:
+      - "9000:9000"
+    deploy:                     # NVIDIA (needs the nvidia-container-toolkit)
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Vulkan (AMD/Intel): replace the deploy block with
+    # devices:
+    #   - /dev/dri:/dev/dri

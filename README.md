@@ -181,6 +181,66 @@ The queue shows each step live: here the English subtitle was extracted from the
 <img src="assets/screenshots/16-tasks.png" alt="System, Tasks" width="800">
 <img src="assets/screenshots/09-dashboard.png" alt="Dashboard" width="800">
 
+## Extra: transcription on another machine
+
+Only needed when c3parr runs on a small box: if its machine already has a good GPU, skip this. Transcription is the only heavy step, and it can run on another machine with a GPU. On a NanoPi M5 (CPU only), a 42-minute episode took 66 minutes; through a Jetson Orin Nano on the network, about 3 minutes, audio upload included.
+
+[`examples/whisper-server`](examples/whisper-server) builds whisper.cpp and serves the OpenAI API c3parr talks to. Like c3parr's image, it has two variants, for x86 and ARM: **cuda** for NVIDIA (the machine needs the driver and the nvidia-container-toolkit) and **vulkan** for AMD, Intel and others through Mesa. On an AMD BC-250 the Vulkan build took 5 minutes and transcribed 6 minutes of audio in 10 s over the network.
+
+1. On the GPU machine, get the example folder:
+
+   ```bash
+   git clone --depth 1 https://github.com/wdonega/c3parr.git
+   cd c3parr/examples/whisper-server
+   ```
+
+   In [`compose.yaml`](examples/whisper-server/compose.yaml), pick the variant. For NVIDIA, set `CUDA_ARCHS` to your GPU only (`86` RTX 30xx, `89` RTX 40xx, `120` RTX 50xx, `87` Jetson Orin…); empty builds all of them and takes much longer. For AMD or Intel, set `VARIANT: vulkan` and swap the `deploy` block for `/dev/dri`, as the comment in the file shows.
+
+   ```yaml
+   services:
+     whisper:
+       build:
+         context: .
+         args:
+           VARIANT: cuda             # or vulkan for AMD/Intel
+           CUDA_ARCHS: "89"          # RTX 40xx
+       container_name: whisper
+       restart: unless-stopped
+       environment:
+         WHISPER_MODEL: large-v3-turbo-q8_0
+       volumes:
+         - ./models:/models        # ~900 MB, downloaded on the first start
+       ports:
+         - "9000:9000"
+       deploy:
+         resources:
+           reservations:
+             devices:
+               - driver: nvidia
+                 count: all
+                 capabilities: [gpu]
+       # Vulkan (AMD/Intel): replace the deploy block with
+       # devices:
+       #   - /dev/dri:/dev/dri
+   ```
+
+2. Build and start it, from that folder. The build compiles whisper.cpp once (about 5 minutes for Vulkan on a 12-core x86, 25 for CUDA on an 8-core ARM board); the first start downloads the model before port 9000 opens.
+
+   ```bash
+   docker compose up -d --build
+   docker logs -f whisper     # ready when it prints the model on "CUDA0" or "Vulkan0"
+   ```
+
+3. Check it from any machine with a short audio file. The answer is JSON with the text in the original language.
+
+   ```bash
+   curl http://<gpu-machine>:9000/v1/audio/transcriptions -F file=@sample.wav
+   ```
+
+4. In c3parr, **Settings → Integrations → Transcription**: **Where it runs** = *Server: OpenAI-compatible*, **Server URL** = `http://<gpu-machine>:9000/v1`, **Model** empty (the server uses the model it started with). **Test connection**, then **Save**. The next transcription in the queue goes to the server.
+
+<img src="assets/screenshots/17-asr-remote-connected.png" alt="Transcription pointing at a whisper server on another machine" width="800">
+
 ## Development
 
 ```bash
