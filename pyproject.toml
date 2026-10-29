@@ -5,6 +5,8 @@ description = "Gera e ressincroniza legendas a partir do áudio, com tradução 
 authors = [
     { name = "william.donega", email = "william.donega@e-ai.com.br" }
 ]
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anthropic>=2.3.0",
