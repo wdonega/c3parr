@@ -4,6 +4,7 @@ Como o Bazarr: lê os filmes e episódios com arquivo, aplica os filtros de Sett
 (monitorado, tags, tipo de série, temporada 0), traduz o caminho e grava. O que saiu do
 Radarr/Sonarr sai daqui também, mas só quando tudo o que eles listam foi achado neste disco
 (caminho que não abre = mapeamento errado ou disco desmontado, e aí nada é apagado).
+De cada vídeo também grava as legendas que estão ao lado dele: as telas leem do banco, não do disco.
 """
 
 import logging
@@ -13,6 +14,7 @@ from typing import Any
 import httpx
 
 from c3parr.library.arr import ArrClient, latest_major, map_path
+from c3parr.library.sidecars import index_subtitles
 from c3parr.library.store import Library
 
 log = logging.getLogger("c3parr.arr")
@@ -75,6 +77,7 @@ def sync_radarr(
             folder, str(video), str(m.get("title") or video.stem), m.get("year") or None,
             m.get("tmdbId") or None, config.monitor_new,
         )  # fmt: skip
+        index_subtitles(library, str(video))
     removed = None if counts["missing"] else library.remove_movies_except(folders)
     return _summary("movies", counts, removed)
 
@@ -134,6 +137,7 @@ def sync_sonarr(
                 videos.add(str(video))
                 counts["items"] += 1
                 counts["new"] += library.upsert_episode(series_id, str(video), season, number)
+                index_subtitles(library, str(video))
     finally:
         client.close()
     removed = None if counts["missing"] else library.remove_series_except(folders, videos)

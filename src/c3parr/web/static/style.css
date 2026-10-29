@@ -10,6 +10,11 @@ nav.left.max .badge { position: static; transform: none; margin-inline-start: au
 /* subitens de Settings/System, indentados como no Bazarr */
 nav.left.max a.sub { min-block-size: 2.25rem; padding-block: .25rem; padding-inline-start: 3.25rem; font-size: .875rem; }
 nav.left.max a.sub.selected { color: var(--primary); }
+/* repositório e versão no pé do menu lateral */
+nav.left .nav-about { margin-block-start: auto; display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; font-size: .75rem; color: var(--on-surface-variant); }
+nav.left .nav-about a { display: inline-flex; align-items: center; gap: .25rem; min-block-size: 0; padding: .25rem; color: inherit; }
+nav.left .nav-about a:hover { color: var(--primary); }
+nav.left .nav-about i { font-size: 1.1rem; }
 /* modo seleção das listas: as caixas e o botão de adicionar várias só aparecem nele */
 body:not(.selecting) .selection-only { display: none; }
 /* aviso some sozinho */

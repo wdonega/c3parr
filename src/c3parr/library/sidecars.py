@@ -3,6 +3,10 @@
 import re
 from pathlib import Path
 
+from c3parr.audio.ffmpeg import MediaInfo
+from c3parr.library.store import Library, SubtitleFile
+from c3parr.pipeline.naming import guess_text_lang, sidecar_subtitles
+
 SUB_EXTS = {".srt", ".ass", ".ssa", ".vtt"}
 _LANG = re.compile(r"^[a-z]{2,3}(-[a-z]{2,4})?$", re.IGNORECASE)
 # marcas de tipo de legenda do Bazarr/Plex, não de idioma (`.pt-BR.hi.srt`, `.en.forced.srt`)
@@ -58,3 +62,34 @@ def pick_reference(video: Path, target: str) -> Path | None:
 def has_language(langs: set[str], target: str) -> bool:
     wanted = LANG_ALIASES.get(target.lower(), {target.lower()})
     return bool(langs & wanted)
+
+
+def index_subtitles(
+    library: Library, video: str, probe: MediaInfo | None = None
+) -> list[SubtitleFile]:
+    """Lê do disco as legendas do vídeo e grava no banco, de onde as telas leem.
+
+    Roda no sync e na pipeline, nunca ao abrir uma página. Sem `probe` (o sync não sonda o vídeo),
+    as faixas embutidas já gravadas ficam. O idioma adivinhado pelo texto (`Filme.hi.srt`) só é
+    refeito quando o arquivo muda.
+    """
+    known = {f.path: f for f in library.subtitle_files([video]).get(video, [])}
+    files: list[SubtitleFile] = []
+    for t in probe.subtitles if probe else ():
+        if t.text_based:
+            files.append(SubtitleFile(path=f"{video}#{t.index}", video=video, lang=t.lang,
+                                      kind="embedded", forced=t.forced))  # fmt: skip
+    for sc in sidecar_subtitles(Path(video)):
+        try:
+            mtime = Path(sc.path).stat().st_mtime
+        except OSError:
+            continue
+        lang = sc.lang
+        if lang is None and not sc.ours:
+            old = known.get(sc.path)
+            lang = old.lang if old and old.mtime == mtime else guess_text_lang(Path(sc.path))
+        files.append(SubtitleFile(path=sc.path, video=video, lang=lang,
+                                  kind="ours" if sc.ours else "human", forced=sc.forced,
+                                  mtime=mtime))  # fmt: skip
+    library.set_subtitle_files(video, files, keep_embedded=probe is None)
+    return files

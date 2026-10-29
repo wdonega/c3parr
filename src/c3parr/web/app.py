@@ -7,6 +7,7 @@ abrem os subitens como no Bazarr. Configs e biblioteca ficam no SQLite (`c3parr.
 import logging
 import os
 import platform
+import threading
 from collections import deque
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
@@ -21,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import ValidationError
 
-from c3parr import __version__
+from c3parr import REPO_URL, __version__
 from c3parr.asr.remote import REMOTE_IDS, RemoteASRConfig, RemoteTranscriber
 from c3parr.asr.whisper_cpp import measured_speed
 from c3parr.core.config import LLM_ENV, SECRET_NAMES, Settings, load_env, load_secrets
@@ -47,8 +48,8 @@ from c3parr.metadata import tmdb as tmdb_meta
 from c3parr.metadata.tmdb import TMDbConfig, TMDbProvider
 from c3parr.pipeline.actions import run_step
 from c3parr.pipeline.catalog import Catalog
-from c3parr.pipeline.naming import guess_text_lang, norm_lang, same_lang, sidecar_subtitles
-from c3parr.pipeline.reconcile import PipelineContext, reconcile, reconcile_all
+from c3parr.pipeline.naming import norm_lang, same_lang
+from c3parr.pipeline.reconcile import PipelineContext, index_library, reconcile, reconcile_all
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 from c3parr.providers.registry import build_factories
 from c3parr.recipes import full as full_recipe
@@ -351,7 +352,13 @@ def create_app(
     env = Environment(loader=FileSystemLoader(HERE / "templates"),
                       autoescape=select_autoescape(["html"]))  # fmt: skip
     env.filters["when"] = _when
+    released = __version__.count(".") == 2 and __version__.startswith("1.")
     common: dict[str, Any] = {
+        "version": __version__,
+        "repo_url": REPO_URL,
+        "release_url": f"{REPO_URL}/releases/tag/v{__version__}"
+        if released
+        else f"{REPO_URL}/releases",
         "labels": STEP_LABELS,
         "languages": LANGUAGES,
         "language_names": LANGUAGE_NAMES,
@@ -414,6 +421,9 @@ def create_app(
         if start_worker:
             worker.start()
             scheduler.start()
+            if lib.meta("subtitle_index") is None:  # biblioteca de antes do índice de legendas
+                threading.Thread(target=index_library, args=(pipeline,), name="c3parr-index",
+                                 daemon=True).start()  # fmt: skip
         yield
         worker.stop()
         scheduler.stop()
@@ -439,9 +449,8 @@ def create_app(
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard() -> HTMLResponse:
         cfg = lib.config()
-        active = _active_jobs()
-        movies = [_row(m, m.video, active) for m in lib.movies()]
-        episodes = [_row(e, e.video, active) for e in lib.episodes()]
+        movies = _rows(lib.movies())
+        episodes = _rows(lib.episodes())
         shows = len(lib.series_list())
         cards = [
             {"label": "Movies", "href": "/movies", "total": len(movies),
@@ -539,24 +548,30 @@ def create_app(
 
     # --- biblioteca ---
 
-    def _row(item: Any, video: str, active: dict[str, str]) -> dict[str, Any]:
-        """Legendas por idioma (embutida, de outra fonte, nossa) e os idiomas alvo que faltam."""
-        present: dict[str, str] = {}
-        media = catalog.media_by_video(video)
-        if media and media.probe:
-            for t in media.probe.subtitles:
-                if t.lang and t.text_based and not t.forced:
-                    present.setdefault(t.lang, "embedded")
-        for sc in sidecar_subtitles(Path(video)):
-            lang = sc.lang or (None if sc.ours else guess_text_lang(Path(sc.path)))
-            if lang and not sc.forced:
-                kind = "ours" if sc.ours else "human"
-                if kind == "human" or lang not in present:
-                    present[lang] = kind
+    def _rows(items: list[Any]) -> list[dict[str, Any]]:
+        """Por item: legendas por idioma (embutida, de outra fonte, nossa) e os idiomas alvo que
+        faltam. Só lê o banco (o sync e a pipeline gravam o que acham no disco): com biblioteca
+        grande, abrir a página não pode depender de listar pastas nem de acordar o NAS."""
+        active = _active_jobs()
+        videos = [i.video for i in items]
+        subs = lib.subtitle_files(None if len(videos) > 500 else videos)
         targets = lib.config().target_languages
-        missing = [t for t in targets if not any(same_lang(t, lang) for lang in present)]
-        return {"item": item, "name": Path(video).name, "subs": sorted(present.items()),
-                "missing": missing, "job": active.get(video)}  # fmt: skip
+        out = []
+        for item in items:
+            present: dict[str, str] = {}
+            files = sorted(subs.get(item.video, []), key=lambda f: f.kind != "embedded")
+            for f in files:
+                if not f.lang or f.forced:
+                    continue
+                if f.kind == "embedded":
+                    present.setdefault(f.lang, "embedded")
+                elif f.kind == "human" or f.lang not in present:
+                    present[f.lang] = f.kind
+            missing = [t for t in targets if not any(same_lang(t, lang) for lang in present)]
+            out.append({"item": item, "name": Path(item.video).name,
+                        "subs": sorted(present.items()), "missing": missing,
+                        "job": active.get(item.video)})  # fmt: skip
+        return out
 
     def _active_jobs() -> dict[str, str]:
         out: dict[str, str] = {}
@@ -569,17 +584,16 @@ def create_app(
 
     @app.get("/movies", response_class=HTMLResponse)
     def movies_page() -> HTMLResponse:
-        active = _active_jobs()
-        rows = [_row(m, m.video, active) for m in lib.movies()]
-        return render("movies.html", section="movies", rows=rows)
+        return render("movies.html", section="movies", rows=_rows(lib.movies()))
 
     @app.get("/tv", response_class=HTMLResponse)
     def tv_page() -> HTMLResponse:
-        episodes = lib.episodes()
-        active = _active_jobs()
+        by_show: dict[int, list[dict[str, Any]]] = {}
+        for ep in _rows(lib.episodes()):
+            by_show.setdefault(ep["item"].series_id, []).append(ep)
         rows = []
         for show in lib.series_list():
-            eps = [_row(e, e.video, active) for e in episodes if e.series_id == show.id]
+            eps = by_show.get(show.id, [])
             done = sum(1 for e in eps if not e["missing"])
             # "faltando" para o botão: sem alguma legenda e sem passo na fila
             missing = sum(1 for e in eps if e["missing"] and not e["job"])
@@ -592,10 +606,9 @@ def create_app(
             show = lib.series(series_id)
         except KeyError:
             raise HTTPException(404, "show not found") from None
-        active = _active_jobs()
         seasons: dict[int | None, list[dict[str, Any]]] = {}
-        for ep in lib.episodes(series_id):
-            seasons.setdefault(ep.season, []).append(_row(ep, ep.video, active))
+        for ep in _rows(lib.episodes(series_id)):
+            seasons.setdefault(ep["item"].season, []).append(ep)
         ordered = sorted(seasons.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))
         return render("series.html", section="tv", show=show, seasons=ordered)
 

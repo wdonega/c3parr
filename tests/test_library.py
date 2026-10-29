@@ -7,9 +7,10 @@ from typing import Any
 import httpx
 import pytest
 
+from c3parr.audio.ffmpeg import MediaInfo, SubtitleStream
 from c3parr.jobs.queue import JobQueue
 from c3parr.library.arr import ArrConfig, map_path
-from c3parr.library.sidecars import subtitle_languages
+from c3parr.library.sidecars import index_subtitles, subtitle_languages
 from c3parr.library.store import Library, now
 from c3parr.library.sync import sync_radarr, sync_sonarr
 from c3parr.library.tasks import Scheduler, default_tasks, search_missing, wanted
@@ -149,6 +150,38 @@ def test_removed_in_arr_is_removed_here_but_never_when_files_are_not_found(
     movies, _ = sync(library, arr)
     assert "check the Path Mappings" in movies and "nothing was removed" in movies
     assert len(library.movies()) == 1
+
+
+def test_sync_records_the_subtitles_next_to_each_video(
+    library: Library, arr: FakeArr, media: Path
+) -> None:
+    sync(library, arr)
+    subs = library.subtitle_files()
+    langs = {Path(v).name: [(f.lang, f.kind) for f in fs] for v, fs in subs.items()}
+    assert langs == {"Incendies.2010.1080p.mkv": [("en", "human")],
+                     "Criminal Minds S01E02.mkv": [("pt-BR", "human")]}  # fmt: skip
+    arr.files = arr.files[:1]  # o episódio saiu do Sonarr: as legendas dele saem do banco
+    sync(library, arr)
+    assert {Path(v).name for v in library.subtitle_files()} == {"Incendies.2010.1080p.mkv"}
+
+
+def test_subtitle_index_keeps_embedded_and_guesses_language_once(
+    library: Library, media: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video = str(media / "movies" / "Incendies (2010)" / "Incendies.2010.1080p.mkv")
+    unnamed = Path(video).with_name("Incendies.2010.1080p.hi.srt")
+    unnamed.write_text(" ".join(["the you and is it to of that"] * 10))
+    probe = MediaInfo(duration=1.0, audio=(), subtitles=(
+        SubtitleStream(index=3, lang="fr", codec="subrip"),))  # fmt: skip
+    index_subtitles(library, video, probe)
+    calls: list[Path] = []
+    monkeypatch.setattr("c3parr.library.sidecars.guess_text_lang",
+                        lambda p: calls.append(p) or "xx")  # fmt: skip
+    files = {(f.lang, f.kind) for f in index_subtitles(library, video)}  # sync: sem sondagem
+    assert calls == []  # arquivo igual: o idioma adivinhado vem do banco
+    assert files == {("en", "human")}  # `.en.srt` pelo nome, `.hi.srt` pelo texto
+    stored = {(f.lang, f.kind) for f in library.subtitle_files([video])[video]}
+    assert ("fr", "embedded") in stored  # o sync não apaga as faixas embutidas
 
 
 def test_arr_address_forms_and_path_mapping() -> None:

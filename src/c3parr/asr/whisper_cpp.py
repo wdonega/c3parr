@@ -41,6 +41,8 @@ def default_cache_dir() -> Path:
     """O mesmo cache do `Settings` (variável `C3PARR_CACHE_DIR`), sem carregar o `Settings`."""
     env = os.environ.get("C3PARR_CACHE_DIR")
     return Path(env).expanduser() if env else Path.home() / ".cache" / "c3parr"
+
+
 MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{name}.bin"
 VAD_URL = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
 SPEED_FILE = "whisper-cpp-speed.json"

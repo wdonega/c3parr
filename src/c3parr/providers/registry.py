@@ -1,6 +1,6 @@
 """Liga cada provider do repositório à fábrica da sua interface."""
 
-from c3parr.align import auto, embed, fuzzy
+from c3parr.align import auto, embed, fuzzy, timing
 from c3parr.asr import fake as asr_fake
 from c3parr.asr import faster_whisper, remote, whisper_cpp
 from c3parr.interfaces import (
@@ -27,6 +27,7 @@ REGISTRATIONS = (
     file_source.register,
     fuzzy.register,
     embed.register,
+    timing.register,
     auto.register,
     tmdb.register,
     llm_context.register,

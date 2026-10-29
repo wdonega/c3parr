@@ -48,6 +48,15 @@ CREATE TABLE IF NOT EXISTS episode (
     episode INTEGER,
     added_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS subtitle_file (
+    path TEXT PRIMARY KEY,
+    video TEXT NOT NULL,
+    lang TEXT,
+    kind TEXT NOT NULL,
+    forced INTEGER NOT NULL DEFAULT 0,
+    mtime REAL
+);
+CREATE INDEX IF NOT EXISTS subtitle_file_video ON subtitle_file(video);
 CREATE TABLE IF NOT EXISTS secret (
     name TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -159,6 +168,19 @@ class Episode(Model):
     season: int | None = None
     episode: int | None = None
     added_at: str
+
+
+class SubtitleFile(Model):
+    """Uma legenda do vídeo, como as telas a mostram: embutida (`path` = `<vídeo>#<faixa>`),
+    de outra fonte ao lado do vídeo (`human`) ou nossa (`ours`)."""
+
+    path: str
+    video: str
+    lang: str | None = None
+    kind: Literal["embedded", "human", "ours"]
+    forced: bool = False
+    mtime: float | None = None
+    """Do arquivo quando foi lido: o idioma adivinhado pelo texto só é refeito se ele mudar."""
 
 
 class TaskState(Model):
@@ -290,6 +312,7 @@ class Library:
             gone = [r["id"] for r in db.execute("SELECT id, folder FROM movie")
                     if r["folder"] not in folders]  # fmt: skip
             db.executemany("DELETE FROM movie WHERE id = ?", [(i,) for i in gone])
+            self._forget_subtitles_of_removed(db)
         return len(gone)
 
     # --- séries ---
@@ -364,6 +387,7 @@ class Library:
             shows = [r["id"] for r in db.execute("SELECT id, folder FROM series")
                      if r["folder"] not in folders]  # fmt: skip
             db.executemany("DELETE FROM series WHERE id = ?", [(i,) for i in shows])
+            self._forget_subtitles_of_removed(db)
         return len(eps) + len(shows)
 
     def watch_info(self, video: str) -> tuple[bool, str] | None:
@@ -389,6 +413,42 @@ class Library:
         table = {"movie": "movie", "series": "series"}[kind]
         with self._lock, self._db() as db:
             db.execute(f"UPDATE {table} SET monitored = ? WHERE id = ?", (int(monitored), item_id))
+
+    # --- legendas de cada vídeo (as telas leem daqui; a pipeline lê do disco) ---
+
+    def subtitle_files(self, videos: list[str] | None = None) -> dict[str, list[SubtitleFile]]:
+        """vídeo → legendas. Sem `videos`, a biblioteca toda numa consulta só."""
+        with self._db() as db:
+            if videos is None:
+                rows = db.execute("SELECT * FROM subtitle_file").fetchall()
+            else:
+                rows = []
+                for i in range(0, len(videos), 500):  # limite de parâmetros do SQLite
+                    chunk = videos[i : i + 500]
+                    marks = ",".join("?" * len(chunk))
+                    rows += db.execute(f"SELECT * FROM subtitle_file WHERE video IN ({marks})",
+                                       chunk).fetchall()  # fmt: skip
+        out: dict[str, list[SubtitleFile]] = {}
+        for r in rows:
+            out.setdefault(r["video"], []).append(SubtitleFile.model_validate(dict(r)))
+        return out
+
+    def set_subtitle_files(self, video: str, files: list[SubtitleFile],
+                           keep_embedded: bool = False) -> None:  # fmt: skip
+        """Troca as legendas gravadas do vídeo. `keep_embedded`: quem chama não sondou o vídeo
+        (o sync), então as faixas embutidas já gravadas ficam."""
+        with self._lock, self._db() as db:
+            sql = "DELETE FROM subtitle_file WHERE video = ?"
+            db.execute(sql + (" AND kind != 'embedded'" if keep_embedded else ""), (video,))
+            db.executemany(
+                "INSERT OR REPLACE INTO subtitle_file (path, video, lang, kind, forced, mtime) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [(f.path, video, f.lang, f.kind, int(f.forced), f.mtime) for f in files],
+            )
+
+    def _forget_subtitles_of_removed(self, db: sqlite3.Connection) -> None:
+        db.execute("DELETE FROM subtitle_file WHERE video NOT IN "
+                   "(SELECT video FROM movie UNION SELECT video FROM episode)")  # fmt: skip
 
     # --- rotinas ---
 

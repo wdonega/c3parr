@@ -65,12 +65,14 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_PYTHON=python3 UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # dependências antes do código: mudar o código não reinstala tudo
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock LICENSE ./
 RUN uv sync --frozen --no-dev --extra web --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev --extra web --no-editable
 
 COPY --from=whisper /out /opt/whisper
+# no fim: mudar a versão a cada build não invalida o cache das camadas de cima
+ARG C3PARR_VERSION=""
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENV PATH=/app/.venv/bin:/opt/whisper:$PATH \
@@ -83,7 +85,8 @@ ENV PATH=/app/.venv/bin:/opt/whisper:$PATH \
     HOME=/config \
     PUID=1000 \
     PGID=1000 \
-    C3PARR_IMAGE_VARIANT=${VARIANT}
+    C3PARR_IMAGE_VARIANT=${VARIANT} \
+    C3PARR_VERSION=${C3PARR_VERSION}
 
 EXPOSE 8484
 VOLUME ["/config"]

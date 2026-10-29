@@ -9,21 +9,29 @@
 # Pull requests only build. To start a new line (1.1.N, 2.0.N…) change VERSION_PREFIX below.
 name: Docker image
 
-# Documentation-only changes (README, docs/, other .md files) don't build, publish or release.
+# Only what goes into the image builds, publishes and releases: the same files the .dockerignore
+# lets in, plus the build recipe. README, LICENSE, assets/, docs, tests and the compose example don't.
+# Keep this list in step with the .dockerignore.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".gitignore"
-      - "LICENSE"
+    paths:
+      - "src/**"
+      - "docker/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/docker.yml"
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".gitignore"
-      - "LICENSE"
+    paths:
+      - "src/**"
+      - "docker/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/docker.yml"
   workflow_dispatch:
 
 permissions:
@@ -95,7 +103,9 @@ jobs:
         with:
           context: .
           platforms: linux/${{ matrix.arch }}
-          build-args: VARIANT=${{ matrix.variant }}
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            C3PARR_VERSION=${{ needs.revision.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           provenance: false
           tags: ${{ env.IMAGE }}:rev${{ needs.revision.outputs.n }}-${{ matrix.variant }}-${{ matrix.arch }}
@@ -104,6 +114,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.revision.outputs.version }}
             org.opencontainers.image.title=c3parr (${{ matrix.variant }})
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
           cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }},mode=max
 

@@ -1,7 +1,8 @@
-# só entra no build o que a imagem usa: pyproject.toml, uv.lock, src/ e docker/
+# só entra no build o que a imagem usa: pyproject.toml, uv.lock, LICENSE, src/ e docker/
 *
 !pyproject.toml
 !uv.lock
+!LICENSE
 !src/
 !docker/
 **/__pycache__

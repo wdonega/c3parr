@@ -5,11 +5,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from c3parr.align.auto import AutoSyncConfig, AutoSynchronizer
 from c3parr.align.core import Match, Thresholds, build_result, monotonic_align, ransac_line
+from c3parr.align.embed import EmbeddingSynchronizer
 from c3parr.align.text import clean, normalize
+from c3parr.align.timing import TimingSyncConfig, TimingSynchronizer
 from c3parr.core.job import ComponentSpec, JobParams
-from c3parr.core.models import Cue, Subtitle
+from c3parr.core.models import Cue, Segment, Subtitle, Transcript
 from c3parr.engine.engine import Engine
+from c3parr.interfaces.sync import SyncRequest
+from c3parr.providers.base import Health
 from c3parr.providers.registry import build_factories
 from c3parr.recipes import sync as sync_recipe
 from c3parr.subtitle.ass import parse_ass
@@ -187,3 +192,59 @@ def test_cut_in_reference_is_detected_and_both_sides_line_up() -> None:
         if abs(c.start - 3000) > 60
     ]
     assert max(far) < 0.6
+
+
+def _rhythm(n: int = 400, seed: int = 3) -> list[float]:
+    """Inícios de fala com o ritmo irregular de um diálogo real (1 a 6 s entre falas)."""
+    gaps = np.random.default_rng(seed).uniform(1.0, 6.0, n)
+    return list(np.cumsum(gaps) + 30.0)
+
+
+def _as_transcript(starts: list[float]) -> Transcript:
+    segs = tuple(Segment(id=i, start=t, end=t + 1.5, text=f"line {i}", lang="en")
+                 for i, t in enumerate(starts))  # fmt: skip
+    return Transcript(segments=segs, language="en", model="principal",
+                      audio_duration=starts[-1] + 10)  # fmt: skip
+
+
+def _as_subtitle(starts: list[float], lang: str = "pt") -> Subtitle:
+    cues = tuple(Cue(index=i + 1, start=t, end=t + 1.5, text=f"fala {i}")
+                 for i, t in enumerate(starts))  # fmt: skip
+    return Subtitle(cues=cues, lang=lang)
+
+
+@pytest.mark.parametrize(
+    ("scale", "offset"), [(1.0, 3.7), (1.0, -42.0), (25 / (24000 / 1001), 8.0)]
+)
+def test_timing_sync_finds_offset_and_frame_rate_across_languages(
+    scale: float, offset: float
+) -> None:
+    truth = _rhythm()
+    shifted = [(t - offset) / scale for t in truth]  # a legenda de outra release, em português
+    result = TimingSynchronizer(TimingSyncConfig()).sync(
+        _as_subtitle(shifted), _as_transcript(truth), SyncRequest(audio_duration=truth[-1] + 10)
+    )
+    assert result.accepted, result.reason
+    errors = [abs(c.start - t) for c, t in zip(result.cues, truth, strict=True)]
+    assert float(np.median(errors)) < 0.05
+
+
+def test_timing_sync_rejects_a_subtitle_of_another_episode() -> None:
+    result = TimingSynchronizer(TimingSyncConfig()).sync(
+        _as_subtitle(_rhythm(seed=9)), _as_transcript(_rhythm()), SyncRequest(audio_duration=2000)
+    )
+    assert not result.accepted and "no clear offset" in (result.reason or "")
+
+
+def test_auto_sync_without_the_embed_extra_falls_back_to_timing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        EmbeddingSynchronizer, "health", lambda self: Health(ok=False, detail="not installed")
+    )
+    truth = _rhythm()
+    result = AutoSynchronizer(AutoSyncConfig()).sync(
+        _as_subtitle([t - 5 for t in truth]), _as_transcript(truth),
+        SyncRequest(audio_duration=truth[-1] + 10),
+    )  # fmt: skip
+    assert result.accepted, result.reason

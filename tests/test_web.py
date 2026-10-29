@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from c3parr.core.models import Degradation
 from c3parr.engine.engine import RunResult, StepReport
 from c3parr.jobs.queue import Job, JobQueue, Worker
+from c3parr.library.sidecars import index_subtitles
 from c3parr.library.store import Library
 from c3parr.web.app import create_app
 
@@ -152,6 +153,13 @@ def test_library_pages_settings_and_tasks(
         show_id = lib.upsert_series(str(episode.parents[1]), "Show", None, None, True)
         lib.upsert_episode(show_id, str(episode), 1, 1)
         assert "Incendies" in client.get("/movies").text
+        # a página lê as legendas do banco: a do disco só aparece depois do sync ou da pipeline
+        sub = movie.with_name("Incendies.es.srt")
+        sub.write_text("1\n00:00:01,000 --> 00:00:02,000\nHola\n")
+        assert "surface-container-highest" not in client.get("/movies").text
+        index_subtitles(lib, str(movie))
+        sub.unlink()
+        assert "surface-container-highest" in client.get("/movies").text
         show = lib.series_list()[0]
         assert "Show S01E01.mkv" in client.get(f"/tv/{show.id}").text
 

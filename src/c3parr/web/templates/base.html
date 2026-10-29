@@ -16,10 +16,15 @@
 <nav class="left max l left-align">
   <header class="row center-align wordmark"><img src="/static/favicon.png" alt=""><span>C3PARR</span></header>
   {% with full = true %}{% include "_nav.html" %}{% endwith %}
+  <footer class="nav-about">
+    <a href="{{ repo_url }}" target="_blank" rel="noopener" title="Source code on GitHub"><i>code</i><span>GitHub</span></a>
+    <a href="{{ release_url }}" target="_blank" rel="noopener" title="Release notes">v{{ version }}</a>
+  </footer>
 </nav>
 <nav class="left m">
   <header class="center-align wordmark"><img src="/static/favicon.png" alt="c3parr"></header>
   {% with full = false %}{% include "_nav.html" %}{% endwith %}
+  <footer class="nav-about"><a href="{{ repo_url }}" target="_blank" rel="noopener" title="c3parr v{{ version }} on GitHub"><i>code</i></a></footer>
 </nav>
 <nav class="bottom s">
   {% with full = false %}{% include "_nav.html" %}{% endwith %}

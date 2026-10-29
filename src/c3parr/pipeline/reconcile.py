@@ -16,7 +16,8 @@ from c3parr.audio import ffmpeg
 from c3parr.core.job import ComponentSpec
 from c3parr.engine.engine import Engine
 from c3parr.jobs.queue import JobQueue
-from c3parr.library.store import Library
+from c3parr.library.sidecars import index_subtitles
+from c3parr.library.store import Library, SubtitleFile
 from c3parr.pipeline.catalog import Catalog, Media, sha_of
 from c3parr.pipeline.decide import (
     Decision,
@@ -27,7 +28,7 @@ from c3parr.pipeline.decide import (
     OurOutput,
     decide,
 )
-from c3parr.pipeline.naming import WORK_EXT, guess_text_lang, sidecar_subtitles, work_file
+from c3parr.pipeline.naming import WORK_EXT, work_file
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 from c3parr.subtitle.format import FormatRules
 
@@ -61,7 +62,8 @@ def _work_files(video: Path, kind: str) -> dict[str, str]:
     return out
 
 
-def build_state(cat: Catalog, media: Media) -> ItemState:
+def build_state(cat: Catalog, media: Media, subs: list[SubtitleFile]) -> ItemState:
+    """`subs`: as legendas do vídeo recém-lidas do disco (`index_subtitles`)."""
     video = Path(media.video)
     probe = media.probe
     embedded = []
@@ -77,11 +79,9 @@ def build_state(cat: Catalog, media: Media) -> ItemState:
             )
         )
     externals = []
-    for sc in sidecar_subtitles(video):
-        if sc.ours:
-            continue
-        lang = sc.lang or guess_text_lang(Path(sc.path))
-        externals.append(ExternalSub(path=sc.path, lang=lang, forced=sc.forced))
+    for sub in subs:
+        if sub.kind == "human":
+            externals.append(ExternalSub(path=sub.path, lang=sub.lang, forced=sub.forced))
     outputs = {}
     for lang, rec in cat.outputs(media.id).items():
         p = Path(rec.path)
@@ -157,9 +157,10 @@ def reconcile(ctx: PipelineContext, video: str, origem: str = "rotina",
         ctx.catalog.resolve_alerts(key=f"probe:{video}")
         media = ctx.catalog.media(media.id)
 
+    subs = index_subtitles(ctx.library, video, media.probe)  # do disco, e atualiza as telas
     decision = Decision()
     for _ in range(4):  # trocar a principal muda o estado; decide de novo até estabilizar
-        decision = decide(build_state(ctx.catalog, media), cfg, retry_failed)
+        decision = decide(build_state(ctx.catalog, media, subs), cfg, retry_failed)
         m = decision.main
         if m is not None and (media.main_path, media.main_lang, media.main_source) != (
             m.path,
@@ -194,3 +195,17 @@ def reconcile_all(ctx: PipelineContext) -> str:
             ctx.catalog.remove_media(m.video)
     added = ctx.queue.pending_count() - before
     return f"{seen} items checked, {max(0, added)} steps queued"
+
+
+def index_library(ctx: PipelineContext) -> int:
+    """Grava as legendas de toda a biblioteca de uma vez (primeira subida desta versão; depois o
+    sync e a pipeline mantêm). As faixas embutidas vêm da sondagem que o catálogo já tem."""
+    probes = {m.video: m.probe for m in ctx.catalog.all_media()}
+    videos = ctx.library.videos()
+    for video in videos:
+        try:
+            index_subtitles(ctx.library, video, probes.get(video))
+        except Exception:
+            log.exception("index %s", video)
+    ctx.library.set_meta("subtitle_index", "1")
+    return len(videos)
