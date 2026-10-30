@@ -33,7 +33,33 @@ from c3parr.providers.base import Health, ProviderInfo, Requirements
 from c3parr.translate.languages import NAMES_EN
 
 Flavor = Literal["openai", "asr-webservice"]
-_NAME_TO_CODE = {v.lower(): k for k, v in NAMES_EN.items()}
+# os nomes que o Whisper devolve no formato OpenAI (tokenizer.LANGUAGES), mais os apelidos dele
+_WHISPER_NAMES = {
+    "english": "en", "chinese": "zh", "german": "de", "spanish": "es", "russian": "ru",
+    "korean": "ko", "french": "fr", "japanese": "ja", "portuguese": "pt", "turkish": "tr",
+    "polish": "pl", "catalan": "ca", "dutch": "nl", "arabic": "ar", "swedish": "sv",
+    "italian": "it", "indonesian": "id", "hindi": "hi", "finnish": "fi", "vietnamese": "vi",
+    "hebrew": "he", "ukrainian": "uk", "greek": "el", "malay": "ms", "czech": "cs",
+    "romanian": "ro", "danish": "da", "hungarian": "hu", "tamil": "ta", "norwegian": "no",
+    "thai": "th", "urdu": "ur", "croatian": "hr", "bulgarian": "bg", "lithuanian": "lt",
+    "latin": "la", "maori": "mi", "malayalam": "ml", "welsh": "cy", "slovak": "sk",
+    "telugu": "te", "persian": "fa", "latvian": "lv", "bengali": "bn", "serbian": "sr",
+    "azerbaijani": "az", "slovenian": "sl", "kannada": "kn", "estonian": "et",
+    "macedonian": "mk", "breton": "br", "basque": "eu", "icelandic": "is", "armenian": "hy",
+    "nepali": "ne", "mongolian": "mn", "bosnian": "bs", "kazakh": "kk", "albanian": "sq",
+    "swahili": "sw", "galician": "gl", "marathi": "mr", "punjabi": "pa", "sinhala": "si",
+    "khmer": "km", "shona": "sn", "yoruba": "yo", "somali": "so", "afrikaans": "af",
+    "occitan": "oc", "georgian": "ka", "belarusian": "be", "tajik": "tg", "sindhi": "sd",
+    "gujarati": "gu", "amharic": "am", "yiddish": "yi", "lao": "lo", "uzbek": "uz",
+    "faroese": "fo", "haitian creole": "ht", "pashto": "ps", "turkmen": "tk", "nynorsk": "nn",
+    "maltese": "mt", "sanskrit": "sa", "luxembourgish": "lb", "myanmar": "my", "tibetan": "bo",
+    "tagalog": "tl", "malagasy": "mg", "assamese": "as", "tatar": "tt", "hawaiian": "haw",
+    "lingala": "ln", "hausa": "ha", "bashkir": "ba", "javanese": "jw", "sundanese": "su",
+    "cantonese": "yue", "burmese": "my", "valencian": "ca", "flemish": "nl", "haitian": "ht",
+    "letzeburgesch": "lb", "pushto": "ps", "panjabi": "pa", "moldavian": "ro", "moldovan": "ro",
+    "sinhalese": "si", "castilian": "es", "mandarin": "zh",
+}  # fmt: skip
+_NAME_TO_CODE = _WHISPER_NAMES | {v.lower(): k for k, v in NAMES_EN.items()}
 
 
 class RemoteASRConfig(BaseModel):
@@ -68,7 +94,11 @@ def _code(lang: str | None, fallback: str) -> str:
     if not lang:
         return fallback
     low = lang.strip().lower()
-    return _NAME_TO_CODE.get(low) or normalize_lang(low) or fallback
+    if low in _NAME_TO_CODE:
+        return _NAME_TO_CODE[low]
+    code = normalize_lang(low)
+    # nome que não está na tabela não vira "código": o idioma pedido é melhor que "ukrainian"
+    return code if code and len(code.split("-")[0]) <= 3 else fallback
 
 
 def parse_response(data: dict[str, Any], lang: str, cfg: FasterWhisperConfig) -> list[Segment]:

@@ -123,3 +123,14 @@ def test_vad_word_times_are_moved_to_the_segment_time() -> None:
                                     {"word": " Nawal", "start": 5.7, "end": 6.0}]}]}  # fmt: skip
     seg = parse_response(data, "fr", FasterWhisperConfig())[0]
     assert [(w.w, w.start) for w in seg.words] == [("Mme", 133.2), ("Nawal", 133.3)]
+
+
+def test_language_names_from_the_openai_format_become_codes() -> None:
+    from c3parr.asr.remote import _code
+
+    # Resident Evil dublado: o servidor devolveu "ukrainian", e o arquivo virou main.ukrainian
+    assert _code("ukrainian", "und") == "uk"
+    assert _code("Swedish", "und") == "sv"
+    assert _code("haitian creole", "und") == "ht"
+    assert _code("fr", "und") == "fr" and _code("pt-BR", "und") == "pt-BR"
+    assert _code("klingon", "und") == "und" and _code(None, "en") == "en"
