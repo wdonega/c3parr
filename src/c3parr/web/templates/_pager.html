@@ -1,0 +1,14 @@
+{# contagem e páginas de uma lista longa (`pager` vem de _pager no app) #}
+{% if pager.total %}
+<nav class="row padding pager">
+  <span class="small-text outline-text">{{ pager.first }}–{{ pager.last }} of {{ pager.total }}</span>
+  <div class="max"></div>
+  {% if pager.pages > 1 %}
+  {% if pager.prev %}<a class="button transparent circle small" href="{{ pager.prev }}" title="Previous page"><i>chevron_left</i></a>
+  {% else %}<button class="transparent circle small" disabled><i>chevron_left</i></button>{% endif %}
+  <span class="small-text nowrap">Page {{ pager.page }} of {{ pager.pages }}</span>
+  {% if pager.next %}<a class="button transparent circle small" href="{{ pager.next }}" title="Next page"><i>chevron_right</i></a>
+  {% else %}<button class="transparent circle small" disabled><i>chevron_right</i></button>{% endif %}
+  {% endif %}
+</nav>
+{% endif %}

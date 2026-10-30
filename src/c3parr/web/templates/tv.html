@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
 {% include "_library_toolbar.html" %}
-<article class="round no-padding top-margin">
+<article class="round no-padding top-margin" id="library">
 {% if rows %}
 <table class="stripes">
   <thead><tr>
@@ -22,6 +22,8 @@
   {% endfor %}
   </tbody>
 </table>
+{% include "_pager.html" %}
+{% elif has_items %}<div class="center-align padding"><i class="extra">search_off</i><p>Nothing matches these filters.</p></div>
 {% else %}{% with what = "TV shows", setting = "TV folders" %}{% include "_empty_library.html" %}{% endwith %}{% endif %}
 </article>
 {% endblock %}

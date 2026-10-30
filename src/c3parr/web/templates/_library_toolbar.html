@@ -9,3 +9,11 @@
   <button class="transparent" type="button" hx-post="/system/tasks/sync_{{ arr }}/run" hx-target="#toast" hx-swap="outerHTML">
     <i>sync</i><span>Sync with {{ arr | capitalize }}</span></button>
 </nav>
+{% if options is defined %}
+{% set path = "/movies" if section == "movies" else "/tv" %}
+<form class="row wrap filters top-margin" action="{{ path }}" method="get"
+      hx-get="{{ path }}" hx-target="#library" hx-select="#library" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="input changed delay:300ms from:[name=q], change">
+  {% with name = "show", current = show %}{% include "_filters.html" %}{% endwith %}
+</form>
+{% endif %}

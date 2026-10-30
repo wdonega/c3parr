@@ -8,13 +8,14 @@ import json
 import logging
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from c3parr.core.job import JobParams
 from c3parr.core.models import Model
+from c3parr.core.search import fold, words
 from c3parr.engine.engine import Engine, Recipe, RunResult, StepReport
 
 log = logging.getLogger("c3parr.jobs")
@@ -212,6 +213,29 @@ class JobQueue:
         if row is None:
             raise KeyError(job_id)
         return _job(row)
+
+    def search(
+        self, query: str = "", statuses: Iterable[str] = (), limit: int = 100, offset: int = 0
+    ) -> tuple[list[Job], int]:
+        """Uma página da fila filtrada por texto (nome do vídeo ou erro) e status, e o total."""
+        where, args = [], []
+        for word in words(query):
+            escaped = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where.append("fold(video || ' ' || COALESCE(erro, '')) LIKE ? ESCAPE '\\'")
+            args.append(f"%{escaped}%")
+        wanted = list(statuses)
+        if wanted:
+            where.append(f"status IN ({', '.join('?' * len(wanted))})")
+            args.extend(wanted)
+        sql = " WHERE " + " AND ".join(where) if where else ""
+        with self._db() as db:
+            db.create_function("fold", 1, fold, deterministic=True)
+            total = int(db.execute(f"SELECT COUNT(*) FROM tarefas{sql}", args).fetchone()[0])
+            rows = db.execute(
+                f"SELECT * FROM tarefas{sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+                [*args, limit, offset],
+            ).fetchall()
+        return [_job(r) for r in rows], total
 
     def list(self, limit: int = 200) -> list[Job]:
         with self._db() as db:

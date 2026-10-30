@@ -1,0 +1,8 @@
+{# busca por texto e chips de um filtro (radio): `name`, `options` [(valor, rótulo)] e `current` #}
+<div class="field prefix border round small"><i>search</i>
+  <input type="search" name="q" value="{{ q }}" placeholder="Search" aria-label="Search" autocomplete="off"></div>
+<nav class="filter-chips wrap small-space" role="radiogroup">
+  {% for value, label in options %}
+  <label class="chip"><input type="radio" name="{{ name }}" value="{{ value }}"{% if value == current %} checked{% endif %}><span>{{ label }}</span></label>
+  {% endfor %}
+</nav>

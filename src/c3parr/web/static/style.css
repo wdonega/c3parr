@@ -42,3 +42,9 @@ main article:not(.no-padding) { padding: 1rem; }
 .tmdb-logo { height: .75rem; width: auto; vertical-align: middle; }
 /* diálogo modal: escurece a página atrás (o BeerCSS esconde o backdrop: opacity 0 e hidden) */
 dialog::backdrop { background: rgb(0 0 0 / .5); opacity: 1 !important; visibility: visible !important; }
+/* filtros das listas: busca e chips de escolha única (o radio fica escondido; o chip marcado se destaca) */
+.filters .field { flex: 1 1 16rem; max-width: 28rem; margin: 0; }
+.filter-chips .chip { cursor: pointer; }
+.filter-chips input { position: absolute; opacity: 0; pointer-events: none; }
+.filter-chips .chip:has(input:checked) { background-color: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
+.filter-chips .chip:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }

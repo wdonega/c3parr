@@ -422,3 +422,88 @@ def test_llm_effort_defaults_to_low_and_only_reaches_anthropic_and_gemini(
     )
     lib.update_config(llm_provider="deepseek")
     assert components_for(Settings(), lib.config())["traducao"].params["llm"]["effort"] is None
+
+
+def test_search_ignores_case_accents_and_word_order() -> None:
+    from c3parr.core.search import matches
+
+    assert matches("quarantieme DREAM", "Dream Theater - Quarantième")
+    assert matches("super s02", "Supernatural - S02E10 - Hunted")
+    assert not matches("super s03", "Supernatural - S02E10 - Hunted")
+    assert matches("", "anything") and matches("  ", None)
+
+
+def test_queue_search_filters_by_text_and_status_and_pages(queue: JobQueue) -> None:
+    for n in range(5):
+        queue.submit(f"/tv/Show/Show S01E0{n}.mkv", "pt-BR")
+    queue.submit("/movies/Quarantième 50%.mkv", "pt-BR")
+    queue.fail(1, "LLM timeout")
+
+    found, total = queue.search("show", limit=2, offset=0)
+    assert total == 5 and [j.id for j in found] == [5, 4]  # mais recentes primeiro
+    assert [j.id for j in queue.search("show", limit=2, offset=4)[0]] == [1]
+    assert queue.search("QUARANTIEME")[1] == 1
+    assert queue.search("50%")[1] == 1 and queue.search("%")[1] == 1  # % é texto, não curinga
+    assert [j.id for j in queue.search(statuses=["falhou"])[0]] == [1]
+    assert queue.search("timeout")[1] == 1  # acha pelo erro também
+    assert queue.search("show", ["na_fila"])[1] == 4
+
+
+def test_queue_page_filters_and_pager(tmp_path: Path, queue: JobQueue) -> None:
+    for n in range(105):
+        queue.submit(f"/tv/Show/Show S01E{n:03d}.mkv", "pt-BR")
+    queue.submit("/movies/Incendies.mkv", "pt-BR")
+    queue.fail(106, "LLM timeout")
+    app = create_app(queue=queue, runner=fake_runner(), start_worker=False,
+                     library=Library(queue.path.parent / "c3parr.db"))  # fmt: skip
+    with TestClient(app) as client:
+        page = client.get("/queue").text
+        assert 'name="status" value="failed"' in page and "1\u2013100 of 106" in page
+        assert "Page 1 of 2" in page and 'href="/queue?page=2"' in page
+
+        failed = client.get("/queue/rows", params={"status": "failed"})
+        assert "Incendies.mkv" in failed.text and "S01E000" not in failed.text
+        assert failed.headers["HX-Replace-Url"] == "/queue?status=failed&page=1"
+
+        second = client.get("/queue/rows", params={"q": "show", "page": 2})
+        assert "101\u2013105 of 105" in second.text and "S01E000" in second.text
+        assert 'id="queue-page" name="page" value="2"' in second.text
+        # página além do fim (a fila encolheu ou o filtro mudou): mostra a última
+        assert (
+            "101\u2013105 of 105" in client.get("/queue/rows", params={"q": "show", "page": 9}).text
+        )
+        assert "No tasks match" in client.get("/queue/rows", params={"q": "nada"}).text
+
+
+def test_library_search_missing_filter_and_pages(tmp_path: Path, queue: JobQueue) -> None:
+    lib = Library(tmp_path / "c3parr.db")
+    done = tmp_path / "movies" / "Incendies (2010)" / "Incendies.mkv"
+    done.parent.mkdir(parents=True)
+    done.write_bytes(b"x")
+    lib.upsert_movie(str(done.parent), str(done), "Incendies", 2010, None, True)
+    done.with_name("Incendies.pt-BR.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nOi\n")
+    index_subtitles(lib, str(done))
+    for n in range(101):
+        lib.upsert_movie(f"/movies/Filme {n:03d}", f"/movies/Filme {n:03d}/f.mkv",
+                         f"Filme {n:03d}", 2000, None, True)  # fmt: skip
+    show_id = lib.upsert_series("/tv/Café Society", "Café Society", None, None, True)
+    lib.upsert_episode(show_id, "/tv/Café Society/S01E01.mkv", 1, 1)
+    app = create_app(queue=queue, runner=fake_runner(), start_worker=False, library=lib)
+    with TestClient(app) as client:
+        first = client.get("/movies").text
+        assert "1\u2013100 of 102" in first and 'href="/movies?page=2"' in first
+
+        found = client.get("/movies", params={"q": "incendies"}).text
+        assert "Incendies" in found and "Filme 000" not in found
+
+        missing = client.get("/movies", params={"show": "missing"}).text
+        assert "Filme 000" in missing and "Incendies (2010)" not in missing
+        complete = client.get("/movies", params={"show": "complete"}).text
+        assert "Incendies" in complete and "Filme 000" not in complete
+
+        none = client.get("/movies", params={"q": "nada"}).text
+        assert "Nothing matches these filters" in none
+
+        assert "Café Society" in client.get("/tv", params={"q": "cafe"}).text
+        assert "Café Society" in client.get("/tv", params={"show": "missing"}).text
+        assert "Café Society" not in client.get("/tv", params={"show": "complete"}).text

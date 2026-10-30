@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -28,6 +29,7 @@ from c3parr.asr.whisper_cpp import measured_speed
 from c3parr.core.config import LLM_ENV, SECRET_NAMES, Settings, load_env, load_secrets
 from c3parr.core.errors import ProviderError
 from c3parr.core.job import ComponentSpec
+from c3parr.core.search import matches
 from c3parr.engine.engine import Engine, RunResult
 from c3parr.jobs.queue import (
     ACTION_LABELS,
@@ -163,12 +165,44 @@ STEP_ICONS = {
 }
 LEVEL_CLASSES = {"WARNING": "tertiary", "ERROR": "error-container", "CRITICAL": "error"}
 ACTIVE = frozenset({"na_fila", "processando"})
+PAGE_SIZE = 100
+# chips da fila: valor na URL → (rótulo, status do banco)
+QUEUE_FILTERS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "": ("All", ()),
+    "running": ("Running", ("processando",)),
+    "queued": ("Queued", ("na_fila",)),
+    "done": ("Done", ("concluida", "concluida_avisos")),
+    "failed": ("Failed", ("falhou",)),
+    "cancelled": ("Cancelled", ("cancelada",)),
+}
+# chips de Filmes e Séries: o que falta é algum idioma alvo
+LIBRARY_FILTERS = {"": "All", "missing": "Missing subtitles", "complete": "Complete",
+                   "queued": "In the queue"}  # fmt: skip
 SUBTITLE_FLAGS = (
     "use_embedded", "embedded_resolves", "external_resolves", "forced_resolves",
     "sync_new_external", "fix_external_in_place", "delete_ours_on_human",
     "new_external_becomes_main", "asr_enabled", "asr_always",
 )  # fmt: skip
 RunOutput = tuple[RunResult, str | None, str]
+
+
+def _pager(path: str, params: dict[str, str], page: int, total: int) -> dict[str, Any]:
+    """Página pedida (corrigida para o intervalo) e os links de anterior e próxima."""
+    pages = max(1, -(-total // PAGE_SIZE))
+    page = min(max(page, 1), pages)
+
+    def href(n: int) -> str:
+        return f"{path}?{urlencode({**{k: v for k, v in params.items() if v}, 'page': n})}"
+
+    return {"page": page, "pages": pages, "total": total, "href": href(page),
+            "first": (page - 1) * PAGE_SIZE + 1 if total else 0,
+            "last": min(page * PAGE_SIZE, total),
+            "prev": href(page - 1) if page > 1 else None,
+            "next": href(page + 1) if page < pages else None}  # fmt: skip
+
+
+def _shown(show: str, missing: bool, queued: bool) -> bool:
+    return {"missing": missing, "complete": not missing, "queued": queued}.get(show, True)
 
 
 class LogBuffer(logging.Handler):
@@ -498,18 +532,30 @@ def create_app(
 
     # --- fila ---
 
+    def _queue(q: str, status: str, page: int) -> dict[str, Any]:
+        statuses = QUEUE_FILTERS.get(status, QUEUE_FILTERS[""])[1]
+        found, total = jobs.search(q, statuses, PAGE_SIZE, (max(page, 1) - 1) * PAGE_SIZE)
+        pager = _pager("/queue", {"q": q, "status": status}, page, total)
+        if total and pager["page"] != page:  # página além do fim (a fila encolheu): a última
+            found, _ = jobs.search(q, statuses, PAGE_SIZE, (pager["page"] - 1) * PAGE_SIZE)
+        options = [(k, label) for k, (label, _) in QUEUE_FILTERS.items()]
+        return {"jobs": found, "pager": pager, "q": q, "status": status, "options": options}
+
     @app.get("/queue", response_class=HTMLResponse)
-    def queue_page() -> HTMLResponse:
+    def queue_page(q: str = "", status: str = "", page: int = 1) -> HTMLResponse:
         target = lib.config().target_language
-        return render("queue.html", section="queue", jobs=jobs.list(), target=target)
+        return render("queue.html", section="queue", target=target, **_queue(q, status, page))
 
     @app.get("/queue/count", response_class=HTMLResponse)
     def pending_badge() -> HTMLResponse:
         return render("badge.html")
 
     @app.get("/queue/rows", response_class=HTMLResponse)
-    def rows() -> HTMLResponse:
-        return render("rows.html", jobs=jobs.list())
+    def rows(q: str = "", status: str = "", page: int = 1) -> HTMLResponse:
+        ctx = _queue(q, status, page)
+        response = render("rows.html", **ctx)
+        response.headers["HX-Replace-Url"] = ctx["pager"]["href"]  # recarregar mantém o filtro
+        return response
 
     def _job_or_404(job_id: int) -> Job:
         try:
@@ -582,23 +628,40 @@ def create_app(
                     out[j.video] = j.step_label if running else f"Queued: {j.step_label}"
         return out
 
+    def _library(path: str, rows: list[dict[str, Any]], q: str, show: str,
+                 page: int) -> dict[str, Any]:  # fmt: skip
+        pager = _pager(path, {"q": q, "show": show}, page, len(rows))
+        start = (pager["page"] - 1) * PAGE_SIZE
+        return {"rows": rows[start:start + PAGE_SIZE], "pager": pager, "q": q, "show": show,
+                "options": list(LIBRARY_FILTERS.items())}  # fmt: skip
+
     @app.get("/movies", response_class=HTMLResponse)
-    def movies_page() -> HTMLResponse:
-        return render("movies.html", section="movies", rows=_rows(lib.movies()))
+    def movies_page(q: str = "", show: str = "", page: int = 1) -> HTMLResponse:
+        every = _rows(lib.movies())
+        rows = [r for r in every
+                if matches(q, r["item"].title, r["item"].year, r["item"].folder)
+                and _shown(show, bool(r["missing"]), bool(r["job"]))]  # fmt: skip
+        return render("movies.html", section="movies", has_items=bool(every),
+                      **_library("/movies", rows, q, show, page))  # fmt: skip
 
     @app.get("/tv", response_class=HTMLResponse)
-    def tv_page() -> HTMLResponse:
+    def tv_page(q: str = "", show: str = "", page: int = 1) -> HTMLResponse:
         by_show: dict[int, list[dict[str, Any]]] = {}
         for ep in _rows(lib.episodes()):
             by_show.setdefault(ep["item"].series_id, []).append(ep)
-        rows = []
-        for show in lib.series_list():
-            eps = by_show.get(show.id, [])
+        every: list[dict[str, Any]] = []
+        for series in lib.series_list():
+            eps = by_show.get(series.id, [])
             done = sum(1 for e in eps if not e["missing"])
             # "faltando" para o botão: sem alguma legenda e sem passo na fila
             missing = sum(1 for e in eps if e["missing"] and not e["job"])
-            rows.append({"item": show, "total": len(eps), "done": done, "missing": missing})
-        return render("tv.html", section="tv", rows=rows)
+            queued = any(e["job"] for e in eps)
+            every.append({"item": series, "total": len(eps), "done": done, "missing": missing,
+                          "queued": queued})  # fmt: skip
+        rows = [r for r in every if matches(q, r["item"].title, r["item"].year, r["item"].folder)
+                and _shown(show, r["done"] < r["total"], r["queued"])]  # fmt: skip
+        return render("tv.html", section="tv", has_items=bool(every),
+                      **_library("/tv", rows, q, show, page))  # fmt: skip
 
     @app.get("/tv/{series_id}", response_class=HTMLResponse)
     def series_page(series_id: int) -> HTMLResponse:

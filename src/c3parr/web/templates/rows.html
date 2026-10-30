@@ -1,3 +1,4 @@
+<ul class="list border">
 {% for j in jobs %}
 <li class="wave" tabindex="0" hx-get="/queue/{{ j.id }}" hx-target="#detail" hx-swap="innerHTML"
     hx-trigger="click, keyup[key=='Enter']">
@@ -14,6 +15,14 @@
   <span class="chip {{ status_classes[j.status] }} m l">{{ j.label }}</span>
 </li>
 {% else %}
+{% if q or status %}
+<li><div class="max center-align padding"><i class="extra">search_off</i>
+  <p>No tasks match these filters.</p></div></li>
+{% else %}
 <li><div class="max center-align padding"><i class="extra">playlist_add</i>
   <p>The queue is empty. Add movies or episodes from <a class="link" href="/movies">Movies</a> or <a class="link" href="/tv">TV Shows</a>.</p></div></li>
+{% endif %}
 {% endfor %}
+</ul>
+{% include "_pager.html" %}
+<input type="hidden" id="queue-page" name="page" value="{{ pager.page }}">

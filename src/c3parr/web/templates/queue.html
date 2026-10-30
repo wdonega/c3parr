@@ -1,10 +1,15 @@
 {% extends "base.html" %}{% block content %}
-<div class="grid">
+{# a busca troca só a lista; a página atual fica num campo dentro dela, e o polling manda os dois #}
+<form id="queue-filter" class="row wrap filters" action="/queue" method="get"
+      hx-get="/queue/rows" hx-target="#rows" hx-swap="innerHTML"
+      hx-trigger="input changed delay:300ms from:[name=q], change">
+  {% with name = "status", current = status %}{% include "_filters.html" %}{% endwith %}
+</form>
+<div class="grid top-margin">
   <div class="s12 l7">
-    <article class="round no-padding">
-      <ul class="list border" id="rows" hx-get="/queue/rows" hx-trigger="every 2s" hx-swap="innerHTML">
-        {% include "rows.html" %}
-      </ul>
+    <article class="round no-padding" id="rows" hx-get="/queue/rows" hx-include="#queue-filter, #queue-page"
+             hx-trigger="every 2s" hx-swap="innerHTML">
+      {% include "rows.html" %}
     </article>
   </div>
   <div class="s12 l5">
