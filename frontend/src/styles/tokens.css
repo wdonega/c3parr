@@ -1,0 +1,45 @@
+/* Paleta e medidas da interface, num lugar só. Tudo o mais usa estas variáveis.
+   O fundo vem do banner; a lavanda do logo é o destaque; o magenta do robô fica reservado
+   para o que o c3parr fez. Bom, atenção e erro têm cor própria, separada do destaque. */
+:root {
+  color-scheme: dark;
+
+  --bg: #14111b;
+  --bg-side: #0f0d15;
+  --surface: #1c1825;
+  --surface-2: #252031;
+  --surface-sunk: #191621;
+  --line: #2e283b;
+  --line-strong: #433a56;
+  --line-soft: #2a2536;
+
+  --text: #ede9f5;
+  --text-2: #b8b1c8;
+  --muted: #9c94ad;
+
+  --accent: #cdb8ff;
+  --accent-ink: #1d1433;
+  --accent-soft: #2b2344;
+  --accent-line: #5b4a8a;
+
+  --ours: #f25fe3;
+  --ours-text: #f58bea;
+  --ours-soft: #3a1a39;
+
+  --ok: #6fddae;
+  --warn: #f5bd55;
+  --bad: #ff9485;
+  --bad-text: #ffd3cc;
+  --bad-soft: #261416;
+  --bad-line: #6b2b2c;
+  --other: #8e84a8;
+
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --brand: "Russo One", "IBM Plex Sans", sans-serif;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --side: 232px;
+  --tabbar: 64px;
+}

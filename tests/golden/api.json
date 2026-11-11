@@ -670,6 +670,7 @@
     "job": {
      "id": 5,
      "label": "Translate → pt-BR",
+     "language": "pt-BR",
      "position": null,
      "progress": 0.47,
      "status": "running"
@@ -750,6 +751,7 @@
     "job": {
      "id": 5,
      "label": "Translate → pt-BR",
+     "language": "pt-BR",
      "position": null,
      "progress": 0.47,
      "status": "running"
@@ -856,6 +858,7 @@
     "job": {
      "id": 5,
      "label": "Translate → pt-BR",
+     "language": "pt-BR",
      "position": null,
      "progress": 0.47,
      "status": "running"
@@ -1865,6 +1868,7 @@
       "job": {
        "id": 6,
        "label": "Translate → pt-BR",
+       "language": "pt-BR",
        "position": 1,
        "progress": 0.0,
        "status": "queued"
@@ -1977,7 +1981,7 @@
     "message": "could not read old.mkv",
     "resolved_at": "<ts>",
     "seen": false,
-    "step": "sondar",
+    "step": "Read the video",
     "target": "old.mkv"
    }
   ],

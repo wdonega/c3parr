@@ -39,10 +39,8 @@ def browser() -> Iterator[Browser]:
         chromium.close()
 
 
-@pytest.fixture
-def served(tmp_path: Path) -> Iterator[Served]:
-    """O app com a biblioteca de exemplo, escutando numa porta livre."""
-    world = seed_world(tmp_path)
+def serve(world: World) -> Iterator[Served]:
+    """Sobe o app numa porta livre e o derruba no fim."""
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -57,6 +55,12 @@ def served(tmp_path: Path) -> Iterator[Served]:
     yield Served(world, f"http://127.0.0.1:{port}")
     server.should_exit = True
     thread.join(5)
+
+
+@pytest.fixture
+def served(tmp_path: Path) -> Iterator[Served]:
+    """A interface antiga com a biblioteca de exemplo."""
+    yield from serve(seed_world(tmp_path))
 
 
 @pytest.fixture

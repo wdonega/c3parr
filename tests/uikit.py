@@ -14,7 +14,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import jinja2
 import pytest
@@ -106,12 +106,13 @@ class World(NamedTuple):
     """Ids pelos nomes do exemplo: filmes e séries pelo título, tarefas pelo papel (`running`…)."""
 
 
-def empty_world(root: Path) -> World:
-    """Instalação nova: nada configurado, biblioteca e fila vazias."""
+def empty_world(root: Path, ui: Literal["legacy", "spa"] = "legacy") -> World:
+    """Instalação nova: nada configurado, biblioteca e fila vazias. `ui`: as páginas HTML de
+    hoje (`legacy`) ou a interface nova servida do build do frontend (`spa`)."""
     library = Library(root / "c3parr.db")
     queue = JobQueue(root / "cache" / "fila.db")
     app = create_app(settings=settings_for(root), queue=queue, runner=fake_runner(),
-                     start_worker=False, library=library)  # fmt: skip
+                     start_worker=False, library=library, ui=ui)  # fmt: skip
     return World(root, app, library, queue, app.state.catalog, {})
 
 
@@ -128,10 +129,10 @@ def _sub(video: str, lang: str, kind: str, forced: bool = False) -> SubtitleFile
     )
 
 
-def seed_world(root: Path) -> World:
+def seed_world(root: Path, ui: Literal["legacy", "spa"] = "legacy") -> World:
     """O exemplo fixo das telas: 4 filmes, 2 séries, uma tarefa em cada estado, alertas e
     rotinas. Alvos pt-BR e es, para haver itens completos, pela metade e sem nada."""
-    world = empty_world(root)
+    world = empty_world(root, ui)
     lib, queue, catalog = world.library, world.queue, world.catalog
     ids = world.ids
     lib.update_config(

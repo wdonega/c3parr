@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from c3parr.library.store import AppConfig
+
 JobStatus = Literal["queued", "running", "done", "done_with_warnings", "failed", "cancelled"]
 StepState = Literal["done", "cached", "skipped", "failed", "warning", "running", "pending"]
 SubKind = Literal["embedded", "external", "ours"]
@@ -77,6 +79,8 @@ class JobRef(Out):
 
     id: int
     label: str
+    language: str | None = None
+    """O idioma que a tarefa está fazendo; `None` quando o passo não é de um idioma."""
     status: Literal["queued", "running"]
     progress: float
     position: int | None = None
@@ -419,7 +423,7 @@ class TestResult(ActionResult):
 
 class SettingsView(Out):
     tests: dict[str, TestRecord]
-    config: dict[str, Any]
+    config: AppConfig
     shown: SettingsShown
     secrets: dict[str, Literal["settings", "environment", ""]]
     """De onde vem cada chave. O valor nunca sai do servidor."""

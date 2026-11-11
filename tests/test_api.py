@@ -142,7 +142,8 @@ def test_upcoming_follows_the_run_order_and_a_task_can_jump_to_the_top(
     episode = show["seasons"][1]["episodes"][0]
     assert episode["name"] == DYING and episode["title"] == "In My Time of Dying"
     assert episode["job"] == {"id": ids["queued"], "label": "Translate → pt-BR",
-                              "status": "queued", "progress": 0.0, "position": 3}  # fmt: skip
+                              "language": "pt-BR", "status": "queued", "progress": 0.0,
+                              "position": 3}  # fmt: skip
     oldboy = next(m for m in api.get("/movies").json()["rows"] if m["title"] == "Oldboy")
     assert oldboy["job"]["status"] == "running" and oldboy["job"]["position"] is None
 

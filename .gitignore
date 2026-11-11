@@ -13,3 +13,7 @@ models/
 __pycache__/
 .venv/
 .DS_Store
+
+# frontend: dependências e o build (que vai para dentro do pacote)
+node_modules/
+src/c3parr/web/dist/

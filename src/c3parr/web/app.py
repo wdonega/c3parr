@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -68,6 +68,8 @@ from c3parr.web.service import (
 log = logging.getLogger("c3parr.web")
 HERE = Path(__file__).parent
 STATIC = HERE / "static"
+DIST = HERE / "dist"
+"""O build do frontend (`npm run build` em frontend/). Não vai para o git."""
 
 STATUS_ICONS = {
     "na_fila": "schedule",
@@ -195,13 +197,34 @@ def _fetch_poster(lib: Library, kind: ArrKind, url: str) -> bytes | None:
         return None
 
 
+def serve_spa(app: FastAPI, dist: Path) -> None:
+    """Serve a interface nova: os arquivos do build e, para qualquer outro endereço, a página
+    dela (as rotas /movies, /tv/3… são resolvidas no navegador)."""
+    root = dist.resolve()
+    app.mount("/assets", StaticFiles(directory=root / "assets"), name="assets")
+    fresh = {"Cache-Control": "no-cache"}  # a página e o service worker sempre na versão atual
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def page(path: str) -> FileResponse:
+        if path.startswith(("api/", "static/", "assets/")):
+            raise HTTPException(404)
+        file = (root / path).resolve()
+        if path and file.is_file() and root in file.parents:  # favicon, manifest, sw.js, ícones
+            return FileResponse(file, headers=fresh)
+        return FileResponse(root / "index.html", headers=fresh)
+
+
 def create_app(
     settings: Settings | None = None,
     queue: JobQueue | None = None,
     runner: Runner | None = None,
     start_worker: bool = True,
     library: Library | None = None,
+    ui: Literal["legacy", "spa"] = "legacy",
+    dist: Path | None = None,
 ) -> FastAPI:
+    """`ui`: `spa` serve a interface nova (o build do frontend em `dist`) sobre a API; `legacy`,
+    as páginas HTML antigas. A API JSON existe nos dois."""
     settings = settings or Settings()
     jobs = queue or JobQueue(settings.cache_dir / "fila.db")
     lib = library or Library(settings.config_dir / "c3parr.db")
@@ -334,6 +357,14 @@ def create_app(
     def not_found(_request: Request, error: NotFound) -> JSONResponse:
         return JSONResponse({"detail": str(error)}, status_code=404)
 
+    @app.get("/health")
+    def health() -> dict[str, bool]:
+        return {"ok": True}
+
+    if ui == "spa":
+        serve_spa(app, dist or DIST)
+        return app
+
     @app.get("/")
     def home() -> RedirectResponse:
         return RedirectResponse("/dashboard")
@@ -345,10 +376,6 @@ def create_app(
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard() -> HTMLResponse:
         return render("dashboard.html", section="dashboard", **svc.dashboard())
-
-    @app.get("/health")
-    def health() -> dict[str, bool]:
-        return {"ok": True}
 
     # --- fila ---
 
@@ -529,4 +556,8 @@ def serve() -> None:
     logging.basicConfig(level=logging.INFO, format=fmt)
     host = os.environ.get("C3PARR_HOST", "127.0.0.1")
     port = int(os.environ.get("C3PARR_PORT", "8484"))
-    uvicorn.run(create_app(), host=host, port=port)
+    # a interface nova, se o build dela está no pacote; C3PARR_UI=legacy força a antiga
+    built = (DIST / "index.html").exists()
+    wanted = os.environ.get("C3PARR_UI", "spa" if built else "legacy")
+    ui: Literal["legacy", "spa"] = "spa" if wanted == "spa" and built else "legacy"
+    uvicorn.run(create_app(ui=ui), host=host, port=port)

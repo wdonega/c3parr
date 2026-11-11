@@ -60,8 +60,8 @@ def job_ref(job: Job | None, positions: dict[int, int]) -> s.JobRef | None:
     if job is None:
         return None
     status = "running" if job.status == "processando" else "queued"
-    return s.JobRef(id=job.id, label=job.step_label, status=status, progress=job.progresso,
-                    position=positions.get(job.id))  # fmt: skip
+    return s.JobRef(id=job.id, label=job.step_label, language=job.idioma, status=status,
+                    progress=job.progresso, position=positions.get(job.id))  # fmt: skip
 
 
 def subs(row: dict[str, Any]) -> list[s.Sub]:
@@ -297,7 +297,7 @@ def build_api(svc: Service) -> APIRouter:
             for i in view["interfaces"]
         ]  # fmt: skip
         return s.SettingsView(
-            config=config.model_dump(mode="json"),
+            config=config,
             shown=s.SettingsShown(
                 llm_model=config.llm_model or defaults[config.llm_provider][1],
                 llm_base_url=config.llm_base_url or defaults["custom"][0],
@@ -344,8 +344,9 @@ def build_api(svc: Service) -> APIRouter:
     @api.get("/system/alerts")
     def alerts() -> s.Alerts:
         data = svc.alerts_data()
+        steps = {**data["step_names"], "sondar": "Read the video"}  # alerta que não é passo
         rows = [
-            s.AlertRow(key=a.key, kind=a.kind, step=data["step_names"].get(a.kind, a.kind),
+            s.AlertRow(key=a.key, kind=a.kind, step=steps.get(a.kind, a.kind),
                        message=a.message, target=a.target, count=a.count, first_at=a.first_at,
                        last_at=a.last_at, seen=a.seen, resolved_at=a.resolved_at,
                        items=data["names"].get(a.key, []))
