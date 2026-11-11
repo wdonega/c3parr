@@ -311,7 +311,7 @@ def test_the_app_serves_the_built_interface_and_keeps_the_api_apart(tmp_path: Pa
     (tmp_path / "secret.txt").write_text("outside the build")
     app = create_app(settings=settings_for(tmp_path), queue=JobQueue(tmp_path / "fila.db"),
                      runner=fake_runner(), start_worker=False,
-                     library=Library(tmp_path / "c3parr.db"), ui="spa", dist=dist)  # fmt: skip
+                     library=Library(tmp_path / "c3parr.db"), dist=dist)  # fmt: skip
     with TestClient(app) as client:
         # qualquer endereço de página devolve a interface: as rotas são resolvidas no navegador
         for path in ("/", "/dashboard", "/movies", "/tv/3", "/settings/library/radarr", "/nope"):
@@ -327,7 +327,7 @@ def test_the_app_serves_the_built_interface_and_keeps_the_api_apart(tmp_path: Pa
         # a API e os arquivos continuam o que são: o que não existe é 404, não a página
         assert client.get("/api/v1/shell").json()["pending"] == 0
         assert client.get("/health").json() == {"ok": True}
-        for path in ("/api/v1/nope", "/api/nope", "/assets/nope.js", "/static/nope.png"):
+        for path in ("/api/v1/nope", "/api/nope", "/assets/nope.js"):
             assert client.get(path).status_code == 404, path
         # nada fora da pasta do build sai por aqui
         for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/assets/../../secret.txt"):

@@ -1,7 +1,7 @@
-"""O que a interface faz, conferido pelo resultado (banco, fila, alertas) e não pelo HTML.
+"""O que a interface faz, conferido pelo resultado: banco, fila, alertas.
 
-Cada cenário fala só com o driver (`ui.do`), em termos do domínio. A interface nova entra com
-outro driver nos mesmos cenários: se algum quebrar, ela perdeu um comportamento.
+Cada cenário fala só com o driver (`ui.do`), em termos do domínio. Nasceram rodando também
+contra as páginas HTML antigas, para provar que a API fazia o mesmo que elas.
 """
 
 import shutil
@@ -12,7 +12,7 @@ from typing import Any, NamedTuple
 
 import pytest
 from fastapi.testclient import TestClient
-from uikit import ApiDriver, ContextSpy, HtmlDriver, World, empty_world, seed_world
+from uikit import ApiDriver, World, empty_world, seed_world
 
 from c3parr.asr.remote import REMOTE_IDS
 from c3parr.core.config import Settings
@@ -27,23 +27,17 @@ DYING = "Supernatural - S02E01 - In My Time of Dying.mkv"
 
 
 class Ui(NamedTuple):
-    do: HtmlDriver | ApiDriver
+    do: ApiDriver
     world: World
 
 
-@pytest.fixture(params=["html", "api"])
-def connect(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Callable[[World], Ui]]:
-    """Abre a interface sobre um mundo. Cada cenário roda duas vezes: pelas páginas HTML de
-    hoje e pela API JSON da interface nova. As duas têm de dar o mesmo resultado."""
+@pytest.fixture
+def connect() -> Iterator[Callable[[World], Ui]]:
+    """Abre a interface (a API JSON) sobre um mundo."""
     with ExitStack() as stack:
 
         def open_(world: World) -> Ui:
-            client = stack.enter_context(TestClient(world.app))
-            if request.param == "api":
-                return Ui(ApiDriver(client), world)
-            return Ui(HtmlDriver(client, ContextSpy(monkeypatch), world.root), world)
+            return Ui(ApiDriver(stack.enter_context(TestClient(world.app))), world)
 
         yield open_
 
@@ -584,17 +578,3 @@ def test_alerts_are_seen_when_opened_and_retried_on_request(seeded: Ui) -> None:
     assert do.retry_alert("probe:old").ok  # já resolvido: nada a fazer
     retried = do.retry_alert("traduzir:pt-BR:llm")  # o arquivo do exemplo não é um vídeo de fato
     assert not retried.ok and catalog.unseen_alerts() == 1
-
-
-def test_old_addresses_still_lead_somewhere(tmp_path: Path) -> None:
-    """Só das páginas HTML: endereços antigos e subpáginas que não existem."""
-    with TestClient(empty_world(tmp_path).app) as client:
-
-        def target(path: str) -> str:
-            return client.get(path, follow_redirects=False).headers["location"]
-
-        assert target("/") == "/dashboard" and target("/fila") == "/queue"
-        assert target("/settings") == "/settings/library" and target("/system") == "/system/tasks"
-        assert client.get("/health").json() == {"ok": True}
-        assert client.get("/settings/invented").status_code == 404
-        assert client.get("/settings/library/invented").status_code == 404

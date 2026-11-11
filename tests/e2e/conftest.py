@@ -1,8 +1,7 @@
 """Testes no navegador de verdade (Playwright), com a biblioteca de exemplo servida de fato.
 
 Ficam fora da rodada normal: `uv run pytest -m e2e`. Na primeira vez, baixe o navegador com
-`uv run playwright install chromium`. A interface de hoje carrega BeerCSS e htmx de CDN, então
-estes testes precisam de internet.
+`uv run playwright install chromium` e construa a interface (`npm run build` em frontend/).
 """
 
 import socket
@@ -14,9 +13,8 @@ from typing import NamedTuple
 
 import pytest
 import uvicorn
-from pages import LegacyUi
 from playwright.sync_api import Browser, sync_playwright
-from uikit import World, seed_world
+from uikit import World
 
 
 class Served(NamedTuple):
@@ -55,18 +53,3 @@ def serve(world: World) -> Iterator[Served]:
     yield Served(world, f"http://127.0.0.1:{port}")
     server.should_exit = True
     thread.join(5)
-
-
-@pytest.fixture
-def served(tmp_path: Path) -> Iterator[Served]:
-    """A interface antiga com a biblioteca de exemplo."""
-    yield from serve(seed_world(tmp_path))
-
-
-@pytest.fixture
-def ui(browser: Browser, served: Served) -> Iterator[LegacyUi]:
-    context = browser.new_context(viewport={"width": 1280, "height": 800})
-    page = context.new_page()
-    page.set_default_timeout(8000)
-    yield LegacyUi(page, served.url)
-    context.close()

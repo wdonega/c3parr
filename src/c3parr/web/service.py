@@ -1,6 +1,6 @@
-"""O que as telas mostram e o que as ações fazem, sem HTML nem HTTP.
+"""O que as telas mostram e o que as ações fazem, sem HTTP.
 
-As rotas HTML (`app.py`) e a API JSON usam o mesmo `Service`: a regra mora aqui uma vez só.
+A API JSON (`api.py`) só traduz o que sai daqui: a regra mora no `Service`, uma vez só.
 O que fala com o mundo de fora (Radarr/Sonarr, TMDb, LLM, servidor de transcrição) entra por
 `Clients`, para os testes trocarem.
 """
@@ -123,9 +123,6 @@ QUEUE_FILTERS: dict[str, tuple[str, tuple[str, ...]]] = {
     "failed": ("Failed", ("falhou",)),
     "cancelled": ("Cancelled", ("cancelada",)),
 }
-# chips de Filmes e Séries: o que falta é algum idioma alvo
-LIBRARY_FILTERS = {"": "All", "missing": "Missing subtitles", "complete": "Complete",
-                   "queued": "In the queue"}  # fmt: skip
 SUBTITLE_FLAGS = (
     "use_embedded", "embedded_resolves", "external_resolves", "forced_resolves",
     "sync_new_external", "fix_external_in_place", "delete_ours_on_human",
@@ -487,28 +484,6 @@ class Service:
             "warnings": [w for w in self.warnings() if w["level"] == "warn"],
         }  # fmt: skip
 
-    def dashboard(self) -> dict[str, Any]:
-        """Os mesmos números, com os rótulos da tela HTML."""
-        data = self.dashboard_data()
-        movies, episodes, done = data["movies"], data["episodes"], data["activity"]
-        cards = [
-            {"label": "Movies", "href": "/movies", "total": movies["total"],
-             "done": movies["done"]},
-            {"label": f"Episodes ({episodes['shows']} shows)", "href": "/tv",
-             "total": episodes["total"], "done": episodes["done"]},
-        ]  # fmt: skip
-        activity = [
-            ("Translations", done["translations"]),
-            ("Transcriptions (ASR)", done["transcriptions"]),
-            ("Embedded subtitles extracted", done["extracted"]),
-            ("Subtitles synced", done["synced"]),
-            ("Steps in the queue", done["queued"]),
-            ("Steps waiting after a failure", done["failed"]),
-        ]
-        return {"library_cards": cards, "activity": activity, "made": data["made"],
-                "lang_rows": data["languages"], "alerts_open": data["alerts_open"],
-                "warnings": data["warnings"]}  # fmt: skip
-
     # --- fila ---
 
     def queue(self, q: str, status: str, page: int) -> dict[str, Any]:
@@ -572,9 +547,6 @@ class Service:
                      "language": r.lang or None, "state": r.state, "detail": r.detail,
                      "attempts": r.attempts, "updated_at": r.updated_at} for r in done]  # fmt: skip
         return {"stage": stage, "pipeline": pipeline}
-
-    def target_language(self) -> str:
-        return self.lib.config().target_language
 
     def job(self, job_id: int) -> Job:
         try:
@@ -695,17 +667,6 @@ class Service:
                 **self._page("/tv", found, q, show, page,
                              lambda r: (r["done"] < r["total"], r["queued"]), sort)}  # fmt: skip
 
-    @staticmethod
-    def _html_list(data: dict[str, Any], q: str, show: str) -> dict[str, Any]:
-        return {"has_items": data["has_items"], "rows": data["rows"], "pager": data["pager"],
-                "q": q, "show": show, "options": list(LIBRARY_FILTERS.items())}  # fmt: skip
-
-    def movies(self, q: str, show: str, page: int) -> dict[str, Any]:
-        return self._html_list(self.movies_data(q, show, page), q, show)
-
-    def shows(self, q: str, show: str, page: int) -> dict[str, Any]:
-        return self._html_list(self.shows_data(q, show, page), q, show)
-
     def show(self, series_id: int) -> dict[str, Any]:
         try:
             show = self.lib.series(series_id)
@@ -765,9 +726,6 @@ class Service:
         self.lib.set_monitored(kind, item_id, not item.monitored if monitored is None
                                else monitored)  # fmt: skip
         return self.lib.movie(item_id) if kind == "movie" else self.lib.series(item_id)
-
-    def toggle_monitor(self, kind: str, item_id: int) -> Any:
-        return self.set_monitored(kind, item_id)
 
     def _videos_for(self, key: str) -> list[str]:
         """`movie:1`, `episode:7` ou `series:2` (todos os episódios: o decisor vê o que falta)."""
@@ -951,70 +909,9 @@ class Service:
             return Outcome(f"Not saved, check: {fields}", error=True, status=422)
         return Outcome("Saved.")
 
-    def save_library(self, arrs: Mapping[str, ArrConfig], shared: Mapping[str, Any],
-                     secrets: Mapping[str, str]) -> Outcome:  # fmt: skip
-        """`arrs`: só o Radarr ou o Sonarr que a tela mandou. `shared`: monitor_new e
-        sync_interval_minutes, quando vieram."""
-        outcome = self._save({**arrs, **shared}, secrets)
-        if not outcome.error:  # como o Bazarr: gravou o endereço, já lê a biblioteca de novo
-            for kind, arr in arrs.items():
-                if arr.enabled:
-                    self.lib.request_run(f"sync_{kind}")
-        return outcome
-
-    def save_languages(self, targets: Iterable[str], fallback: Iterable[str],
-                       secrets: Mapping[str, str]) -> Outcome:  # fmt: skip
-        chosen = list(dict.fromkeys(norm_lang(t) for t in targets))
-        if not chosen:
-            return Outcome("Pick at least one target language.", error=True, status=422)
-        order = list(dict.fromkeys(norm_lang(c) for c in fallback if c))
-        return self._save({"target_languages": chosen, "fallback_languages": order}, secrets)
-
-    def save_subtitles(self, values: Mapping[str, Any], secrets: Mapping[str, str]) -> Outcome:
-        """`values`: os liga/desliga presentes estão ligados; escolhas e minutos como vieram."""
-        changes: dict[str, Any] = {
-            "wait_minutes": values.get("wait_minutes"),
-            "search_interval_minutes": values.get("search_interval_minutes"),
-        }
-        for flag in SUBTITLE_FLAGS:
-            changes[flag] = bool(values.get(flag))
-        for choice in SUBTITLE_CHOICES:
-            if choice in values:
-                changes[choice] = values[choice]
-        return self._save(changes, secrets)
-
-    def save_engines(self, choices: Mapping[str, str], secrets: Mapping[str, str]) -> Outcome:
-        config = self.lib.config()
-        valid = {i["id"]: {p.id for p in i["providers"]} for i in self.interfaces(config)}
-        picked = {k: v for k, v in choices.items() if v in valid.get(k, ())}
-        return self._save({"components": {**config.components, **picked}}, secrets)
-
-    def save_integrations(self, values: Mapping[str, str],
-                          secrets: Mapping[str, str]) -> Outcome:  # fmt: skip
-        config = self.lib.config()
-        changes: dict[str, Any] = {}
-        provider = values.get("llm_provider")
-        if provider not in LLM_PRESETS:
-            provider = config.llm_provider
-        changes["llm_provider"] = provider
-        if values.get("llm_effort") in ("low", "medium"):
-            changes["llm_effort"] = values["llm_effort"]
-        # igual ao padrão do provedor grava vazio: segue o padrão se ele mudar numa versão nova
-        model = values.get("llm_model", "").strip()
-        changes["llm_model"] = "" if model == llm_defaults(provider)[1] else model
-        url = values.get("llm_base_url", "").strip()
-        changes["llm_base_url"] = "" if url == llm_defaults("custom")[0] else url
-        mode = values.get("asr_mode", config.asr_mode)
-        if mode in REMOTE_IDS and not values.get("asr_url", "").strip():
-            return Outcome("Transcription: put the server URL.", error=True, status=422)
-        changes["asr_mode"] = mode
-        changes["asr_url"] = values.get("asr_url", "").strip()
-        changes["asr_model"] = values.get("asr_model", "").strip()
-        return self._save(changes, secrets)
-
-    # A API manda só o que mudou. As regras são as mesmas das telas antigas: o Radarr/Sonarr que
-    # veio é limpo e, se ligado, relido; idiomas sem repetição; motor só entre os oferecidos;
-    # modelo e URL iguais ao padrão ficam vazios; servidor de transcrição exige URL.
+    # A interface manda só o que mudou. As regras: o Radarr/Sonarr que veio é limpo e, se ligado,
+    # relido; idiomas sem repetição; motor só entre os oferecidos; modelo e URL iguais ao padrão
+    # ficam vazios; servidor de transcrição exige URL.
 
     def _arr_with(self, kind: str, given: Mapping[str, Any]) -> ArrConfig:
         """O Radarr/Sonarr salvo com os campos que vieram por cima, limpos."""
@@ -1172,13 +1069,6 @@ class Service:
 
     def mark_alerts_seen(self) -> None:
         self.catalog.mark_alerts_seen()
-
-    def alerts_view(self) -> dict[str, Any]:
-        """Os alertas como estavam antes de abrir a página; abrir marca os abertos como vistos
-        (os de configuração só somem configurando)."""
-        data = self.alerts_data()
-        self.mark_alerts_seen()
-        return {**data, "alerts_unseen": len(data["setup"])}
 
     def retry_alert(self, key: str) -> Outcome:
         alert = next((a for a in self.catalog.alerts(include_resolved=False) if a.key == key), None)

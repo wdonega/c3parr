@@ -277,8 +277,6 @@ uv run pytest -m e2e tests/e2e/test_spa.py
 
 The TypeScript types in `frontend/src/api/types.ts` come from the API contract. After changing `src/c3parr/web/schemas.py`, write them again with `C3PARR_UPDATE_GOLDEN=1 uv run pytest tests/test_frontend_types.py`.
 
-Without the build, `c3parr-web` falls back to the previous HTML pages; `C3PARR_UI=legacy` forces them.
-
 For local transcription install whisper.cpp (`brew install whisper.cpp` on a Mac, with Metal).
 
 ## License

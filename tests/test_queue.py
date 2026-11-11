@@ -1,11 +1,12 @@
-"""A fila por dentro: ordem em que roda, contagens e as ações em lote."""
+"""A fila por dentro: ordem em que roda, o worker, busca, contagens e as ações em lote."""
 
 from pathlib import Path
 
 import pytest
+from uikit import fake_runner
 
 from c3parr.engine.engine import RunResult, StepReport
-from c3parr.jobs.queue import JobQueue
+from c3parr.jobs.queue import JobQueue, Worker
 
 
 @pytest.fixture
@@ -116,3 +117,74 @@ def test_counts_follow_the_text_search(queue: JobQueue) -> None:
     assert queue.counts("quarantieme") == {"falhou": 1}
     assert queue.counts("timeout") == {"falhou": 1}  # acha pelo erro também
     assert queue.counts("nada") == {}
+
+
+def test_queue_is_fifo(queue: JobQueue) -> None:
+    a, b = queue.submit("/m/a.mkv", "pt-BR"), queue.submit("/m/b.mkv", "pt-BR")
+    first = queue.take_next()
+    assert first is not None and first.id == a.id and first.status == "processando"
+    second = queue.take_next()
+    assert second is not None and second.id == b.id
+    assert queue.take_next() is None
+
+
+@pytest.mark.parametrize(
+    ("outcome", "status"),
+    [("ok", "concluida"), ("aviso", "concluida_avisos"), ("falha", "falhou")],
+)
+def test_worker_records_final_status(queue: JobQueue, outcome: str, status: str) -> None:
+    job = queue.submit("/m/a.mkv", "pt-BR")
+    done = Worker(queue, fake_runner(outcome)).run_once()
+    assert done is not None and done.id == job.id
+    assert done.status == status
+    assert done.etapas[0].name == "audio"
+    if outcome == "falha":
+        assert done.erro == "LLM fora do ar"
+
+
+def test_restart_puts_interrupted_job_back_in_queue(tmp_path: Path) -> None:
+    q = JobQueue(tmp_path / "fila.db")
+    q.submit("/m/a.mkv", "pt-BR")
+    q.take_next()
+    again = JobQueue(tmp_path / "fila.db")
+    assert again.list()[0].status == "na_fila"
+
+
+def test_cancel_queued_job(queue: JobQueue) -> None:
+    job = queue.submit("/m/a.mkv", "pt-BR")
+    queue.cancel(job.id)
+    assert queue.get(job.id).status == "cancelada"
+    assert queue.take_next() is None
+
+
+def test_llm_without_url_is_unavailable() -> None:
+    from c3parr.core.errors import Unavailable
+    from c3parr.llm.client import LLMConfig, make_llm_client
+
+    with pytest.raises(Unavailable, match="no LLM configured"):
+        make_llm_client(LLMConfig())
+
+
+def test_search_ignores_case_accents_and_word_order() -> None:
+    from c3parr.core.search import matches
+
+    assert matches("quarantieme DREAM", "Dream Theater - Quarantième")
+    assert matches("super s02", "Supernatural - S02E10 - Hunted")
+    assert not matches("super s03", "Supernatural - S02E10 - Hunted")
+    assert matches("", "anything") and matches("  ", None)
+
+
+def test_queue_search_filters_by_text_and_status_and_pages(queue: JobQueue) -> None:
+    for n in range(5):
+        queue.submit(f"/tv/Show/Show S01E0{n}.mkv", "pt-BR")
+    queue.submit("/movies/Quarantième 50%.mkv", "pt-BR")
+    queue.fail(1, "LLM timeout")
+
+    found, total = queue.search("show", limit=2, offset=0)
+    assert total == 5 and [j.id for j in found] == [5, 4]  # mais recentes primeiro
+    assert [j.id for j in queue.search("show", limit=2, offset=4)[0]] == [1]
+    assert queue.search("QUARANTIEME")[1] == 1
+    assert queue.search("50%")[1] == 1 and queue.search("%")[1] == 1  # % é texto, não curinga
+    assert [j.id for j in queue.search(statuses=["falhou"])[0]] == [1]
+    assert queue.search("timeout")[1] == 1  # acha pelo erro também
+    assert queue.search("show", ["na_fila"])[1] == 4

@@ -1,9 +1,6 @@
-"""A interface nova no navegador de verdade, com a biblioteca de exemplo.
-
-É a mesma lista de comportamentos que `test_browser.py` fixou na interface antiga (contagem de
-alterações, aviso ao sair, campos que seguem uma escolha, chips, seleção, detalhe da fila), mais
-o que a nova corrige: subpáginas alcançáveis no celular, botão só onde falta legenda, título por
-página. Precisa do build do frontend: `npm run build` em `frontend/`.
+"""A interface no navegador de verdade, com a biblioteca de exemplo: contagem de alterações,
+aviso ao sair, campos que seguem uma escolha, chips, seleção, detalhe da fila, celular e PWA.
+Precisa do build do frontend: `npm run build` em `frontend/`.
 """
 
 import dataclasses
@@ -26,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def spa(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Served]:
-    world = seed_world(tmp_path_factory.mktemp("spa"), ui="spa")
+    world = seed_world(tmp_path_factory.mktemp("spa"))
     service = world.app.state.service  # sem internet: nenhum pôster vem, fica o bloco de cor
     service.clients = dataclasses.replace(service.clients, fetch_poster=lambda kind, url: None)
     yield from serve(world)

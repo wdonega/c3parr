@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from test_web import fake_runner
+from uikit import fake_runner
 
 from c3parr.asr.remote import RemoteASRConfig, RemoteTranscriber
 from c3parr.core.config import Settings
@@ -100,15 +100,17 @@ def test_remote_mode_replaces_the_local_engine_and_settings_save_it(
 ) -> None:
     lib = Library(tmp_path / "c3parr.db")
     app = create_app(queue=queue, runner=fake_runner(), start_worker=False, library=lib)
-    with TestClient(app) as client:
-        page = client.get("/settings/integrations").text
-        assert 'name="asr_mode"' in page and 'value="local" selected' in page  # padrão: local
-        bad = client.post("/settings/integrations", data={"asr_mode": "openai", "asr_url": ""})
+    with TestClient(app, base_url="http://testserver/api/v1") as client:
+        assert client.get("/settings").json()["config"]["asr_mode"] == "local"  # padrão: local
+        bad = client.patch("/settings", json={"changes": {"asr_mode": "openai", "asr_url": ""}})
         assert bad.status_code == 422 and lib.config().asr_mode == "local"
-        client.post("/settings/integrations",
-                    data={"asr_mode": "asr-webservice", "asr_url": "http://whisper:9000"})  # fmt: skip
-        assert "asr-webservice" not in client.get("/settings/engines").text  # só motores locais
-        assert "Transcription on a separate server" in client.get("/system/status").text
+        client.patch("/settings", json={
+            "changes": {"asr_mode": "asr-webservice", "asr_url": "http://whisper:9000"}})  # fmt: skip
+        engines = client.get("/settings").json()["options"]["engines"]
+        offered = {p["id"] for e in engines for p in e["providers"]}
+        assert "asr-webservice" not in offered  # em Engines, só motores locais
+        notices = [w["title"] for w in client.get("/system/status").json()["warnings"]]
+        assert "Transcription on a separate server" in notices
     spec = components_for(Settings(), lib.config())["transcricao"]
     assert spec.provider == "asr-webservice" and spec.params == {"base_url": "http://whisper:9000"}
 
