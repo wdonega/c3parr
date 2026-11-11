@@ -5,16 +5,21 @@ O que fala com o mundo de fora (Radarr/Sonarr, TMDb, LLM, servidor de transcriç
 `Clients`, para os testes trocarem.
 """
 
+import hashlib
+import json
 import logging
 import platform
+import re
+import time
+import uuid
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from pydantic import ValidationError
 
@@ -24,11 +29,11 @@ from c3parr.asr.whisper_cpp import measured_speed
 from c3parr.core.config import LLM_ENV, SECRET_NAMES, Settings, load_env, load_secrets
 from c3parr.core.errors import ProviderError
 from c3parr.core.job import ComponentSpec
-from c3parr.core.search import matches
+from c3parr.core.search import matches, words
 from c3parr.jobs.queue import ACTION_LABELS, Job, JobQueue
 from c3parr.library.arr import API_KEY_ENV as ARR_KEY_ENV
 from c3parr.library.arr import SERIES_TYPES, ArrConfig, ArrKind, major
-from c3parr.library.store import AppConfig, Library
+from c3parr.library.store import AppConfig, Library, LibraryItem
 from c3parr.library.tasks import Scheduler
 from c3parr.llm.client import LLM_KEY_ENV, LLM_PRESETS, LLMConfig, llm_defaults
 from c3parr.metadata import tmdb as tmdb_meta
@@ -136,6 +141,21 @@ PATCHABLE = frozenset({
 })  # fmt: skip
 
 
+SORTS = ("title", "added", "missing")
+POSTER_TYPES = (".jpg", ".jpeg", ".png", ".webp")
+POSTER_RETRY_S = 600.0
+"""Pôster que não veio só é pedido de novo depois disto (a lista não martela quem está fora)."""
+# o que cada teste de conexão usa: mexeu nisso, o resultado guardado não vale mais
+TEST_INPUTS: dict[str, frozenset[str]] = {
+    "radarr": frozenset({"radarr", "RADARR_API_KEY"}),
+    "sonarr": frozenset({"sonarr", "SONARR_API_KEY"}),
+    "llm": frozenset({"llm_provider", "llm_model", "llm_base_url", "llm_effort",
+                      *LLM_KEY_ENV.values()}),
+    "asr": frozenset({"asr_mode", "asr_url", "asr_model", "C3PARR_ASR_API_KEY", "components"}),
+    "tmdb": frozenset({"TMDB_READ_ACCESS_TOKEN"}),
+}  # fmt: skip
+
+
 class NotFound(Exception):
     """O item pedido não existe (vira 404 na rota)."""
 
@@ -158,6 +178,8 @@ class Clients:
     remote_asr: Callable[[RemoteASRConfig, str], Any]
     env_secrets: Callable[[], dict[str, str]]
     latest_major: Callable[[ArrKind], int]
+    fetch_poster: Callable[[ArrKind, str], bytes | None]
+    """Baixa o pôster (endereço da internet ou capa no Radarr/Sonarr); None se não veio."""
 
 
 class LogBuffer(logging.Handler):
@@ -192,6 +214,15 @@ def _shown(show: str, missing: bool, queued: bool) -> bool:
     return {"missing": missing, "complete": not missing, "queued": queued}.get(show, True)
 
 
+def poster_source(url: str) -> str:
+    """O pôster num tamanho de lista: o TMDb e o Radarr/Sonarr guardam versões menores."""
+    if "image.tmdb.org/t/p/original/" in url:
+        return url.replace("/t/p/original/", "/t/p/w342/")
+    if "/MediaCover/" in url and not url.startswith(("http://", "https://")):
+        return re.sub(r"/poster(\.\w+)", r"/poster-500\1", url, count=1)
+    return url
+
+
 def interval_label(delta: timedelta) -> str:
     minutes = int(delta.total_seconds() // 60)
     if minutes % 1440 == 0:
@@ -215,7 +246,8 @@ def job_steps(job: Job, planned: list[str]) -> list[dict[str, str]]:
                 text += f" · {s.provider}"
             if s.reason:
                 text += f" · {s.reason}"
-            out.append({"label": STEP_LABELS.get(s.name, s.name), "state": state, "text": text})
+            label = STEP_LABELS.get(s.name) or ACTION_LABELS.get(s.name, s.name)
+            out.append({"label": label, "state": state, "text": text})
         return out
     current = planned.index(job.etapa) if job.etapa in planned else -1
     out = []
@@ -302,6 +334,7 @@ class Service:
         self.planned = planned
         self.themes = themes
         self.clients = clients
+        self._poster_misses: dict[str, float] = {}
 
     # --- chaves ---
 
@@ -501,6 +534,45 @@ class Service:
         found, _ = self.jobs.search(statuses=("processando",), limit=1)
         return found[0] if found else None
 
+    def upcoming(self, limit: int) -> list[Job]:
+        return self.jobs.upcoming(limit)
+
+    def recent(self, limit: int) -> list[Job]:
+        return self.jobs.recent(limit)
+
+    def queue_positions(self) -> dict[int, int]:
+        """id da tarefa que espera → o lugar dela na fila (1 é a próxima a rodar)."""
+        return {j.id: n for n, j in enumerate(self.jobs.upcoming(2000), start=1)}
+
+    def items_for(self, jobs: Iterable[Job]) -> dict[str, LibraryItem]:
+        """vídeo → o filme ou episódio dele, para a fila mostrar título em vez de arquivo."""
+        return self.lib.items_for(j.video for j in jobs)
+
+    def cancel_queued(self) -> Outcome:
+        n = self.jobs.cancel_queued()
+        return Outcome(f"{n} task(s) cancelled." if n else "Nothing is waiting in the queue.")
+
+    def retry_failed(self) -> Outcome:
+        n = self.jobs.retry_failed()
+        return Outcome(f"{n} task(s) back in the queue." if n else "No failed task to run again.")
+
+    def move_to_top(self, job_id: int) -> dict[str, Any]:
+        self.job(job_id)
+        self.jobs.move_to_top(job_id)
+        return self.job_detail(job_id)
+
+    def job_extra(self, job: Job) -> dict[str, Any]:
+        """O que a tarefa está fazendo agora e os passos da pipeline já registrados no vídeo."""
+        stage = STEP_LABELS.get(job.etapa or "") if job.status == "processando" else None
+        steps = self.catalog.steps(job.media_id) if job.media_id is not None else {}
+        order = list(ACTION_LABELS)
+        done = sorted(steps.values(), key=lambda r: (
+            order.index(r.action) if r.action in order else len(order), r.lang))  # fmt: skip
+        pipeline = [{"action": r.action, "label": ACTION_LABELS.get(r.action, r.action),
+                     "language": r.lang or None, "state": r.state, "detail": r.detail,
+                     "attempts": r.attempts, "updated_at": r.updated_at} for r in done]  # fmt: skip
+        return {"stage": stage, "pipeline": pipeline}
+
     def target_language(self) -> str:
         return self.lib.config().target_language
 
@@ -575,9 +647,16 @@ class Service:
 
     @staticmethod
     def _page(path: str, found: list[dict[str, Any]], q: str, show: str, page: int,
-              flags: Callable[[dict[str, Any]], tuple[bool, bool]]) -> dict[str, Any]:  # fmt: skip
+              flags: Callable[[dict[str, Any]], tuple[bool, bool]],
+              sort: str = "title") -> dict[str, Any]:  # fmt: skip
         """`found` (o que casa com a busca) filtrado pelo chip e cortado na página; e quantos
-        itens cada chip tem. `flags` diz, de cada linha, se falta legenda e se está na fila."""
+        itens cada chip tem. `flags` diz, de cada linha, se falta legenda e se está na fila.
+        `sort`: `title` (como veio), `added` (mais novos primeiro) ou `missing` (o que falta
+        legenda primeiro)."""
+        if sort == "added":
+            found = sorted(found, key=lambda r: r["item"].added_at, reverse=True)
+        elif sort == "missing":
+            found = sorted(found, key=lambda r: not flags(r)[0])
         marks = [flags(r) for r in found]
         rows = [r for r, (missing, queued) in zip(found, marks, strict=True)
                 if _shown(show, missing, queued)]  # fmt: skip
@@ -589,15 +668,15 @@ class Service:
         shown = rows[start : start + PAGE_SIZE]
         return {"rows": shown, "pager": pages, "counts": counts}
 
-    def movies_data(self, q: str, show: str, page: int) -> dict[str, Any]:
+    def movies_data(self, q: str, show: str, page: int, sort: str = "title") -> dict[str, Any]:
         every = self.item_rows(self.lib.movies())
         found = [r for r in every
                  if matches(q, r["item"].title, r["item"].year, r["item"].folder)]  # fmt: skip
         return {"has_items": bool(every),
                 **self._page("/movies", found, q, show, page,
-                             lambda r: (bool(r["missing"]), bool(r["job"])))}  # fmt: skip
+                             lambda r: (bool(r["missing"]), bool(r["job"])), sort)}  # fmt: skip
 
-    def shows_data(self, q: str, show: str, page: int) -> dict[str, Any]:
+    def shows_data(self, q: str, show: str, page: int, sort: str = "title") -> dict[str, Any]:
         by_show: dict[int, list[dict[str, Any]]] = {}
         for ep in self.item_rows(self.lib.episodes()):
             by_show.setdefault(ep["item"].series_id, []).append(ep)
@@ -614,7 +693,7 @@ class Service:
                  if matches(q, r["item"].title, r["item"].year, r["item"].folder)]  # fmt: skip
         return {"has_items": bool(every),
                 **self._page("/tv", found, q, show, page,
-                             lambda r: (r["done"] < r["total"], r["queued"]))}  # fmt: skip
+                             lambda r: (r["done"] < r["total"], r["queued"]), sort)}  # fmt: skip
 
     @staticmethod
     def _html_list(data: dict[str, Any], q: str, show: str) -> dict[str, Any]:
@@ -637,6 +716,43 @@ class Service:
             seasons.setdefault(ep["item"].season, []).append(ep)
         ordered = sorted(seasons.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))
         return {"show": show, "seasons": ordered}
+
+    def search(self, q: str, limit: int = 8) -> dict[str, list[Any]]:
+        """Busca do topo: filmes e séries pelo título ou ano. Sem texto, nada."""
+        if not words(q):
+            return {"movies": [], "shows": []}
+        movies = [m for m in self.lib.movies() if matches(q, m.title, m.year)]
+        shows = [s for s in self.lib.series_list() if matches(q, s.title, s.year)]
+        return {"movies": movies[:limit], "shows": shows[:limit]}
+
+    def poster_file(self, kind: str, item_id: int) -> Path:
+        """O pôster do filme ou da série, baixado na primeira vez e guardado no cache."""
+        if kind not in ("movie", "series"):
+            raise NotFound("Not Found")
+        try:
+            item = self.lib.movie(item_id) if kind == "movie" else self.lib.series(item_id)
+        except KeyError:
+            raise NotFound("item not found") from None
+        if not item.poster:
+            raise NotFound("no poster")
+        url = poster_source(item.poster)
+        suffix = Path(urlsplit(url).path).suffix.lower()
+        name = hashlib.sha256(url.encode()).hexdigest()[:24]
+        target = self.settings.cache_dir / "posters" / (
+            name + (suffix if suffix in POSTER_TYPES else ".jpg"))  # fmt: skip
+        if target.exists():
+            return target
+        if time.monotonic() - self._poster_misses.get(url, -POSTER_RETRY_S) < POSTER_RETRY_S:
+            raise NotFound("poster not available")
+        data = self.clients.fetch_poster("radarr" if kind == "movie" else "sonarr", url)
+        if not data:
+            self._poster_misses[url] = time.monotonic()
+            raise NotFound("poster not available")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        partial = target.with_name(f"{target.name}.{uuid.uuid4().hex}.part")
+        partial.write_bytes(data)
+        partial.replace(target)
+        return target
 
     def set_monitored(self, kind: str, item_id: int, monitored: bool | None = None) -> Any:
         """Marca ou desmarca o filme ou a série (`None` alterna) e devolve o item como ficou."""
@@ -965,6 +1081,10 @@ class Service:
         out.update({name: changes[name] for name in PLAIN_SETTINGS if name in changes})
         outcome = self._save({**arrs, **out}, {k: v or "" for k, v in secrets.items()})
         if not outcome.error:
+            touched = changes.keys() | secrets.keys()
+            for target, inputs in TEST_INPUTS.items():
+                if touched & inputs:
+                    self.lib.set_meta(f"test_{target}", "")
             for kind, arr in arrs.items():
                 if arr.enabled:
                     self.lib.request_run(f"sync_{kind}")
@@ -972,7 +1092,27 @@ class Service:
 
     def test_screen(self, target: str, changes: Mapping[str, Any],
                     secrets: Mapping[str, str | None]) -> Outcome:  # fmt: skip
-        """Testa a conexão com o que a tela tem agora: o salvo, com o digitado por cima."""
+        """Testa a conexão com o que a tela tem agora (o salvo, com o digitado por cima) e
+        guarda o resultado, para a tela mostrar o último teste sem refazer."""
+        started = time.perf_counter()
+        outcome = self._test(target, changes, secrets)
+        record = {"ok": not outcome.error, "message": outcome.message,
+                  "at": datetime.now(UTC).isoformat(timespec="seconds"),
+                  "ms": round((time.perf_counter() - started) * 1000)}  # fmt: skip
+        self.lib.set_meta(f"test_{target}", json.dumps(record))
+        return outcome
+
+    def last_tests(self) -> dict[str, dict[str, Any]]:
+        """Alvo → o último teste de conexão que ainda vale (ok, mensagem, quando, quanto levou)."""
+        out = {}
+        for target in TEST_INPUTS:
+            raw = self.lib.meta(f"test_{target}")
+            if raw:
+                out[target] = dict(json.loads(raw))
+        return out
+
+    def _test(self, target: str, changes: Mapping[str, Any],
+              secrets: Mapping[str, str | None]) -> Outcome:  # fmt: skip
         config = self.lib.config()
         typed = {k: (v or "").strip() for k, v in secrets.items()}
 

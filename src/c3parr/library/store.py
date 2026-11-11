@@ -7,6 +7,7 @@ Segredos continuam fora daqui (só no ambiente ou no `.env`).
 import json
 import sqlite3
 import threading
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS movie (
     year INTEGER,
     tmdb_id INTEGER,
     monitored INTEGER NOT NULL DEFAULT 1,
-    added_at TEXT NOT NULL
+    added_at TEXT NOT NULL,
+    poster TEXT
 );
 CREATE TABLE IF NOT EXISTS series (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +40,8 @@ CREATE TABLE IF NOT EXISTS series (
     year INTEGER,
     tmdb_id INTEGER,
     monitored INTEGER NOT NULL DEFAULT 1,
-    added_at TEXT NOT NULL
+    added_at TEXT NOT NULL,
+    poster TEXT
 );
 CREATE TABLE IF NOT EXISTS episode (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +49,8 @@ CREATE TABLE IF NOT EXISTS episode (
     video TEXT NOT NULL UNIQUE,
     season INTEGER,
     episode INTEGER,
-    added_at TEXT NOT NULL
+    added_at TEXT NOT NULL,
+    title TEXT
 );
 CREATE TABLE IF NOT EXISTS subtitle_file (
     path TEXT PRIMARY KEY,
@@ -70,6 +74,14 @@ CREATE TABLE IF NOT EXISTS task (
     run_now INTEGER NOT NULL DEFAULT 0
 );
 """
+
+
+# colunas que vieram depois: o banco de uma versão anterior ganha cada uma ao abrir
+ADDED_COLUMNS = {
+    "movie": {"poster": "TEXT"},
+    "series": {"poster": "TEXT"},
+    "episode": {"title": "TEXT"},
+}
 
 
 def now() -> datetime:
@@ -149,6 +161,8 @@ class Movie(Model):
     tmdb_id: int | None = None
     monitored: bool = True
     added_at: str
+    poster: str | None = None
+    """Endereço do pôster que o Radarr informou (na internet, ou o caminho da capa nele)."""
 
 
 class Series(Model):
@@ -159,6 +173,7 @@ class Series(Model):
     tmdb_id: int | None = None
     monitored: bool = True
     added_at: str
+    poster: str | None = None
 
 
 class Episode(Model):
@@ -168,6 +183,22 @@ class Episode(Model):
     season: int | None = None
     episode: int | None = None
     added_at: str
+    title: str | None = None
+    """Título do episódio no Sonarr."""
+
+
+class LibraryItem(Model):
+    """O filme ou o episódio de um vídeo, com o que a interface precisa para dar nome a ele."""
+
+    kind: Literal["movie", "episode"]
+    id: int
+    title: str
+    """Do filme, ou da série do episódio."""
+    year: int | None = None
+    show_id: int | None = None
+    season: int | None = None
+    episode: int | None = None
+    episode_title: str | None = None
 
 
 class SubtitleFile(Model):
@@ -199,6 +230,11 @@ class Library:
         self._lock = threading.Lock()
         with self._db() as db:
             db.executescript(SCHEMA)
+            for table, columns in ADDED_COLUMNS.items():
+                have = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
+                for name, decl in columns.items():
+                    if name not in have:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     def _db(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -285,20 +321,21 @@ class Library:
         return Movie.model_validate(dict(row))
 
     def upsert_movie(self, folder: str, video: str, title: str, year: int | None,
-                     tmdb_id: int | None, monitored: bool) -> bool:  # fmt: skip
+                     tmdb_id: int | None, monitored: bool,
+                     poster: str | None = None) -> bool:  # fmt: skip
         """Grava o filme achado no scan. Devolve True se ele é novo."""
         with self._lock, self._db() as db:
             cur = db.execute(
                 "UPDATE movie SET video = ?, title = ?, year = ?, "
-                "tmdb_id = COALESCE(?, tmdb_id) WHERE folder = ?",
-                (video, title, year, tmdb_id, folder),
+                "tmdb_id = COALESCE(?, tmdb_id), poster = COALESCE(?, poster) WHERE folder = ?",
+                (video, title, year, tmdb_id, poster, folder),
             )
             if cur.rowcount:
                 return False
             db.execute(
-                "INSERT INTO movie (folder, video, title, year, tmdb_id, monitored, added_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (folder, video, title, year, tmdb_id, int(monitored), now().isoformat()),
+                "INSERT INTO movie (folder, video, title, year, tmdb_id, monitored, added_at, "
+                "poster) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (folder, video, title, year, tmdb_id, int(monitored), now().isoformat(), poster),
             )
             return True
 
@@ -330,31 +367,33 @@ class Library:
         return Series.model_validate(dict(row))
 
     def upsert_series(self, folder: str, title: str, year: int | None, tmdb_id: int | None,
-                      monitored: bool) -> int:  # fmt: skip
+                      monitored: bool, poster: str | None = None) -> int:  # fmt: skip
         with self._lock, self._db() as db:
             db.execute(
-                "INSERT INTO series (folder, title, year, tmdb_id, monitored, added_at) "
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(folder) DO UPDATE SET "
+                "INSERT INTO series (folder, title, year, tmdb_id, monitored, added_at, poster) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(folder) DO UPDATE SET "
                 "title = excluded.title, year = excluded.year, "
-                "tmdb_id = COALESCE(excluded.tmdb_id, series.tmdb_id)",
-                (folder, title, year, tmdb_id, int(monitored), now().isoformat()),
+                "tmdb_id = COALESCE(excluded.tmdb_id, series.tmdb_id), "
+                "poster = COALESCE(excluded.poster, series.poster)",
+                (folder, title, year, tmdb_id, int(monitored), now().isoformat(), poster),
             )
             row = db.execute("SELECT id FROM series WHERE folder = ?", (folder,)).fetchone()
         return int(row["id"])
 
     def upsert_episode(self, series_id: int, video: str, season: int | None,
-                       episode: int | None) -> bool:  # fmt: skip
+                       episode: int | None, title: str | None = None) -> bool:  # fmt: skip
         with self._lock, self._db() as db:
             cur = db.execute(
-                "UPDATE episode SET series_id = ?, season = ?, episode = ? WHERE video = ?",
-                (series_id, season, episode, video),
+                "UPDATE episode SET series_id = ?, season = ?, episode = ?, "
+                "title = COALESCE(?, title) WHERE video = ?",
+                (series_id, season, episode, title, video),
             )
             if cur.rowcount:
                 return False
             db.execute(
-                "INSERT INTO episode (series_id, video, season, episode, added_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (series_id, video, season, episode, now().isoformat()),
+                "INSERT INTO episode (series_id, video, season, episode, added_at, title) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (series_id, video, season, episode, now().isoformat(), title),
             )
             return True
 
@@ -389,6 +428,32 @@ class Library:
             db.executemany("DELETE FROM series WHERE id = ?", [(i,) for i in shows])
             self._forget_subtitles_of_removed(db)
         return len(eps) + len(shows)
+
+    def items_for(self, videos: Iterable[str]) -> dict[str, LibraryItem]:
+        """vídeo → o filme ou o episódio dele. Vídeo que não está na biblioteca fica de fora."""
+        wanted = list(dict.fromkeys(videos))
+        out: dict[str, LibraryItem] = {}
+        with self._db() as db:
+            for i in range(0, len(wanted), 500):  # limite de parâmetros do SQLite
+                chunk = wanted[i : i + 500]
+                marks = ",".join("?" * len(chunk))
+                for r in db.execute(
+                    f"SELECT id, video, title, year FROM movie WHERE video IN ({marks})", chunk
+                ):
+                    out[r["video"]] = LibraryItem(kind="movie", id=r["id"], title=r["title"],
+                                                  year=r["year"])  # fmt: skip
+                for r in db.execute(
+                    "SELECT e.id, e.video, e.season, e.episode, e.title AS episode_title, "
+                    "s.id AS show_id, s.title, s.year FROM episode e "
+                    f"JOIN series s ON s.id = e.series_id WHERE e.video IN ({marks})",
+                    chunk,
+                ):
+                    out[r["video"]] = LibraryItem(
+                        kind="episode", id=r["id"], title=r["title"], year=r["year"],
+                        show_id=r["show_id"], season=r["season"], episode=r["episode"],
+                        episode_title=r["episode_title"],
+                    )  # fmt: skip
+        return out
 
     def watch_info(self, video: str) -> tuple[bool, str] | None:
         """(monitorado, quando entrou na biblioteca) do vídeo; None se não está na biblioteca."""

@@ -28,6 +28,15 @@ def _file_path(folder: str | None, file: dict[str, Any]) -> str | None:
     return None
 
 
+def _poster(item: dict[str, Any]) -> str | None:
+    """O pôster que o Radarr/Sonarr informa: o endereço na internet se houver, senão o caminho
+    da capa guardada nele (`/MediaCover/12/poster.jpg`)."""
+    for image in item.get("images") or []:
+        if isinstance(image, dict) and image.get("coverType") == "poster":
+            return str(image.get("remoteUrl") or image.get("url") or "") or None
+    return None
+
+
 def _summary(kind: str, counts: dict[str, int], removed: int | None) -> str:
     parts = [f"{counts['items']} {kind}", f"{counts['new']} new"]
     if removed:
@@ -75,7 +84,7 @@ def sync_radarr(
         counts["items"] += 1
         counts["new"] += library.upsert_movie(
             folder, str(video), str(m.get("title") or video.stem), m.get("year") or None,
-            m.get("tmdbId") or None, config.monitor_new,
+            m.get("tmdbId") or None, config.monitor_new, _poster(m),
         )  # fmt: skip
         index_subtitles(library, str(video))
     removed = None if counts["missing"] else library.remove_movies_except(folders)
@@ -108,16 +117,16 @@ def sync_sonarr(
             ):
                 counts["filtered"] += 1
                 continue
-            numbers: dict[int, tuple[int | None, int | None, bool]] = {}
+            numbers: dict[int, tuple[int | None, int | None, bool, str | None]] = {}
             for ep in client.episodes(int(s["id"])):
                 fid = ep.get("episodeFileId")
                 if fid and fid not in numbers:  # arquivo com vários episódios: fica o primeiro
                     numbers[fid] = (ep.get("seasonNumber"), ep.get("episodeNumber"),
-                                    bool(ep.get("monitored")))  # fmt: skip
+                                    bool(ep.get("monitored")), ep.get("title") or None)  # fmt: skip
             series_id: int | None = None
             for f in client.episode_files(int(s["id"])):
-                default = (f.get("seasonNumber"), None, True)
-                season, number, monitored = numbers.get(int(f["id"]), default)
+                default = (f.get("seasonNumber"), None, True, None)
+                season, number, monitored, title = numbers.get(int(f["id"]), default)
                 skip_zero = cfg.exclude_season_zero and season == 0
                 if skip_zero or (cfg.only_monitored and not monitored):
                     counts["filtered"] += 1
@@ -131,12 +140,13 @@ def sync_sonarr(
                     folder = str(map_path(str(s.get("path") or video.parent), cfg.path_mappings))
                     series_id = library.upsert_series(
                         folder, str(s.get("title") or Path(folder).name), s.get("year") or None,
-                        s.get("tmdbId") or None, config.monitor_new,
+                        s.get("tmdbId") or None, config.monitor_new, _poster(s),
                     )  # fmt: skip
                     folders.add(folder)
                 videos.add(str(video))
                 counts["items"] += 1
-                counts["new"] += library.upsert_episode(series_id, str(video), season, number)
+                counts["new"] += library.upsert_episode(series_id, str(video), season, number,
+                                                        title)  # fmt: skip
                 index_subtitles(library, str(video))
     finally:
         client.close()

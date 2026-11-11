@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.openapi.utils import get_openapi
@@ -32,6 +33,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from c3parr import REPO_URL, __version__
 from c3parr.asr.remote import RemoteASRConfig, RemoteTranscriber
 from c3parr.core.config import Settings, load_secrets
+from c3parr.core.errors import ProviderError
 from c3parr.engine.engine import Engine, RunResult
 from c3parr.jobs.queue import FINISHED, Job, JobQueue, ProgressFn, Runner, Worker, engine_runner
 from c3parr.library.arr import API_KEY_ENV as ARR_KEY_ENV
@@ -170,6 +172,29 @@ def _latest_major(kind: ArrKind) -> int:
     return latest_major(kind)
 
 
+POSTER_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _fetch_poster(lib: Library, kind: ArrKind, url: str) -> bytes | None:
+    """Baixa o pôster: da internet, ou a capa guardada no Radarr/Sonarr (pela API dele, que
+    aceita a chave). O que não vier como imagem, ou vier grande demais, não serve."""
+    try:
+        if url.startswith(("http://", "https://")):
+            got = httpx.get(url, timeout=15, follow_redirects=True)
+            image = got.headers.get("content-type", "").startswith("image/")
+            ok = got.status_code == 200 and image and len(got.content) <= POSTER_MAX_BYTES
+            return got.content if ok else None
+        key = effective_secrets(lib).get(ARR_KEY_ENV[kind], "")
+        client = ArrClient(kind, getattr(lib.config(), kind), key)
+        try:
+            return client.image(url)
+        finally:
+            client.close()
+    except (httpx.HTTPError, ProviderError) as e:
+        log.info("poster %s: %s", url, e)
+        return None
+
+
 def create_app(
     settings: Settings | None = None,
     queue: JobQueue | None = None,
@@ -231,7 +256,8 @@ def create_app(
         planned=planned,
         themes=themes,
         clients=Clients(arr=_arr, tmdb=_tmdb, llm=_llm, remote_asr=_remote_asr,
-                        env_secrets=_env_secrets, latest_major=_latest_major),
+                        env_secrets=_env_secrets, latest_major=_latest_major,
+                        fetch_poster=lambda kind, url: _fetch_poster(lib, kind, url)),
     )  # fmt: skip
 
     env = Environment(loader=FileSystemLoader(HERE / "templates"),

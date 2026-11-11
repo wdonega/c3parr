@@ -125,6 +125,19 @@ class ArrClient:
     def episodes(self, series_id: int) -> list[dict[str, Any]]:
         return list(self.get("/episode", seriesId=series_id))
 
+    def image(self, cover: str) -> bytes:
+        """A capa que o Radarr/Sonarr guarda (`/MediaCover/12/poster.jpg?lastWrite=…`), pedida
+        pela API dele, que aceita a chave."""
+        path = "/mediacover/" + cover.split("/MediaCover/", 1)[-1].split("?", 1)[0]
+        try:
+            r = self._http.get(path)
+        except httpx.HTTPError as e:
+            raise TransientFailure(f"{self.name} did not respond: {e}", provider=self.kind) from e
+        if r.status_code >= 400:
+            msg = f"{self.name} answered HTTP {r.status_code} on {path}"
+            raise TransientFailure(msg, provider=self.kind)
+        return r.content
+
     def close(self) -> None:
         self._http.close()
 

@@ -28,6 +28,10 @@ def routes(ids: dict[str, int]) -> list[tuple[str, str, dict[str, str]]]:
         ("queue", "/queue", {}),
         ("queue_failed", "/queue", {"status": "failed"}),
         ("queue_search", "/queue", {"q": "super"}),
+        ("queue_upcoming", "/queue/upcoming", {}),
+        ("queue_recent", "/queue/recent", {}),
+        ("search", "/search", {"q": "a"}),
+        ("movies_by_missing", "/movies", {"sort": "missing"}),
     ]
     out += [(f"job_{role}", f"/queue/{ids[role]}", {})
             for role in ("done", "warned", "failed", "cancelled", "running", "queued")]  # fmt: skip

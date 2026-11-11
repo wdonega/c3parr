@@ -158,7 +158,7 @@ class LLMTranslator:
         for n, block in enumerate(blocks):
             lines, usage = self._block(system, block, request.src, dst, usage)
             out.extend(lines)
-            progress((n + 1) / max(1, len(blocks)), f"bloco {n + 1}/{len(blocks)}")
+            progress((n + 1) / max(1, len(blocks)), f"block {n + 1} of {len(blocks)}")
         return Translation(lines=tuple(out), dst=request.dst, usage=usage)
 
     def _block(

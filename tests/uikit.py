@@ -48,6 +48,17 @@ SUBTITLE_FLAGS = (
 )  # fmt: skip
 
 
+# o pôster como o Radarr/Sonarr informa: na internet (TMDb) ou a capa guardada nele
+POSTERS = {
+    "Incendies": "https://image.tmdb.org/t/p/original/incendies.jpg",
+    "Supernatural": "/MediaCover/7/poster.jpg?lastWrite=1",
+}
+EPISODE_TITLES = {
+    "Supernatural - S01E01 - Pilot.mkv": "Pilot",
+    "Supernatural - S02E01 - In My Time of Dying.mkv": "In My Time of Dying",
+}
+
+
 def fake_runner(outcome: str = "ok") -> Runner:
     """Roda uma tarefa sem modelo nenhum: `ok`, `aviso` (degradação) ou `falha`."""
 
@@ -145,7 +156,8 @@ def seed_world(root: Path) -> World:
     for title, (year, _monitored, subs) in movies.items():
         video = _video(root / "movies" / f"{title} ({year})" / f"{title}.mkv")
         videos[title] = video
-        lib.upsert_movie(str(Path(video).parent), video, title, year, None, True)
+        lib.upsert_movie(str(Path(video).parent), video, title, year, None, True,
+                         POSTERS.get(title))  # fmt: skip
         lib.set_subtitle_files(video, [_sub(video, *s) for s in subs])
     for movie in lib.movies():
         ids[movie.title] = movie.id
@@ -164,12 +176,12 @@ def seed_world(root: Path) -> World:
     }  # fmt: skip
     for title, (year, episodes) in shows.items():
         folder = root / "tv" / title
-        ids[title] = lib.upsert_series(str(folder), title, year, None, True)
+        ids[title] = lib.upsert_series(str(folder), title, year, None, True, POSTERS.get(title))
         for season, number, name, subs in episodes:
             sub_folder = f"Season {season}" if season else "Extras"
             video = _video(folder / sub_folder / name)
             videos[name] = video
-            lib.upsert_episode(ids[title], video, season, number)
+            lib.upsert_episode(ids[title], video, season, number, EPISODE_TITLES.get(name))
             lib.set_subtitle_files(video, [_sub(video, *s) for s in subs])
 
     media = {name: catalog.ensure_media(video)[0].id for name, video in videos.items()}
@@ -212,7 +224,7 @@ def seed_world(root: Path) -> World:
     running, _ = queue.submit_step(media["Oldboy"], videos["Oldboy"], "traduzir", "pt-BR",
                                    origem="manual")  # fmt: skip
     queue.take_next()
-    queue.progress(running.id, "traducao", 0.47, "bloco 44/94")
+    queue.progress(running.id, "traducao", 0.47, "block 44 of 94")
     ids["running"] = running.id
 
     queued, _ = queue.submit_step(media[dying], videos[dying], "traduzir", "pt-BR")

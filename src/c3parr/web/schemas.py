@@ -79,6 +79,22 @@ class JobRef(Out):
     label: str
     status: Literal["queued", "running"]
     progress: float
+    position: int | None = None
+    """Lugar na fila (1 é a próxima a rodar); `None` para a que já está rodando."""
+
+
+class JobItem(Out):
+    """O filme ou o episódio da tarefa, para mostrar título em vez de nome de arquivo."""
+
+    kind: Literal["movie", "episode"]
+    id: int
+    title: str
+    """Do filme, ou da série do episódio."""
+    year: int | None
+    show_id: int | None
+    season: int | None
+    episode: int | None
+    episode_title: str | None
 
 
 # --- fila ---
@@ -100,6 +116,8 @@ class JobRow(Out):
     created_at: str
     started_at: str | None
     finished_at: str | None
+    item: JobItem | None = None
+    """`None`: o vídeo não está (mais) na biblioteca."""
 
 
 class Step(Out):
@@ -117,8 +135,30 @@ class Degraded(Out):
     effect: str
 
 
+class PipelineStep(Out):
+    """Um passo da pipeline já registrado para o vídeo (o último resultado de cada um)."""
+
+    action: str
+    label: str
+    language: str | None
+    state: Literal["done", "not_found", "failed"]
+    detail: str | None
+    attempts: int
+    updated_at: str
+
+
+PIPELINE_STATE: dict[str, Literal["done", "not_found", "failed"]] = {
+    "ok": "done",
+    "nao_encontrado": "not_found",
+    "falhou": "failed",
+}
+
+
 class JobDetail(JobRow):
+    stage: str | None
+    """O que a tarefa está fazendo agora (Translation, Sync…), enquanto roda."""
     steps: list[Step]
+    pipeline: list[PipelineStep]
     warnings: list[Degraded]
     has_subtitle: bool
     has_report: bool
@@ -214,6 +254,8 @@ class MovieRow(Out):
     subs: list[Sub]
     missing: list[str]
     job: JobRef | None
+    poster: str | None
+    """Endereço do pôster nesta API; `None` se o Radarr não informou um."""
 
 
 class MoviePage(Out):
@@ -237,6 +279,7 @@ class ShowRow(Out):
     missing: int
     """Episódios sem alguma legenda e sem tarefa na fila."""
     queued: bool
+    poster: str | None
 
 
 class ShowPage(Out):
@@ -251,6 +294,8 @@ class EpisodeRow(Out):
     id: int
     season: int | None
     episode: int | None
+    title: str | None
+    """Título do episódio no Sonarr."""
     name: str
     video: str
     subs: list[Sub]
@@ -270,7 +315,20 @@ class ShowDetail(Out):
     year: int | None
     folder: str
     monitored: bool
+    poster: str | None
     seasons: list[Season]
+
+
+class SearchHit(Out):
+    id: int
+    title: str
+    year: int | None
+    poster: str | None
+
+
+class SearchResults(Out):
+    movies: list[SearchHit]
+    shows: list[SearchHit]
 
 
 class Monitored(Out):
@@ -345,7 +403,22 @@ class SettingsShown(Out):
     llm_url_from_env: bool
 
 
+class TestRecord(Out):
+    """O último teste de conexão de um alvo, enquanto o que ele testou não mudar."""
+
+    ok: bool
+    message: str
+    at: str
+    ms: int
+
+
+class TestResult(ActionResult):
+    ms: int | None = None
+    """Quanto o teste levou."""
+
+
 class SettingsView(Out):
+    tests: dict[str, TestRecord]
     config: dict[str, Any]
     shown: SettingsShown
     secrets: dict[str, Literal["settings", "environment", ""]]

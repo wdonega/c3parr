@@ -254,6 +254,26 @@ class JobQueue:
             ).fetchall()
         return {r["status"]: int(r["n"]) for r in rows}
 
+    def upcoming(self, limit: int = 100) -> list[Job]:
+        """As que esperam, na ordem em que vão rodar (maior prioridade, depois a mais antiga)."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT * FROM tarefas WHERE status = 'na_fila' "
+                "ORDER BY prioridade DESC, id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_job(r) for r in rows]
+
+    def recent(self, limit: int = 10) -> list[Job]:
+        """As que terminaram por último (deram certo, falharam ou foram canceladas rodando)."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT * FROM tarefas WHERE terminada_em IS NOT NULL AND status NOT IN "
+                "('na_fila', 'processando') ORDER BY terminada_em DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_job(r) for r in rows]
+
     def list(self, limit: int = 200) -> list[Job]:
         with self._db() as db:
             rows = db.execute("SELECT * FROM tarefas ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
@@ -336,10 +356,42 @@ class JobQueue:
                 (CANCEL_REQUESTED, job_id),
             )
 
+    def cancel_queued(self) -> int:
+        """Tira da fila todas as que ainda esperam. Devolve quantas."""
+        with self._lock, self._db() as db:
+            cur = db.execute(
+                "UPDATE tarefas SET status = 'cancelada', mensagem = ? WHERE status = 'na_fila'",
+                (CANCEL_REQUESTED,),
+            )
+            return int(cur.rowcount)
+
+    def move_to_top(self, job_id: int) -> None:
+        """Passa a tarefa que espera na frente de todas as outras da fila."""
+        with self._lock, self._db() as db:
+            db.execute(
+                "UPDATE tarefas SET prioridade = (SELECT COALESCE(MAX(prioridade), 0) + 1 "
+                "FROM tarefas WHERE status = 'na_fila') WHERE id = ? AND status = 'na_fila'",
+                (job_id,),
+            )
+
     def cancel_requested(self, job_id: int) -> bool:
         with self._db() as db:
             row = db.execute("SELECT mensagem FROM tarefas WHERE id = ?", (job_id,)).fetchone()
         return row is not None and row["mensagem"] == CANCEL_REQUESTED
+
+    def retry_failed(self) -> int:
+        """Devolve à fila as que falharam. De cada trabalho volta só a tentativa mais recente,
+        e nenhuma se ele já tem outra tarefa na fila ou rodando. Devolve quantas voltaram."""
+        twin = _SAME_WORK.format(a="t", b="tarefas")
+        with self._lock, self._db() as db:
+            cur = db.execute(
+                "UPDATE tarefas SET status = 'na_fila', progresso = 0, etapa = NULL, erro = NULL, "
+                "mensagem = NULL, terminada_em = NULL WHERE status = 'falhou' "
+                f"AND NOT EXISTS (SELECT 1 FROM tarefas t WHERE {twin} AND t.id != tarefas.id "
+                "AND (t.status IN ('na_fila', 'processando') "
+                "OR (t.status = 'falhou' AND t.id > tarefas.id)))"
+            )
+            return int(cur.rowcount)
 
     def retry(self, job_id: int) -> None:
         with self._db() as db:
@@ -349,6 +401,13 @@ class JobQueue:
                 "('falhou', 'cancelada', 'concluida', 'concluida_avisos')",
                 (job_id,),
             )
+
+
+# o mesmo trabalho: mesmo vídeo, mesmo passo e mesmo idioma (tarefa antiga: o idioma de destino)
+_SAME_WORK = (
+    "{a}.video = {b}.video AND COALESCE({a}.acao, '') = COALESCE({b}.acao, '') "
+    "AND COALESCE({a}.idioma, {a}.dst, '') = COALESCE({b}.idioma, {b}.dst, '')"
+)
 
 
 def _job(row: sqlite3.Row) -> Job:

@@ -485,7 +485,7 @@ def test_the_queue_lists_newest_first_and_filters_by_text_and_status(seeded: Ui)
     assert do.queue(q="nada")["total"] == 0
     running = do.queue(status="running")["rows"][0]
     assert (running["step"], running["progress"], running["message"], running["priority"]) == (
-        "Translate → pt-BR", 0.47, "bloco 44/94", True)  # fmt: skip
+        "Translate → pt-BR", 0.47, "block 44 of 94", True)  # fmt: skip
 
 
 def test_the_queue_pages_and_falls_back_to_the_last_page(fresh: Ui) -> None:
@@ -521,7 +521,7 @@ def test_task_details_tell_each_state_apart(seeded: Ui) -> None:
     states = [s["state"] for s in running["steps"]]
     current = states.index("running")
     assert running["steps"][current] == {"label": "Translation", "state": "running",
-                                         "text": "bloco 44/94"}  # fmt: skip
+                                         "text": "block 44 of 94"}  # fmt: skip
     assert set(states[:current]) == {"done"} and set(states[current + 1 :]) == {"pending"}
     queued = do.job(ids["queued"])
     assert queued is not None and {s["state"] for s in queued["steps"]} == {"pending"}

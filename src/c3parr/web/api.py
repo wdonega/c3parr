@@ -5,6 +5,7 @@ As regras são as do `Service`, as mesmas das rotas HTML. Aqui só se traduz par
 `{"ok": false, "message": …}`; o que não existe responde 404.
 """
 
+from collections.abc import Iterable
 from typing import Any
 
 from fastapi import APIRouter
@@ -12,15 +13,20 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from c3parr import REPO_URL, __version__
 from c3parr.jobs.queue import FINISHED, Job
+from c3parr.library.store import LibraryItem
 from c3parr.web import schemas as s
 from c3parr.web.service import (
     ACTIVE,
     LANGUAGE_NAMES,
     LANGUAGES,
+    PAGE_SIZE,
+    SORTS,
     STEP_LABELS,
     Outcome,
     Service,
 )
+
+POSTER_MAX_AGE = 7 * 24 * 3600
 
 
 def release_url() -> str:
@@ -29,7 +35,7 @@ def release_url() -> str:
     return f"{REPO_URL}/releases/tag/v{__version__}" if released else f"{REPO_URL}/releases"
 
 
-def job_row(job: Job) -> s.JobRow:
+def job_row(job: Job, item: LibraryItem | None = None) -> s.JobRow:
     return s.JobRow(
         id=job.id,
         name=job.name,
@@ -46,37 +52,24 @@ def job_row(job: Job) -> s.JobRow:
         created_at=job.criada_em,
         started_at=job.iniciada_em,
         finished_at=job.terminada_em,
+        item=s.JobItem(**item.model_dump()) if item else None,
     )
 
 
-def job_detail(detail: dict[str, Any]) -> s.JobDetail:
-    job: Job = detail["job"]
-    steps = [s.Step(label=st["label"], state=s.STEP_STATE[st["state"]], text=st["text"])
-             for st in detail["steps"]]  # fmt: skip
-    warnings = [s.Degraded(stage=d.get("stage", ""), reason=d.get("reason", ""),
-                           label=STEP_LABELS.get(d.get("stage", ""), d.get("stage", "")),
-                           effect=d.get("effect", ""))
-                for d in job.degradacoes]  # fmt: skip
-    return s.JobDetail(
-        **job_row(job).model_dump(),
-        steps=steps,
-        warnings=warnings,
-        has_subtitle=bool(job.legenda),
-        has_report=bool(job.relatorio),
-        can_cancel=job.status in ACTIVE,
-        can_retry=job.status in FINISHED,
-    )
-
-
-def job_ref(job: Job | None) -> s.JobRef | None:
+def job_ref(job: Job | None, positions: dict[int, int]) -> s.JobRef | None:
     if job is None:
         return None
     status = "running" if job.status == "processando" else "queued"
-    return s.JobRef(id=job.id, label=job.step_label, status=status, progress=job.progresso)
+    return s.JobRef(id=job.id, label=job.step_label, status=status, progress=job.progresso,
+                    position=positions.get(job.id))  # fmt: skip
 
 
 def subs(row: dict[str, Any]) -> list[s.Sub]:
     return [s.Sub(lang=lang, kind=s.SUB_KIND[kind]) for lang, kind in row["subs"]]
+
+
+def poster(kind: str, item: Any) -> str | None:
+    return f"/api/v1/poster/{kind}/{item.id}" if item.poster else None
 
 
 def result(outcome: Outcome) -> JSONResponse:
@@ -86,6 +79,34 @@ def result(outcome: Outcome) -> JSONResponse:
 
 def build_api(svc: Service) -> APIRouter:
     api = APIRouter(prefix="/api/v1")
+
+    def job_rows(jobs: Iterable[Job]) -> list[s.JobRow]:
+        found = list(jobs)
+        items = svc.items_for(found)
+        return [job_row(j, items.get(j.video)) for j in found]
+
+    def job_detail(detail: dict[str, Any]) -> s.JobDetail:
+        job: Job = detail["job"]
+        extra = svc.job_extra(job)
+        steps = [s.Step(label=st["label"], state=s.STEP_STATE[st["state"]], text=st["text"])
+                 for st in detail["steps"]]  # fmt: skip
+        pipeline = [s.PipelineStep(**{**p, "state": s.PIPELINE_STATE[p["state"]]})
+                    for p in extra["pipeline"]]  # fmt: skip
+        warnings = [s.Degraded(stage=d.get("stage", ""), reason=d.get("reason", ""),
+                               label=STEP_LABELS.get(d.get("stage", ""), d.get("stage", "")),
+                               effect=d.get("effect", ""))
+                    for d in job.degradacoes]  # fmt: skip
+        return s.JobDetail(
+            **job_rows([job])[0].model_dump(),
+            stage=extra["stage"],
+            steps=steps,
+            pipeline=pipeline,
+            warnings=warnings,
+            has_subtitle=bool(job.legenda),
+            has_report=bool(job.relatorio),
+            can_cancel=job.status in ACTIVE,
+            can_retry=job.status in FINISHED,
+        )
 
     # --- casca e visão geral ---
 
@@ -103,7 +124,7 @@ def build_api(svc: Service) -> APIRouter:
             setup=[s.SetupItem(**item) for item in data["setup"]],
             movies=data["movies"],
             shows=data["shows"],
-            running=job_row(running) if running else None,
+            running=job_rows([running])[0] if running else None,
         )
 
     @api.get("/dashboard")
@@ -125,16 +146,30 @@ def build_api(svc: Service) -> APIRouter:
             warnings=[s.Notice(**w) for w in data["warnings"]],
         )
 
+    @api.get("/search")
+    def search(q: str = "") -> s.SearchResults:
+        found = svc.search(q)
+        return s.SearchResults(
+            movies=[s.SearchHit(id=m.id, title=m.title, year=m.year, poster=poster("movie", m))
+                    for m in found["movies"]],
+            shows=[s.SearchHit(id=sh.id, title=sh.title, year=sh.year, poster=poster("series", sh))
+                   for sh in found["shows"]],
+        )  # fmt: skip
+
     # --- biblioteca ---
 
     @api.get("/movies")
-    def movies(q: str = "", show: str = "", page: int = 1) -> s.MoviePage:
-        data, refs = svc.movies_data(q, show, page), svc.job_refs()
+    def movies(q: str = "", show: str = "", page: int = 1, sort: str = "title") -> s.MoviePage:
+        """`sort`: `title`, `added` (mais novos primeiro) ou `missing` (o que falta primeiro)."""
+        data = svc.movies_data(q, show, page, sort if sort in SORTS else "title")
+        refs, positions = svc.job_refs(), svc.queue_positions()
         rows = [
             s.MovieRow(id=r["item"].id, title=r["item"].title, year=r["item"].year,
                        folder=r["item"].folder, video=r["item"].video,
                        monitored=r["item"].monitored, added_at=r["item"].added_at,
-                       subs=subs(r), missing=r["missing"], job=job_ref(refs.get(r["item"].video)))
+                       subs=subs(r), missing=r["missing"],
+                       job=job_ref(refs.get(r["item"].video), positions),
+                       poster=poster("movie", r["item"]))
             for r in data["rows"]
         ]  # fmt: skip
         pager = data["pager"]
@@ -142,13 +177,14 @@ def build_api(svc: Service) -> APIRouter:
                            pages=pager["pages"], counts=data["counts"])  # fmt: skip
 
     @api.get("/shows")
-    def shows(q: str = "", show: str = "", page: int = 1) -> s.ShowPage:
-        data = svc.shows_data(q, show, page)
+    def shows(q: str = "", show: str = "", page: int = 1, sort: str = "title") -> s.ShowPage:
+        data = svc.shows_data(q, show, page, sort if sort in SORTS else "title")
         rows = [
             s.ShowRow(id=r["item"].id, title=r["item"].title, year=r["item"].year,
                       folder=r["item"].folder, monitored=r["item"].monitored,
                       added_at=r["item"].added_at, total=r["total"], done=r["done"],
-                      missing=r["missing"], queued=r["queued"])
+                      missing=r["missing"], queued=r["queued"],
+                      poster=poster("series", r["item"]))
             for r in data["rows"]
         ]  # fmt: skip
         pager = data["pager"]
@@ -157,19 +193,27 @@ def build_api(svc: Service) -> APIRouter:
 
     @api.get("/shows/{show_id}")
     def show(show_id: int) -> s.ShowDetail:
-        data, refs = svc.show(show_id), svc.job_refs()
+        data = svc.show(show_id)
+        refs, positions = svc.job_refs(), svc.queue_positions()
         seasons = [
             s.Season(season=season, episodes=[
                 s.EpisodeRow(id=r["item"].id, season=r["item"].season,
-                             episode=r["item"].episode, name=r["name"], video=r["item"].video,
-                             subs=subs(r), missing=r["missing"],
-                             job=job_ref(refs.get(r["item"].video)))
+                             episode=r["item"].episode, title=r["item"].title, name=r["name"],
+                             video=r["item"].video, subs=subs(r), missing=r["missing"],
+                             job=job_ref(refs.get(r["item"].video), positions))
                 for r in rows])
             for season, rows in data["seasons"]
         ]  # fmt: skip
         item = data["show"]
         return s.ShowDetail(id=item.id, title=item.title, year=item.year, folder=item.folder,
-                            monitored=item.monitored, seasons=seasons)  # fmt: skip
+                            monitored=item.monitored, poster=poster("series", item),
+                            seasons=seasons)  # fmt: skip
+
+    @api.get("/poster/{kind}/{item_id}", response_class=FileResponse)
+    def poster_image(kind: str, item_id: int) -> FileResponse:
+        """O pôster do filme (`movie`) ou da série (`series`), guardado no cache daqui."""
+        path = svc.poster_file(kind, item_id)
+        return FileResponse(path, headers={"Cache-Control": f"max-age={POSTER_MAX_AGE}"})
 
     @api.post("/library/{kind}/{item_id}/monitor")
     def monitor(kind: str, item_id: int, body: s.MonitorRequest | None = None) -> s.Monitored:
@@ -186,9 +230,27 @@ def build_api(svc: Service) -> APIRouter:
     def queue(q: str = "", status: str = "", page: int = 1) -> s.JobPage:
         data = svc.queue(q, status, page)
         pager = data["pager"]
-        return s.JobPage(rows=[job_row(j) for j in data["jobs"]], total=pager["total"],
+        return s.JobPage(rows=job_rows(data["jobs"]), total=pager["total"],
                          page=pager["page"], pages=pager["pages"],
                          counts=svc.queue_counts(q))  # fmt: skip
+
+    @api.get("/queue/upcoming")
+    def upcoming(limit: int = PAGE_SIZE) -> list[s.JobRow]:
+        """As que esperam, na ordem em que vão rodar."""
+        return job_rows(svc.upcoming(min(max(limit, 1), PAGE_SIZE)))
+
+    @api.get("/queue/recent")
+    def recent(limit: int = 10) -> list[s.JobRow]:
+        """As que terminaram por último."""
+        return job_rows(svc.recent(min(max(limit, 1), PAGE_SIZE)))
+
+    @api.post("/queue/cancel-queued", response_model=s.ActionResult)
+    def cancel_queued() -> JSONResponse:
+        return result(svc.cancel_queued())
+
+    @api.post("/queue/retry-failed", response_model=s.ActionResult)
+    def retry_failed() -> JSONResponse:
+        return result(svc.retry_failed())
 
     @api.get("/queue/{job_id}")
     def job(job_id: int) -> s.JobDetail:
@@ -201,6 +263,11 @@ def build_api(svc: Service) -> APIRouter:
     @api.post("/queue/{job_id}/retry")
     def retry(job_id: int) -> s.JobDetail:
         return job_detail(svc.retry(job_id))
+
+    @api.post("/queue/{job_id}/top")
+    def move_to_top(job_id: int) -> s.JobDetail:
+        """Passa a tarefa que espera na frente de todas as outras."""
+        return job_detail(svc.move_to_top(job_id))
 
     @api.get("/queue/{job_id}/subtitle", response_class=FileResponse)
     def subtitle(job_id: int) -> FileResponse:
@@ -238,6 +305,7 @@ def build_api(svc: Service) -> APIRouter:
                 llm_url_from_env=view["llm_url_from_env"],
             ),
             secrets=view["secret_state"],
+            tests={target: s.TestRecord(**record) for target, record in svc.last_tests().items()},
             options=s.SettingsOptions(
                 languages=[s.Language(code=code, name=name) for code, name in LANGUAGES],
                 llm_providers=providers,
@@ -254,11 +322,14 @@ def build_api(svc: Service) -> APIRouter:
     def save_settings(body: s.SettingsPatch) -> JSONResponse:
         return result(svc.patch_settings(body.changes, body.secrets))
 
-    @api.post("/settings/test/{target}", response_model=s.ActionResult)
+    @api.post("/settings/test/{target}", response_model=s.TestResult)
     def test_connection(target: str, body: s.SettingsPatch | None = None) -> JSONResponse:
         """Testa com o que está na tela (o salvo com `changes` por cima), sem salvar."""
         screen = body or s.SettingsPatch()
-        return result(svc.test_screen(target, screen.changes, screen.secrets))
+        outcome = svc.test_screen(target, screen.changes, screen.secrets)
+        record = svc.last_tests().get(target, {})
+        tested = s.TestResult(ok=not outcome.error, message=outcome.message, ms=record.get("ms"))
+        return JSONResponse(tested.model_dump(), status_code=outcome.status)
 
     # --- system ---
 

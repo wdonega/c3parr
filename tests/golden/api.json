@@ -84,12 +84,24 @@
   "has_report": false,
   "has_subtitle": false,
   "id": 4,
+  "item": {
+   "episode": null,
+   "episode_title": null,
+   "id": 4,
+   "kind": "movie",
+   "season": null,
+   "show_id": null,
+   "title": "Roma",
+   "year": 2018
+  },
   "language": null,
   "message": "cancelamento pedido",
   "name": "Roma.mkv",
   "origin": null,
+  "pipeline": [],
   "priority": false,
   "progress": 0.0,
+  "stage": null,
   "started_at": null,
   "status": "cancelled",
   "step": "Subtitle pt-BR",
@@ -178,12 +190,34 @@
   "has_report": true,
   "has_subtitle": true,
   "id": 1,
+  "item": {
+   "episode": 1,
+   "episode_title": "Pilot",
+   "id": 1,
+   "kind": "episode",
+   "season": 1,
+   "show_id": 1,
+   "title": "Supernatural",
+   "year": 2005
+  },
   "language": "en",
   "message": null,
   "name": "Supernatural - S01E01 - Pilot.mkv",
   "origin": "rotina",
+  "pipeline": [
+   {
+    "action": "extrair",
+    "attempts": 1,
+    "detail": null,
+    "label": "Extract embedded subtitle",
+    "language": "en",
+    "state": "done",
+    "updated_at": "<ts>"
+   }
+  ],
   "priority": false,
   "progress": 1.0,
+  "stage": null,
   "started_at": "<ts>",
   "status": "done",
   "step": "Extract embedded subtitle → en",
@@ -217,12 +251,34 @@
   "has_report": false,
   "has_subtitle": false,
   "id": 3,
+  "item": {
+   "episode": 2,
+   "episode_title": null,
+   "id": 2,
+   "kind": "episode",
+   "season": 1,
+   "show_id": 1,
+   "title": "Supernatural",
+   "year": 2005
+  },
   "language": "pt-BR",
   "message": null,
   "name": "Supernatural - S01E02 - Wendigo.mkv",
   "origin": "rotina",
+  "pipeline": [
+   {
+    "action": "traduzir",
+    "attempts": 1,
+    "detail": "LLM fora do ar",
+    "label": "Translate",
+    "language": "pt-BR",
+    "state": "failed",
+    "updated_at": "<ts>"
+   }
+  ],
   "priority": false,
   "progress": 0.0,
+  "stage": null,
   "started_at": "<ts>",
   "status": "failed",
   "step": "Translate → pt-BR",
@@ -311,12 +367,24 @@
   "has_report": false,
   "has_subtitle": false,
   "id": 6,
+  "item": {
+   "episode": 1,
+   "episode_title": "In My Time of Dying",
+   "id": 3,
+   "kind": "episode",
+   "season": 2,
+   "show_id": 1,
+   "title": "Supernatural",
+   "year": 2005
+  },
   "language": "pt-BR",
   "message": null,
   "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
   "origin": "rotina",
+  "pipeline": [],
   "priority": false,
   "progress": 0.0,
+  "stage": null,
   "started_at": null,
   "status": "queued",
   "step": "Translate → pt-BR",
@@ -405,12 +473,24 @@
   "has_report": false,
   "has_subtitle": false,
   "id": 5,
+  "item": {
+   "episode": null,
+   "episode_title": null,
+   "id": 3,
+   "kind": "movie",
+   "season": null,
+   "show_id": null,
+   "title": "Oldboy",
+   "year": 2003
+  },
   "language": "pt-BR",
-  "message": "bloco 44/94",
+  "message": "block 44 of 94",
   "name": "Oldboy.mkv",
   "origin": "manual",
+  "pipeline": [],
   "priority": true,
   "progress": 0.47,
+  "stage": "Translation",
   "started_at": "<ts>",
   "status": "running",
   "step": "Translate → pt-BR",
@@ -463,7 +543,7 @@
    {
     "label": "Translation",
     "state": "running",
-    "text": "bloco 44/94"
+    "text": "block 44 of 94"
    },
    {
     "label": "Formatting",
@@ -499,12 +579,34 @@
   "has_report": true,
   "has_subtitle": false,
   "id": 2,
+  "item": {
+   "episode": null,
+   "episode_title": null,
+   "id": 2,
+   "kind": "movie",
+   "season": null,
+   "show_id": null,
+   "title": "Parasite",
+   "year": 2019
+  },
   "language": "pt-BR",
   "message": null,
   "name": "Parasite.mkv",
   "origin": "rotina",
+  "pipeline": [
+   {
+    "action": "traduzir",
+    "attempts": 1,
+    "detail": null,
+    "label": "Translate",
+    "language": "pt-BR",
+    "state": "done",
+    "updated_at": "<ts>"
+   }
+  ],
   "priority": false,
   "progress": 1.0,
+  "stage": null,
   "started_at": "<ts>",
   "status": "done_with_warnings",
   "step": "Translate → pt-BR",
@@ -542,6 +644,7 @@
     "job": null,
     "missing": [],
     "monitored": true,
+    "poster": "/api/v1/poster/movie/1",
     "subs": [
      {
       "kind": "embedded",
@@ -567,6 +670,7 @@
     "job": {
      "id": 5,
      "label": "Translate → pt-BR",
+     "position": null,
      "progress": 0.47,
      "status": "running"
     },
@@ -575,6 +679,7 @@
      "es"
     ],
     "monitored": true,
+    "poster": null,
     "subs": [],
     "title": "Oldboy",
     "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
@@ -589,6 +694,7 @@
      "es"
     ],
     "monitored": true,
+    "poster": null,
     "subs": [
      {
       "kind": "external",
@@ -613,6 +719,7 @@
      "es"
     ],
     "monitored": false,
+    "poster": null,
     "subs": [
      {
       "kind": "embedded",
@@ -622,6 +729,112 @@
     "title": "Roma",
     "video": "<root>/movies/Roma (2018)/Roma.mkv",
     "year": 2018
+   }
+  ],
+  "total": 4
+ },
+ "movies_by_missing": {
+  "counts": {
+   "all": 4,
+   "complete": 1,
+   "missing": 3,
+   "queued": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Oldboy (2003)",
+    "id": 3,
+    "job": {
+     "id": 5,
+     "label": "Translate → pt-BR",
+     "position": null,
+     "progress": 0.47,
+     "status": "running"
+    },
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": true,
+    "poster": null,
+    "subs": [],
+    "title": "Oldboy",
+    "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
+    "year": 2003
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Parasite (2019)",
+    "id": 2,
+    "job": null,
+    "missing": [
+     "es"
+    ],
+    "monitored": true,
+    "poster": null,
+    "subs": [
+     {
+      "kind": "external",
+      "lang": "pt"
+     },
+     {
+      "kind": "ours",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Parasite",
+    "video": "<root>/movies/Parasite (2019)/Parasite.mkv",
+    "year": 2019
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Roma (2018)",
+    "id": 4,
+    "job": null,
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": false,
+    "poster": null,
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     }
+    ],
+    "title": "Roma",
+    "video": "<root>/movies/Roma (2018)/Roma.mkv",
+    "year": 2018
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Incendies (2010)",
+    "id": 1,
+    "job": null,
+    "missing": [],
+    "monitored": true,
+    "poster": "/api/v1/poster/movie/1",
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     },
+     {
+      "kind": "external",
+      "lang": "es"
+     },
+     {
+      "kind": "external",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Incendies",
+    "video": "<root>/movies/Incendies (2010)/Incendies.mkv",
+    "year": 2010
    }
   ],
   "total": 4
@@ -643,6 +856,7 @@
     "job": {
      "id": 5,
      "label": "Translate → pt-BR",
+     "position": null,
      "progress": 0.47,
      "status": "running"
     },
@@ -651,6 +865,7 @@
      "es"
     ],
     "monitored": true,
+    "poster": null,
     "subs": [],
     "title": "Oldboy",
     "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
@@ -665,6 +880,7 @@
      "es"
     ],
     "monitored": true,
+    "poster": null,
     "subs": [
      {
       "kind": "external",
@@ -689,6 +905,7 @@
      "es"
     ],
     "monitored": false,
+    "poster": null,
     "subs": [
      {
       "kind": "embedded",
@@ -719,6 +936,7 @@
     "job": null,
     "missing": [],
     "monitored": true,
+    "poster": "/api/v1/poster/movie/1",
     "subs": [
      {
       "kind": "embedded",
@@ -758,6 +976,16 @@
     "error": null,
     "finished_at": null,
     "id": 6,
+    "item": {
+     "episode": 1,
+     "episode_title": "In My Time of Dying",
+     "id": 3,
+     "kind": "episode",
+     "season": 2,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
@@ -775,8 +1003,18 @@
     "error": null,
     "finished_at": null,
     "id": 5,
+    "item": {
+     "episode": null,
+     "episode_title": null,
+     "id": 3,
+     "kind": "movie",
+     "season": null,
+     "show_id": null,
+     "title": "Oldboy",
+     "year": 2003
+    },
     "language": "pt-BR",
-    "message": "bloco 44/94",
+    "message": "block 44 of 94",
     "name": "Oldboy.mkv",
     "origin": "manual",
     "priority": true,
@@ -792,6 +1030,16 @@
     "error": null,
     "finished_at": null,
     "id": 4,
+    "item": {
+     "episode": null,
+     "episode_title": null,
+     "id": 4,
+     "kind": "movie",
+     "season": null,
+     "show_id": null,
+     "title": "Roma",
+     "year": 2018
+    },
     "language": null,
     "message": "cancelamento pedido",
     "name": "Roma.mkv",
@@ -809,6 +1057,16 @@
     "error": "LLM fora do ar",
     "finished_at": "<ts>",
     "id": 3,
+    "item": {
+     "episode": 2,
+     "episode_title": null,
+     "id": 2,
+     "kind": "episode",
+     "season": 1,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Supernatural - S01E02 - Wendigo.mkv",
@@ -826,6 +1084,16 @@
     "error": null,
     "finished_at": "<ts>",
     "id": 2,
+    "item": {
+     "episode": null,
+     "episode_title": null,
+     "id": 2,
+     "kind": "movie",
+     "season": null,
+     "show_id": null,
+     "title": "Parasite",
+     "year": 2019
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Parasite.mkv",
@@ -843,6 +1111,16 @@
     "error": null,
     "finished_at": "<ts>",
     "id": 1,
+    "item": {
+     "episode": 1,
+     "episode_title": "Pilot",
+     "id": 1,
+     "kind": "episode",
+     "season": 1,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "en",
     "message": null,
     "name": "Supernatural - S01E01 - Pilot.mkv",
@@ -875,6 +1153,16 @@
     "error": "LLM fora do ar",
     "finished_at": "<ts>",
     "id": 3,
+    "item": {
+     "episode": 2,
+     "episode_title": null,
+     "id": 2,
+     "kind": "episode",
+     "season": 1,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Supernatural - S01E02 - Wendigo.mkv",
@@ -889,6 +1177,89 @@
   ],
   "total": 1
  },
+ "queue_recent": [
+  {
+   "action": "traduzir",
+   "created_at": "<ts>",
+   "error": "LLM fora do ar",
+   "finished_at": "<ts>",
+   "id": 3,
+   "item": {
+    "episode": 2,
+    "episode_title": null,
+    "id": 2,
+    "kind": "episode",
+    "season": 1,
+    "show_id": 1,
+    "title": "Supernatural",
+    "year": 2005
+   },
+   "language": "pt-BR",
+   "message": null,
+   "name": "Supernatural - S01E02 - Wendigo.mkv",
+   "origin": "rotina",
+   "priority": false,
+   "progress": 0.0,
+   "started_at": "<ts>",
+   "status": "failed",
+   "step": "Translate → pt-BR",
+   "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
+  },
+  {
+   "action": "traduzir",
+   "created_at": "<ts>",
+   "error": null,
+   "finished_at": "<ts>",
+   "id": 2,
+   "item": {
+    "episode": null,
+    "episode_title": null,
+    "id": 2,
+    "kind": "movie",
+    "season": null,
+    "show_id": null,
+    "title": "Parasite",
+    "year": 2019
+   },
+   "language": "pt-BR",
+   "message": null,
+   "name": "Parasite.mkv",
+   "origin": "rotina",
+   "priority": false,
+   "progress": 1.0,
+   "started_at": "<ts>",
+   "status": "done_with_warnings",
+   "step": "Translate → pt-BR",
+   "video": "<root>/movies/Parasite (2019)/Parasite.mkv"
+  },
+  {
+   "action": "extrair",
+   "created_at": "<ts>",
+   "error": null,
+   "finished_at": "<ts>",
+   "id": 1,
+   "item": {
+    "episode": 1,
+    "episode_title": "Pilot",
+    "id": 1,
+    "kind": "episode",
+    "season": 1,
+    "show_id": 1,
+    "title": "Supernatural",
+    "year": 2005
+   },
+   "language": "en",
+   "message": null,
+   "name": "Supernatural - S01E01 - Pilot.mkv",
+   "origin": "rotina",
+   "priority": false,
+   "progress": 1.0,
+   "started_at": "<ts>",
+   "status": "done",
+   "step": "Extract embedded subtitle → en",
+   "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv"
+  }
+ ],
  "queue_search": {
   "counts": {
    "all": 3,
@@ -907,6 +1278,16 @@
     "error": null,
     "finished_at": null,
     "id": 6,
+    "item": {
+     "episode": 1,
+     "episode_title": "In My Time of Dying",
+     "id": 3,
+     "kind": "episode",
+     "season": 2,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
@@ -924,6 +1305,16 @@
     "error": "LLM fora do ar",
     "finished_at": "<ts>",
     "id": 3,
+    "item": {
+     "episode": 2,
+     "episode_title": null,
+     "id": 2,
+     "kind": "episode",
+     "season": 1,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "pt-BR",
     "message": null,
     "name": "Supernatural - S01E02 - Wendigo.mkv",
@@ -941,6 +1332,16 @@
     "error": null,
     "finished_at": "<ts>",
     "id": 1,
+    "item": {
+     "episode": 1,
+     "episode_title": "Pilot",
+     "id": 1,
+     "kind": "episode",
+     "season": 1,
+     "show_id": 1,
+     "title": "Supernatural",
+     "year": 2005
+    },
     "language": "en",
     "message": null,
     "name": "Supernatural - S01E01 - Pilot.mkv",
@@ -954,6 +1355,65 @@
    }
   ],
   "total": 3
+ },
+ "queue_upcoming": [
+  {
+   "action": "traduzir",
+   "created_at": "<ts>",
+   "error": null,
+   "finished_at": null,
+   "id": 6,
+   "item": {
+    "episode": 1,
+    "episode_title": "In My Time of Dying",
+    "id": 3,
+    "kind": "episode",
+    "season": 2,
+    "show_id": 1,
+    "title": "Supernatural",
+    "year": 2005
+   },
+   "language": "pt-BR",
+   "message": null,
+   "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+   "origin": "rotina",
+   "priority": false,
+   "progress": 0.0,
+   "started_at": null,
+   "status": "queued",
+   "step": "Translate → pt-BR",
+   "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv"
+  }
+ ],
+ "search": {
+  "movies": [
+   {
+    "id": 2,
+    "poster": null,
+    "title": "Parasite",
+    "year": 2019
+   },
+   {
+    "id": 4,
+    "poster": null,
+    "title": "Roma",
+    "year": 2018
+   }
+  ],
+  "shows": [
+   {
+    "id": 2,
+    "poster": null,
+    "title": "Dark",
+    "year": 2017
+   },
+   {
+    "id": 1,
+    "poster": "/api/v1/poster/series/1",
+    "title": "Supernatural",
+    "year": 2005
+   }
+  ]
  },
  "settings": {
   "config": {
@@ -1291,7 +1751,8 @@
    "llm_model": "modelo-x",
    "llm_model_from_env": false,
    "llm_url_from_env": false
-  }
+  },
+  "tests": {}
  },
  "shell": {
   "alerts_unseen": 3,
@@ -1305,8 +1766,18 @@
    "error": null,
    "finished_at": null,
    "id": 5,
+   "item": {
+    "episode": null,
+    "episode_title": null,
+    "id": 3,
+    "kind": "movie",
+    "season": null,
+    "show_id": null,
+    "title": "Oldboy",
+    "year": 2003
+   },
    "language": "pt-BR",
-   "message": "bloco 44/94",
+   "message": "block 44 of 94",
    "name": "Oldboy.mkv",
    "origin": "manual",
    "priority": true,
@@ -1336,6 +1807,7 @@
   "folder": "<root>/tv/Supernatural",
   "id": 1,
   "monitored": true,
+  "poster": "/api/v1/poster/series/1",
   "seasons": [
    {
     "episodes": [
@@ -1360,6 +1832,7 @@
         "lang": "pt-BR"
        }
       ],
+      "title": "Pilot",
       "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv"
      },
      {
@@ -1378,6 +1851,7 @@
         "lang": "en"
        }
       ],
+      "title": null,
       "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
      }
     ],
@@ -1391,6 +1865,7 @@
       "job": {
        "id": 6,
        "label": "Translate → pt-BR",
+       "position": 1,
        "progress": 0.0,
        "status": "queued"
       },
@@ -1401,6 +1876,7 @@
       "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
       "season": 2,
       "subs": [],
+      "title": "In My Time of Dying",
       "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv"
      }
     ],
@@ -1423,6 +1899,7 @@
         "lang": "pt-BR"
        }
       ],
+      "title": null,
       "video": "<root>/tv/Supernatural/Extras/Supernatural - Extra.mkv"
      }
     ],
@@ -1449,6 +1926,7 @@
     "id": 2,
     "missing": 0,
     "monitored": true,
+    "poster": null,
     "queued": false,
     "title": "Dark",
     "total": 1,
@@ -1461,6 +1939,7 @@
     "id": 1,
     "missing": 2,
     "monitored": true,
+    "poster": "/api/v1/poster/series/1",
     "queued": true,
     "title": "Supernatural",
     "total": 4,

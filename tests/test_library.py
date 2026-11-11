@@ -58,6 +58,12 @@ class FakeArr:
             {"seasonNumber": 1, "episodeNumber": 2, "episodeFileId": 101, "monitored": False},
             {"seasonNumber": 0, "episodeNumber": 1, "episodeFileId": 102, "monitored": True},
         ]
+        self.series: list[dict[str, Any]] = [
+            {"id": 10, "title": "Criminal Minds", "year": 2005, "monitored": True, "tags": [],
+             "seriesType": "standard", "path": "/data/tv/Criminal Minds",
+             "statistics": {"episodeFileCount": 3}},
+            {"id": 11, "title": "Nothing Yet", "statistics": {"episodeFileCount": 0}},
+        ]  # fmt: skip
         self.version = {"radarr": "6.4.4.10685", "sonarr": "3.0.10.1567"}
         self.seen: list[str] = []
 
@@ -71,15 +77,12 @@ class FakeArr:
             "/system/status": {"version": self.version[kind]},
             "/tag": [{"id": 7, "label": "no-subs"}],
             "/movie": self.movies,
-            "/series": [
-                {"id": 10, "title": "Criminal Minds", "year": 2005, "monitored": True, "tags": [],
-                 "seriesType": "standard", "path": "/data/tv/Criminal Minds",
-                 "statistics": {"episodeFileCount": 3}},
-                {"id": 11, "title": "Nothing Yet", "statistics": {"episodeFileCount": 0}},
-            ],
+            "/series": self.series,
             "/episodefile": self.files,
             "/episode": self.episodes,
         }  # fmt: skip
+        if path == "/mediacover/10/poster-500.jpg":
+            return httpx.Response(200, content=b"cover-bytes")
         return httpx.Response(200, json=routes[path]) if path in routes else httpx.Response(404)
 
 
@@ -279,3 +282,79 @@ def test_pick_reference_prefers_plain_english_and_skips_target(tmp_path: Path) -
     assert pick_reference(video, "pt-BR") == tmp_path / "Film.fr.srt"
     touch(tmp_path / "Film.en.srt")
     assert pick_reference(video, "pt-BR") == tmp_path / "Film.en.srt"
+
+
+def test_sync_keeps_the_poster_and_the_episode_titles(library: Library, arr: FakeArr) -> None:
+    arr.movies[0]["images"] = [
+        {"coverType": "fanart", "remoteUrl": "https://image.test/fanart.jpg"},
+        {"coverType": "poster", "url": "/MediaCover/1/poster.jpg?lastWrite=1",
+         "remoteUrl": "https://image.test/t/p/original/incendies.jpg"},
+    ]  # fmt: skip
+    arr.series[0]["images"] = [{"coverType": "poster", "url": "/MediaCover/10/poster.jpg?x=1"}]
+    arr.episodes[0]["title"] = "Extreme Aggressor"
+    sync(library, arr)
+
+    movie = library.movies()[0]
+    assert movie.poster == "https://image.test/t/p/original/incendies.jpg"  # o da internet
+    show = library.series_list()[0]
+    assert show.poster == "/MediaCover/10/poster.jpg?x=1"  # sem o da internet: a capa no Sonarr
+    titles = {(e.season, e.episode): e.title for e in library.episodes()}
+    assert titles == {(0, 1): None, (1, 1): "Extreme Aggressor", (1, 2): None}
+
+    # o Radarr parou de informar o pôster e o Sonarr, o título: fica o que já se sabia
+    del arr.movies[0]["images"], arr.episodes[0]["title"]
+    sync(library, arr)
+    assert library.movies()[0].poster == movie.poster
+    assert library.episodes()[1].title == "Extreme Aggressor"
+
+
+def test_items_for_names_the_movie_or_the_episode_of_a_video(
+    library: Library, arr: FakeArr
+) -> None:
+    arr.episodes[0]["title"] = "Extreme Aggressor"
+    sync(library, arr)
+    movie, episode = library.movies()[0], library.episodes()[1]
+    items = library.items_for([movie.video, episode.video, "/not/in/the/library.mkv"])
+    assert set(items) == {movie.video, episode.video}
+    found = items[movie.video]
+    assert (found.kind, found.id, found.title, found.year) == ("movie", movie.id, "Incendies", 2010)
+    found = items[episode.video]
+    assert (found.kind, found.id, found.title, found.year) == (
+        "episode", episode.id, "Criminal Minds", 2005)  # fmt: skip
+    assert (found.show_id, found.season, found.episode, found.episode_title) == (
+        library.series_list()[0].id, 1, 1, "Extreme Aggressor")  # fmt: skip
+    assert library.items_for([]) == {}
+
+
+def test_arr_client_fetches_a_stored_cover_through_the_api(arr: FakeArr) -> None:
+    from c3parr.core.errors import TransientFailure
+    from c3parr.library.arr import ArrClient
+
+    client = ArrClient("sonarr", ArrConfig(host="sonarr.test"), "k", httpx.MockTransport(arr))
+    assert client.image("/MediaCover/10/poster-500.jpg?lastWrite=5") == b"cover-bytes"
+    assert arr.seen[-1] == "sonarr/mediacover/10/poster-500.jpg"
+    with pytest.raises(TransientFailure, match="HTTP 404"):
+        client.image("/MediaCover/99/poster.jpg")
+    client.close()
+
+
+def test_a_library_from_before_posters_and_titles_gains_the_columns(tmp_path: Path) -> None:
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    lib = Library(path)
+    lib.upsert_movie("/m/Old", "/m/Old/old.mkv", "Old", 1999, None, True)
+    show_id = lib.upsert_series("/tv/Old", "Old Show", None, None, True)
+    lib.upsert_episode(show_id, "/tv/Old/S01E01.mkv", 1, 1)
+    with sqlite3.connect(path) as db:  # como o banco era antes
+        db.execute("ALTER TABLE movie DROP COLUMN poster")
+        db.execute("ALTER TABLE series DROP COLUMN poster")
+        db.execute("ALTER TABLE episode DROP COLUMN title")
+
+    upgraded = Library(path)
+    assert [(m.title, m.poster) for m in upgraded.movies()] == [("Old", None)]
+    assert upgraded.series_list()[0].poster is None and upgraded.episodes()[0].title is None
+    upgraded.upsert_movie(
+        "/m/Old", "/m/Old/old.mkv", "Old", 1999, None, True, "https://p.test/o.jpg"
+    )
+    assert upgraded.movies()[0].poster == "https://p.test/o.jpg"
