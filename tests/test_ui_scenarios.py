@@ -5,13 +5,14 @@ outro driver nos mesmos cenários: se algum quebrar, ela perdeu um comportamento
 """
 
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, NamedTuple
 
 import pytest
 from fastapi.testclient import TestClient
-from uikit import ContextSpy, HtmlDriver, World, empty_world, seed_world
+from uikit import ApiDriver, ContextSpy, HtmlDriver, World, empty_world, seed_world
 
 from c3parr.asr.remote import REMOTE_IDS
 from c3parr.core.config import Settings
@@ -26,26 +27,37 @@ DYING = "Supernatural - S02E01 - In My Time of Dying.mkv"
 
 
 class Ui(NamedTuple):
-    do: HtmlDriver
+    do: HtmlDriver | ApiDriver
     world: World
 
 
-def _open(world: World, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ui]:
-    spy = ContextSpy(monkeypatch)
-    with TestClient(world.app) as client:
-        yield Ui(HtmlDriver(client, spy, world.root), world)
+@pytest.fixture(params=["html", "api"])
+def connect(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Callable[[World], Ui]]:
+    """Abre a interface sobre um mundo. Cada cenário roda duas vezes: pelas páginas HTML de
+    hoje e pela API JSON da interface nova. As duas têm de dar o mesmo resultado."""
+    with ExitStack() as stack:
+
+        def open_(world: World) -> Ui:
+            client = stack.enter_context(TestClient(world.app))
+            if request.param == "api":
+                return Ui(ApiDriver(client), world)
+            return Ui(HtmlDriver(client, ContextSpy(monkeypatch), world.root), world)
+
+        yield open_
 
 
 @pytest.fixture
-def fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ui]:
+def fresh(tmp_path: Path, connect: Callable[[World], Ui]) -> Ui:
     """Instalação nova, sem nada configurado."""
-    yield from _open(empty_world(tmp_path), monkeypatch)
+    return connect(empty_world(tmp_path))
 
 
 @pytest.fixture
-def seeded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ui]:
+def seeded(tmp_path: Path, connect: Callable[[World], Ui]) -> Ui:
     """A biblioteca de exemplo (`uikit.seed_world`)."""
-    yield from _open(seed_world(tmp_path), monkeypatch)
+    return connect(seed_world(tmp_path))
 
 
 def _by_title(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -149,10 +161,10 @@ def test_engines_accept_only_what_each_interface_offers(fresh: Ui) -> None:
 
 
 def test_keys_are_stored_unless_the_environment_already_has_them(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     monkeypatch.setenv("TMDB_READ_ACCESS_TOKEN", "tmdb-env")
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     lib = ui.world.library
     assert ui.do.secret_state()["TMDB_READ_ACCESS_TOKEN"] == "environment"
     saved = ui.do.save_integrations(
@@ -171,16 +183,21 @@ def test_keys_are_stored_unless_the_environment_already_has_them(
 
 
 def test_model_and_url_equal_to_the_default_are_stored_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     monkeypatch.setenv("C3PARR_LLM_BASE_URL", "http://box:8080/v1")
     monkeypatch.setenv("C3PARR_LLM_MODEL", "qwen-env")
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     lib = ui.world.library
     assert ui.do.save_integrations().ok  # salvar sem mexer: o que vem do .env continua de lá
     assert (lib.config().llm_base_url, lib.config().llm_model) == ("", "")
+    typed = ui.do.save_integrations(llm_base_url="http://box:8080/v1", llm_model="qwen-env")
+    assert typed.ok  # digitar o mesmo que o padrão também não grava
+    assert (lib.config().llm_base_url, lib.config().llm_model) == ("", "")
     assert ui.do.save_integrations(llm_provider="openai").ok  # leva o modelo padrão do novo
     assert (lib.config().llm_provider, lib.config().llm_model) == ("openai", "")
+    assert ui.do.save_integrations(llm_model="gpt-4.1-mini").ok  # o padrão da OpenAI
+    assert lib.config().llm_model == ""
     assert ui.do.save_integrations(llm_model="gpt-5-mini").ok
     assert lib.config().llm_model == "gpt-5-mini"
     assert ui.do.save_integrations(llm_provider="deepseek").ok  # modelo escolhido à mão fica
@@ -220,7 +237,7 @@ def test_a_transcription_server_needs_its_url(fresh: Ui) -> None:
 
 
 def test_connection_tests_use_what_is_on_screen_and_save_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     from c3parr.providers.base import Health
 
@@ -244,7 +261,7 @@ def test_connection_tests_use_what_is_on_screen_and_save_nothing(
     monkeypatch.setenv("C3PARR_LLM_MODEL", "qwen-env")
     monkeypatch.setattr(web, "TMDbProvider", FakeTMDb)
     monkeypatch.setattr(web, "make_llm_client", FakeLLM)
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     lib = ui.world.library
 
     assert not ui.do.test_connection("tmdb").ok  # sem chave nenhuma
@@ -268,7 +285,7 @@ def test_llm_test_without_the_provider_key_fails(fresh: Ui) -> None:
 
 
 def test_arr_test_reports_the_version_and_an_old_major(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     class FakeClient:
         def __init__(self, kind: str, cfg: ArrConfig, key: str) -> None:
@@ -281,14 +298,14 @@ def test_arr_test_reports_the_version_and_an_old_major(
             pass
 
     monkeypatch.setattr(web, "ArrClient", FakeClient)
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     tested = ui.do.test_connection("radarr", host="radarr.test", api_key="rk")
     assert tested.ok and "5.2.0.1" in tested.message and "latest is 6" in tested.message
     assert ui.world.library.config().radarr.host == ""  # não salvou
 
 
 def test_remote_transcription_test_asks_the_typed_server(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     from c3parr.providers.base import Health
 
@@ -302,7 +319,7 @@ def test_remote_transcription_test_asks_the_typed_server(
             return Health(ok=True, detail="large-v3 loaded")
 
     monkeypatch.setattr(web, "RemoteTranscriber", FakeRemote)
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     tested = ui.do.test_connection("asr", asr_mode="asr-webservice", asr_url="http://w:9000")
     assert tested.ok and "large-v3 loaded" in tested.message
     assert seen["asr"] == "asr-webservice http://w:9000 whisper-1"
@@ -330,12 +347,12 @@ def test_a_fresh_install_lists_what_to_set_up_until_it_is_done(fresh: Ui) -> Non
 
 
 def test_the_builtin_tmdb_key_counts_as_configured(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, connect: Callable[[World], Ui]
 ) -> None:
     from c3parr.metadata import tmdb
 
     monkeypatch.setattr(tmdb, "BUILTIN_READ_TOKEN", "builtin")
-    (ui,) = _open(empty_world(tmp_path), monkeypatch)
+    ui = connect(empty_world(tmp_path))
     assert "No TMDb key" not in ui.do.setup()
     assert ui.do.secret_state()["TMDB_READ_ACCESS_TOKEN"] == ""  # a embutida não aparece no campo
 
@@ -353,13 +370,13 @@ def test_library_shows_each_subtitle_by_source_and_what_is_missing(seeded: Ui) -
     movies = _by_title(seeded.do.movies()["rows"])
     assert list(movies) == ["Incendies", "Oldboy", "Parasite", "Roma"]
     incendies = movies["Incendies"]  # a forced em francês não conta
-    assert incendies["subs"] == [["en", "embedded"], ["es", "human"], ["pt-BR", "human"]]
+    assert incendies["subs"] == [["en", "embedded"], ["es", "external"], ["pt-BR", "external"]]
     assert incendies["missing"] == [] and incendies["job"] is None
     # pt (Portugal) não cobre pt-BR: são alvos distintos
-    assert movies["Parasite"]["subs"] == [["pt", "human"], ["pt-BR", "ours"]]
+    assert movies["Parasite"]["subs"] == [["pt", "external"], ["pt-BR", "ours"]]
     assert movies["Parasite"]["missing"] == ["es"]
     assert movies["Oldboy"]["missing"] == ["pt-BR", "es"]
-    assert movies["Oldboy"]["job"] == "Translate → pt-BR"  # a tarefa rodando
+    assert movies["Oldboy"]["job"] == {"label": "Translate → pt-BR", "status": "running"}
     assert not movies["Roma"]["monitored"] and movies["Incendies"]["monitored"]
 
     shows = _by_title(seeded.do.shows()["rows"])
@@ -395,14 +412,16 @@ def test_library_search_filters_and_pages(seeded: Ui) -> None:
 
 def test_a_show_lists_seasons_in_order_with_loose_files_last(seeded: Ui) -> None:
     show = seeded.do.show(seeded.world.ids["Supernatural"])
+    assert show is not None
     assert (show["title"], show["year"], show["monitored"]) == ("Supernatural", 2005, True)
     assert [s["season"] for s in show["seasons"]] == [1, 2, None]
     first = show["seasons"][0]["episodes"]
     assert [(e["episode"], e["name"]) for e in first] == [(1, PILOT), (2, WENDIGO)]
     assert first[0]["missing"] == [] and first[1]["missing"] == ["pt-BR", "es"]
     queued = show["seasons"][1]["episodes"][0]
-    assert queued["name"] == DYING and queued["job"] == "Queued: Translate → pt-BR"
-    assert seeded.do.status_of("/tv/999") == 404
+    assert queued["name"] == DYING
+    assert queued["job"] == {"label": "Translate → pt-BR", "status": "queued"}
+    assert seeded.do.show(999) is None
 
 
 def test_monitoring_toggles_for_movies_and_shows_only(seeded: Ui) -> None:
@@ -482,18 +501,18 @@ def test_the_queue_pages_and_falls_back_to_the_last_page(fresh: Ui) -> None:
 def test_task_details_tell_each_state_apart(seeded: Ui) -> None:
     do, ids = seeded.do, seeded.world.ids
     done = do.job(ids["done"])
-    assert done is not None and done["status"] == "concluida"
+    assert done is not None and done["status"] == "done"
     assert done["has_subtitle"] and done["has_report"]
     assert done["steps"] == [
-        {"label": "Audio", "state": "ok", "text": "done · 3 s"},
-        {"label": "Transcription", "state": "pulado", "text": "skipped · já há legenda"},
-        {"label": "Translation", "state": "cache", "text": "from cache · llm"},
+        {"label": "Audio", "state": "done", "text": "done · 3 s"},
+        {"label": "Transcription", "state": "skipped", "text": "skipped · já há legenda"},
+        {"label": "Translation", "state": "cached", "text": "from cache · llm"},
     ]
     warned = do.job(ids["warned"])
-    assert warned is not None and warned["status"] == "concluida_avisos"
+    assert warned is not None and warned["status"] == "done_with_warnings"
     assert warned["warnings"] == [{"stage": "metadados", "reason": "TMDb não achou",
                                    "effect": "nomes sem conferir"}]  # fmt: skip
-    assert warned["steps"][0]["state"] == "aviso"  # falhou, mas só degradou o resultado
+    assert warned["steps"][0]["state"] == "warning"  # falhou, mas só degradou o resultado
     failed = do.job(ids["failed"])
     assert failed is not None and failed["error"] == "LLM fora do ar"
 
@@ -503,7 +522,7 @@ def test_task_details_tell_each_state_apart(seeded: Ui) -> None:
     current = states.index("running")
     assert running["steps"][current] == {"label": "Translation", "state": "running",
                                          "text": "bloco 44/94"}  # fmt: skip
-    assert set(states[:current]) == {"ok"} and set(states[current + 1 :]) == {"pending"}
+    assert set(states[:current]) == {"done"} and set(states[current + 1 :]) == {"pending"}
     queued = do.job(ids["queued"])
     assert queued is not None and {s["state"] for s in queued["steps"]} == {"pending"}
     assert do.job(999) is None
@@ -567,14 +586,15 @@ def test_alerts_are_seen_when_opened_and_retried_on_request(seeded: Ui) -> None:
     assert not retried.ok and catalog.unseen_alerts() == 1
 
 
-def test_old_addresses_still_lead_somewhere(fresh: Ui) -> None:
-    client = fresh.do.client
-    assert client.get("/", follow_redirects=False).headers["location"] == "/dashboard"
-    assert client.get("/fila", follow_redirects=False).headers["location"] == "/queue"
-    assert (
-        client.get("/settings", follow_redirects=False).headers["location"] == "/settings/library"
-    )
-    assert client.get("/system", follow_redirects=False).headers["location"] == "/system/tasks"
-    assert client.get("/health").json() == {"ok": True}
-    assert fresh.do.status_of("/settings/invented") == 404
-    assert fresh.do.status_of("/settings/library/invented") == 404
+def test_old_addresses_still_lead_somewhere(tmp_path: Path) -> None:
+    """Só das páginas HTML: endereços antigos e subpáginas que não existem."""
+    with TestClient(empty_world(tmp_path).app) as client:
+
+        def target(path: str) -> str:
+            return client.get(path, follow_redirects=False).headers["location"]
+
+        assert target("/") == "/dashboard" and target("/fila") == "/queue"
+        assert target("/settings") == "/settings/library" and target("/system") == "/system/tasks"
+        assert client.get("/health").json() == {"ok": True}
+        assert client.get("/settings/invented").status_code == 404
+        assert client.get("/settings/library/invented").status_code == 404

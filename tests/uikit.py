@@ -33,6 +33,7 @@ from c3parr.llm.client import LLM_KEY_ENV
 from c3parr.pipeline.catalog import Catalog
 from c3parr.providers.base import ProviderInfo
 from c3parr.web.app import create_app
+from c3parr.web.schemas import JOB_STATUS, STEP_STATE, SUB_KIND
 
 Runner = Callable[..., tuple[RunResult, str | None, str]]
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\+00:00|Z)?")
@@ -326,8 +327,14 @@ class HtmlDriver:
 
     @staticmethod
     def _item_row(row: Mapping[str, Any]) -> dict[str, Any]:
-        return {"subs": [list(s) for s in row["subs"]], "missing": list(row["missing"]),
-                "job": row["job"]}  # fmt: skip
+        text = row["job"]  # a tela de hoje mostra a tarefa como texto: "Queued: <passo>"
+        job = None
+        if text:
+            queued = text.startswith("Queued: ")
+            job = {"label": text.removeprefix("Queued: "),
+                   "status": "queued" if queued else "running"}  # fmt: skip
+        return {"subs": [[lang, SUB_KIND[kind]] for lang, kind in row["subs"]],
+                "missing": list(row["missing"]), "job": job}  # fmt: skip
 
     def movies(self, q: str = "", show: str = "", page: int = 0) -> dict[str, Any]:
         context = self._context("/movies", q=q, show=show, page=page)
@@ -344,8 +351,10 @@ class HtmlDriver:
                 for r in context["rows"]]  # fmt: skip
         return {"rows": rows, **self._pager(context)}
 
-    def show(self, show_id: int) -> dict[str, Any]:
-        context = self._context(f"/tv/{show_id}")
+    def show(self, show_id: int) -> dict[str, Any] | None:
+        if self.client.get(f"/tv/{show_id}").status_code == 404:
+            return None
+        context = self.spy.last()[1]
         seasons = [{"season": season,
                     "episodes": [{"id": r["item"].id, "episode": r["item"].episode,
                                   "name": r["name"], **self._item_row(r)} for r in rows]}
@@ -356,7 +365,7 @@ class HtmlDriver:
 
     def queue(self, q: str = "", status: str = "", page: int = 0) -> dict[str, Any]:
         context = self._context("/queue/rows", q=q, status=status, page=page)
-        rows = [{"id": j.id, "name": j.name, "status": j.status, "step": j.step_label,
+        rows = [{"id": j.id, "name": j.name, "status": JOB_STATUS[j.status], "step": j.step_label,
                  "progress": j.progresso, "message": j.mensagem, "error": j.erro,
                  "priority": bool(j.prioridade)} for j in context["jobs"]]  # fmt: skip
         return {"rows": rows, **self._pager(context)}
@@ -367,9 +376,9 @@ class HtmlDriver:
             return None
         context = self.spy.last()[1]
         job: Job = context["job"]
-        return {"status": job.status, "step": job.step_label, "error": job.erro,
-                "steps": [dict(s) for s in context["steps"]],
-                "warnings": [dict(d) for d in job.degradacoes],
+        steps = [{**step, "state": STEP_STATE[step["state"]]} for step in context["steps"]]
+        return {"status": JOB_STATUS[job.status], "step": job.step_label, "error": job.erro,
+                "steps": steps, "warnings": [dict(d) for d in job.degradacoes],
                 "has_subtitle": bool(job.legenda), "has_report": bool(job.relatorio)}  # fmt: skip
 
     def pending(self) -> int:
@@ -547,3 +556,176 @@ class HtmlDriver:
 
     def retry_alert(self, key: str) -> Result:
         return self._toast(self.client.post("/system/alerts/retry", data={"key": key}))
+
+
+class ApiDriver:
+    """A API JSON, que é o que a interface nova usa. Mesmos métodos do `HtmlDriver`."""
+
+    def __init__(self, client: TestClient) -> None:
+        self.client = client
+
+    # --- base ---
+
+    def _get(self, path: str, **params: Any) -> Any:
+        response = self.client.get(f"/api/v1{path}", params={k: v for k, v in params.items() if v})
+        assert response.status_code == 200, f"{path}: {response.status_code}"
+        return response.json()
+
+    @staticmethod
+    def _result(response: Any) -> Result:
+        body = response.json()
+        if "ok" in body:
+            return Result(body["ok"] and response.status_code < 400, body["message"],
+                          response.status_code)  # fmt: skip
+        return Result(False, str(body.get("detail", "")), response.status_code)
+
+    def _patch(self, changes: Mapping[str, Any], secrets: Mapping[str, Any] | None) -> Result:
+        body = {"changes": dict(changes), "secrets": dict(secrets or {})}
+        return self._result(self.client.patch("/api/v1/settings", json=body))
+
+    # --- leituras ---
+
+    @staticmethod
+    def _paged(data: Mapping[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return {"rows": rows, "total": data["total"], "page": data["page"], "pages": data["pages"]}
+
+    @staticmethod
+    def _item_row(row: Mapping[str, Any]) -> dict[str, Any]:
+        job = row["job"] and {"label": row["job"]["label"], "status": row["job"]["status"]}
+        return {"subs": [[sub["lang"], sub["kind"]] for sub in row["subs"]],
+                "missing": row["missing"], "job": job}  # fmt: skip
+
+    def movies(self, q: str = "", show: str = "", page: int = 0) -> dict[str, Any]:
+        data = self._get("/movies", q=q, show=show, page=page)
+        rows = [{"id": r["id"], "title": r["title"], "year": r["year"],
+                 "monitored": r["monitored"], **self._item_row(r)} for r in data["rows"]]  # fmt: skip
+        return self._paged(data, rows)
+
+    def shows(self, q: str = "", show: str = "", page: int = 0) -> dict[str, Any]:
+        data = self._get("/shows", q=q, show=show, page=page)
+        keys = ("id", "title", "year", "monitored", "total", "done", "missing", "queued")
+        return self._paged(data, [{k: r[k] for k in keys} for r in data["rows"]])
+
+    def show(self, show_id: int) -> dict[str, Any] | None:
+        response = self.client.get(f"/api/v1/shows/{show_id}")
+        if response.status_code == 404:
+            return None
+        data = response.json()
+        seasons = [{"season": season["season"],
+                    "episodes": [{"id": e["id"], "episode": e["episode"], "name": e["name"],
+                                  **self._item_row(e)} for e in season["episodes"]]}
+                   for season in data["seasons"]]  # fmt: skip
+        return {"title": data["title"], "year": data["year"], "monitored": data["monitored"],
+                "seasons": seasons}  # fmt: skip
+
+    def queue(self, q: str = "", status: str = "", page: int = 0) -> dict[str, Any]:
+        data = self._get("/queue", q=q, status=status, page=page)
+        keys = ("id", "name", "status", "step", "progress", "message", "error", "priority")
+        return self._paged(data, [{k: j[k] for k in keys} for j in data["rows"]])
+
+    def job(self, job_id: int) -> dict[str, Any] | None:
+        response = self.client.get(f"/api/v1/queue/{job_id}")
+        if response.status_code == 404:
+            return None
+        data = response.json()
+        warnings = [{k: w[k] for k in ("stage", "reason", "effect") if w[k]}
+                    for w in data["warnings"]]  # fmt: skip
+        return {"status": data["status"], "step": data["step"], "error": data["error"],
+                "steps": data["steps"], "warnings": warnings,
+                "has_subtitle": data["has_subtitle"], "has_report": data["has_report"]}  # fmt: skip
+
+    def pending(self) -> int:
+        return int(self._get("/shell")["pending"])
+
+    def setup(self) -> list[str]:
+        return [item["title"] for item in self._get("/shell")["setup"]]
+
+    def alerts_badge(self) -> int:
+        return int(self._get("/shell")["alerts_unseen"])
+
+    def alerts(self) -> list[dict[str, Any]]:
+        """Como a tela de alertas faz: lê e avisa que foram vistos."""
+        data = self._get("/system/alerts")
+        assert self.client.post("/api/v1/system/alerts/seen").status_code == 200
+        return [{"key": a["key"], "message": a["message"], "count": a["count"], "seen": a["seen"],
+                 "resolved": a["resolved_at"] is not None, "items": a["items"]}
+                for a in data["alerts"]]  # fmt: skip
+
+    def tasks(self) -> dict[str, dict[str, Any]]:
+        keys = ("label", "interval", "result", "running", "requested")
+        return {t["name"]: {k: t[k] for k in keys} for t in self._get("/system/tasks")}
+
+    def warnings(self) -> list[str]:
+        return [w["title"] for w in self._get("/system/status")["warnings"]]
+
+    def secret_state(self) -> dict[str, str]:
+        return dict(self._get("/settings")["secrets"])
+
+    def download(self, job_id: int, what: str) -> tuple[int, str]:
+        response = self.client.get(f"/api/v1/queue/{job_id}/{what}")
+        return response.status_code, response.text
+
+    # --- ações: a API recebe só o que mudou ---
+
+    @staticmethod
+    def _arr_body(kind: str, changes: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Separa o que é do Radarr/Sonarr, o que vale para os dois e a chave."""
+        shared = {k: changes.pop(k) for k in ("monitor_new", "sync_interval_minutes")
+                  if k in changes}  # fmt: skip
+        secrets = {}
+        if "api_key" in changes:
+            secrets[f"{kind.upper()}_API_KEY"] = changes.pop("api_key")
+        return {kind: changes, **shared}, secrets
+
+    def save_library(self, kind: str, **changes: Any) -> Result:
+        return self._patch(*self._arr_body(kind, changes))
+
+    def save_integrations(self, **changes: Any) -> Result:
+        secrets = changes.pop("secrets", None)
+        return self._patch(changes, secrets)
+
+    def save_languages(self, targets: Iterable[str] | None = None,
+                       fallback: Iterable[str] | None = None) -> Result:  # fmt: skip
+        changes: dict[str, Any] = {}
+        if targets is not None:
+            changes["target_languages"] = list(targets)
+        if fallback is not None:
+            changes["fallback_languages"] = list(fallback)
+        return self._patch(changes, None)
+
+    def save_subtitles(self, **changes: Any) -> Result:
+        return self._patch(changes, None)
+
+    def save_engines(self, **changes: str) -> Result:
+        return self._patch({"components": changes}, None)
+
+    def test_connection(self, target: str, **changes: Any) -> Result:
+        if target in ("radarr", "sonarr"):
+            body, secrets = self._arr_body(target, changes)
+        else:
+            secrets = changes.pop("secrets", None) or {}
+            body = changes
+        response = self.client.post(f"/api/v1/settings/test/{target}",
+                                    json={"changes": body, "secrets": secrets})  # fmt: skip
+        return self._result(response)
+
+    def add_to_queue(self, *keys: str) -> Result:
+        return self._result(self.client.post("/api/v1/library/queue", json={"items": list(keys)}))
+
+    def toggle_monitor(self, kind: str, item_id: int) -> bool | None:
+        response = self.client.post(f"/api/v1/library/{kind}/{item_id}/monitor")
+        if response.status_code == 404:
+            return None
+        return bool(response.json()["monitored"])
+
+    def cancel(self, job_id: int) -> int:
+        return int(self.client.post(f"/api/v1/queue/{job_id}/cancel").status_code)
+
+    def retry(self, job_id: int) -> int:
+        return int(self.client.post(f"/api/v1/queue/{job_id}/retry").status_code)
+
+    def run_task(self, name: str) -> Result:
+        return self._result(self.client.post(f"/api/v1/system/tasks/{name}/run"))
+
+    def retry_alert(self, key: str) -> Result:
+        return self._result(self.client.post("/api/v1/system/alerts/retry", json={"key": key}))

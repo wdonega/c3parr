@@ -214,15 +214,21 @@ class JobQueue:
             raise KeyError(job_id)
         return _job(row)
 
-    def search(
-        self, query: str = "", statuses: Iterable[str] = (), limit: int = 100, offset: int = 0
-    ) -> tuple[list[Job], int]:
-        """Uma página da fila filtrada por texto (nome do vídeo ou erro) e status, e o total."""
+    @staticmethod
+    def _text_filter(query: str) -> tuple[list[str], list[str]]:
+        """Cada palavra da busca tem de aparecer no nome do vídeo ou no erro."""
         where, args = [], []
         for word in words(query):
             escaped = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             where.append("fold(video || ' ' || COALESCE(erro, '')) LIKE ? ESCAPE '\\'")
             args.append(f"%{escaped}%")
+        return where, args
+
+    def search(
+        self, query: str = "", statuses: Iterable[str] = (), limit: int = 100, offset: int = 0
+    ) -> tuple[list[Job], int]:
+        """Uma página da fila filtrada por texto (nome do vídeo ou erro) e status, e o total."""
+        where, args = self._text_filter(query)
         wanted = list(statuses)
         if wanted:
             where.append(f"status IN ({', '.join('?' * len(wanted))})")
@@ -236,6 +242,17 @@ class JobQueue:
                 [*args, limit, offset],
             ).fetchall()
         return [_job(r) for r in rows], total
+
+    def counts(self, query: str = "") -> dict[str, int]:
+        """Quantas tarefas há em cada status, com o mesmo filtro de texto da busca."""
+        where, args = self._text_filter(query)
+        sql = " WHERE " + " AND ".join(where) if where else ""
+        with self._db() as db:
+            db.create_function("fold", 1, fold, deterministic=True)
+            rows = db.execute(
+                f"SELECT status, COUNT(*) AS n FROM tarefas{sql} GROUP BY status", args
+            ).fetchall()
+        return {r["status"]: int(r["n"]) for r in rows}
 
     def list(self, limit: int = 200) -> list[Job]:
         with self._db() as db:

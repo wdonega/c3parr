@@ -18,6 +18,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -46,6 +47,7 @@ from c3parr.providers.factory import AbstractComponentFactoryFactory
 from c3parr.providers.registry import build_factories
 from c3parr.recipes import full as full_recipe
 from c3parr.web import service
+from c3parr.web.api import build_api
 from c3parr.web.service import (
     LANGUAGE_NAMES,
     LANGUAGES,
@@ -279,7 +281,20 @@ def create_app(
         scheduler.stop()
         logging.getLogger().removeHandler(logs)
 
-    app = FastAPI(title="c3parr", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app = FastAPI(title="c3parr", version=__version__, lifespan=lifespan, redoc_url=None,
+                  docs_url="/api/docs", openapi_url="/api/openapi.json")  # fmt: skip
+    app.include_router(build_api(svc))
+
+    def api_schema() -> dict[str, Any]:
+        """O contrato da API: só as rotas JSON entram (as páginas HTML ficam de fora)."""
+        if app.openapi_schema is None:
+            schema = get_openapi(title="c3parr", version=__version__, routes=app.routes)
+            schema["paths"] = {path: item for path, item in schema["paths"].items()
+                               if path.startswith("/api/v1/")}  # fmt: skip
+            app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = api_schema  # type: ignore[method-assign]
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.state.queue = jobs
     app.state.library = lib

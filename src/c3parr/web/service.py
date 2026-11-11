@@ -127,6 +127,13 @@ SUBTITLE_FLAGS = (
     "new_external_becomes_main", "asr_enabled", "asr_always",
 )  # fmt: skip
 SUBTITLE_CHOICES = ("derived_on_main_change", "foreign_tag")
+# campos da AppConfig que a API grava como vieram (a validação é a do próprio modelo)
+PLAIN_SETTINGS = (*SUBTITLE_FLAGS, *SUBTITLE_CHOICES, "wait_minutes", "search_interval_minutes",
+                  "monitor_new", "sync_interval_minutes", "theme")  # fmt: skip
+PATCHABLE = frozenset({
+    *PLAIN_SETTINGS, "radarr", "sonarr", "target_languages", "fallback_languages", "components",
+    "llm_provider", "llm_model", "llm_base_url", "llm_effort", "asr_mode", "asr_url", "asr_model",
+})  # fmt: skip
 
 
 class NotFound(Exception):
@@ -320,6 +327,15 @@ class Service:
     def unseen_alerts(self) -> int:
         return self.catalog.unseen_alerts()
 
+    def shell(self) -> dict[str, Any]:
+        """O que aparece em toda tela: contadores do menu, o que falta configurar e a tarefa
+        que está rodando."""
+        setup = self.setup_needed()
+        return {"theme": self.theme(), "pending": self.pending(), "setup": setup,
+                "alerts_unseen": self.unseen_alerts() + len(setup),
+                "movies": len(self.lib.movies()), "shows": len(self.lib.series_list()),
+                "running": self.running_job()}  # fmt: skip
+
     def setup_needed(self) -> list[dict[str, str]]:
         """O mínimo para funcionar e que ainda falta. Fica em System → Alerts e no contador até
         ser configurado: abrir a página não faz sumir."""
@@ -396,29 +412,12 @@ class Service:
 
     # --- dashboard ---
 
-    def dashboard(self) -> dict[str, Any]:
+    def dashboard_data(self) -> dict[str, Any]:
+        """Números da visão geral: biblioteca, o que a pipeline fez e legendas por idioma."""
         cfg = self.lib.config()
         movies = self.item_rows(self.lib.movies())
         episodes = self.item_rows(self.lib.episodes())
-        shows = len(self.lib.series_list())
-        cards = [
-            {"label": "Movies", "href": "/movies", "total": len(movies),
-             "done": sum(1 for r in movies if not r["missing"])},
-            {"label": f"Episodes ({shows} shows)", "href": "/tv", "total": len(episodes),
-             "done": sum(1 for r in episodes if not r["missing"])},
-        ]  # fmt: skip
         steps = self.catalog.step_counts()
-        activity = [
-            ("Translations", steps.get(("traduzir", "ok"), 0)),
-            ("Transcriptions (ASR)", steps.get(("asr", "ok"), 0)),
-            ("Embedded subtitles extracted", steps.get(("extrair", "ok"), 0)),
-            ("Subtitles synced", steps.get(("sincronizar", "ok"), 0)),
-            ("Steps in the queue", self.jobs.pending_count()),
-            (
-                "Steps waiting after a failure",
-                sum(n for (_, st), n in steps.items() if st == "falhou"),
-            ),
-        ]
         made: dict[str, int] = {}
         for (lang, _), n in self.catalog.output_counts().items():
             made[lang] = made.get(lang, 0) + n
@@ -437,10 +436,45 @@ class Service:
                 by_lang[lang]["target"] = True
         languages = sorted(by_lang.values(), key=lambda r: (not r["target"], -(
             r["embedded"] + r["human"] + r["ours"]), r["lang"]))  # fmt: skip
-        return {"library_cards": cards, "activity": activity, "made": sorted(made.items()),
-                "lang_rows": languages,
-                "alerts_open": len(self.catalog.alerts(include_resolved=False)),
-                "warnings": [w for w in self.warnings() if w["level"] == "warn"]}  # fmt: skip
+        return {
+            "movies": {"total": len(movies), "done": sum(1 for r in movies if not r["missing"])},
+            "episodes": {"total": len(episodes), "shows": len(self.lib.series_list()),
+                         "done": sum(1 for r in episodes if not r["missing"])},
+            "activity": {
+                "translations": steps.get(("traduzir", "ok"), 0),
+                "transcriptions": steps.get(("asr", "ok"), 0),
+                "extracted": steps.get(("extrair", "ok"), 0),
+                "synced": steps.get(("sincronizar", "ok"), 0),
+                "queued": self.jobs.pending_count(),
+                "failed": sum(n for (_, st), n in steps.items() if st == "falhou"),
+            },
+            "made": sorted(made.items()),
+            "languages": languages,
+            "alerts_open": len(self.catalog.alerts(include_resolved=False)),
+            "warnings": [w for w in self.warnings() if w["level"] == "warn"],
+        }  # fmt: skip
+
+    def dashboard(self) -> dict[str, Any]:
+        """Os mesmos números, com os rótulos da tela HTML."""
+        data = self.dashboard_data()
+        movies, episodes, done = data["movies"], data["episodes"], data["activity"]
+        cards = [
+            {"label": "Movies", "href": "/movies", "total": movies["total"],
+             "done": movies["done"]},
+            {"label": f"Episodes ({episodes['shows']} shows)", "href": "/tv",
+             "total": episodes["total"], "done": episodes["done"]},
+        ]  # fmt: skip
+        activity = [
+            ("Translations", done["translations"]),
+            ("Transcriptions (ASR)", done["transcriptions"]),
+            ("Embedded subtitles extracted", done["extracted"]),
+            ("Subtitles synced", done["synced"]),
+            ("Steps in the queue", done["queued"]),
+            ("Steps waiting after a failure", done["failed"]),
+        ]
+        return {"library_cards": cards, "activity": activity, "made": data["made"],
+                "lang_rows": data["languages"], "alerts_open": data["alerts_open"],
+                "warnings": data["warnings"]}  # fmt: skip
 
     # --- fila ---
 
@@ -453,6 +487,19 @@ class Service:
             found, _ = self.jobs.search(q, statuses, PAGE_SIZE, (pages["page"] - 1) * PAGE_SIZE)
         options = [(k, label) for k, (label, _) in QUEUE_FILTERS.items()]
         return {"jobs": found, "pager": pages, "q": q, "status": status, "options": options}
+
+    def queue_counts(self, q: str) -> dict[str, int]:
+        """Quantas tarefas cada filtro da fila tem, para a busca dada."""
+        by_status = self.jobs.counts(q)
+        out = {"all": sum(by_status.values())}
+        for key, (_, statuses) in QUEUE_FILTERS.items():
+            if key:
+                out[key] = sum(by_status.get(s, 0) for s in statuses)
+        return out
+
+    def running_job(self) -> Job | None:
+        found, _ = self.jobs.search(statuses=("processando",), limit=1)
+        return found[0] if found else None
 
     def target_language(self) -> str:
         return self.lib.config().target_language
@@ -514,31 +561,43 @@ class Service:
                         "job": active.get(item.video)})  # fmt: skip
         return out
 
-    def active_jobs(self) -> dict[str, str]:
-        out: dict[str, str] = {}
+    def job_refs(self) -> dict[str, Job]:
+        """vídeo → a tarefa ativa dele (a que está rodando ganha da que espera na fila)."""
+        out: dict[str, Job] = {}
         for j in self.jobs.list(2000):
-            if j.status in ACTIVE:
-                running = j.status == "processando"
-                if running or j.video not in out:
-                    out[j.video] = j.step_label if running else f"Queued: {j.step_label}"
+            if j.status in ACTIVE and (j.status == "processando" or j.video not in out):
+                out[j.video] = j
         return out
 
+    def active_jobs(self) -> dict[str, str]:
+        return {video: j.step_label if j.status == "processando" else f"Queued: {j.step_label}"
+                for video, j in self.job_refs().items()}  # fmt: skip
+
     @staticmethod
-    def _library(path: str, rows: list[dict[str, Any]], q: str, show: str,
-                 page: int) -> dict[str, Any]:  # fmt: skip
+    def _page(path: str, found: list[dict[str, Any]], q: str, show: str, page: int,
+              flags: Callable[[dict[str, Any]], tuple[bool, bool]]) -> dict[str, Any]:  # fmt: skip
+        """`found` (o que casa com a busca) filtrado pelo chip e cortado na página; e quantos
+        itens cada chip tem. `flags` diz, de cada linha, se falta legenda e se está na fila."""
+        marks = [flags(r) for r in found]
+        rows = [r for r, (missing, queued) in zip(found, marks, strict=True)
+                if _shown(show, missing, queued)]  # fmt: skip
         pages = pager(path, {"q": q, "show": show}, page, len(rows))
         start = (pages["page"] - 1) * PAGE_SIZE
-        return {"rows": rows[start:start + PAGE_SIZE], "pager": pages, "q": q, "show": show,
-                "options": list(LIBRARY_FILTERS.items())}  # fmt: skip
+        counts = {"all": len(found), "missing": sum(1 for m, _ in marks if m),
+                  "complete": sum(1 for m, _ in marks if not m),
+                  "queued": sum(1 for _, queued in marks if queued)}  # fmt: skip
+        shown = rows[start : start + PAGE_SIZE]
+        return {"rows": shown, "pager": pages, "counts": counts}
 
-    def movies(self, q: str, show: str, page: int) -> dict[str, Any]:
+    def movies_data(self, q: str, show: str, page: int) -> dict[str, Any]:
         every = self.item_rows(self.lib.movies())
-        rows = [r for r in every
-                if matches(q, r["item"].title, r["item"].year, r["item"].folder)
-                and _shown(show, bool(r["missing"]), bool(r["job"]))]  # fmt: skip
-        return {"has_items": bool(every), **self._library("/movies", rows, q, show, page)}
+        found = [r for r in every
+                 if matches(q, r["item"].title, r["item"].year, r["item"].folder)]  # fmt: skip
+        return {"has_items": bool(every),
+                **self._page("/movies", found, q, show, page,
+                             lambda r: (bool(r["missing"]), bool(r["job"])))}  # fmt: skip
 
-    def shows(self, q: str, show: str, page: int) -> dict[str, Any]:
+    def shows_data(self, q: str, show: str, page: int) -> dict[str, Any]:
         by_show: dict[int, list[dict[str, Any]]] = {}
         for ep in self.item_rows(self.lib.episodes()):
             by_show.setdefault(ep["item"].series_id, []).append(ep)
@@ -551,9 +610,22 @@ class Service:
             queued = any(e["job"] for e in eps)
             every.append({"item": series, "total": len(eps), "done": done, "missing": missing,
                           "queued": queued})  # fmt: skip
-        rows = [r for r in every if matches(q, r["item"].title, r["item"].year, r["item"].folder)
-                and _shown(show, r["done"] < r["total"], r["queued"])]  # fmt: skip
-        return {"has_items": bool(every), **self._library("/tv", rows, q, show, page)}
+        found = [r for r in every
+                 if matches(q, r["item"].title, r["item"].year, r["item"].folder)]  # fmt: skip
+        return {"has_items": bool(every),
+                **self._page("/tv", found, q, show, page,
+                             lambda r: (r["done"] < r["total"], r["queued"]))}  # fmt: skip
+
+    @staticmethod
+    def _html_list(data: dict[str, Any], q: str, show: str) -> dict[str, Any]:
+        return {"has_items": data["has_items"], "rows": data["rows"], "pager": data["pager"],
+                "q": q, "show": show, "options": list(LIBRARY_FILTERS.items())}  # fmt: skip
+
+    def movies(self, q: str, show: str, page: int) -> dict[str, Any]:
+        return self._html_list(self.movies_data(q, show, page), q, show)
+
+    def shows(self, q: str, show: str, page: int) -> dict[str, Any]:
+        return self._html_list(self.shows_data(q, show, page), q, show)
 
     def show(self, series_id: int) -> dict[str, Any]:
         try:
@@ -566,15 +638,20 @@ class Service:
         ordered = sorted(seasons.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))
         return {"show": show, "seasons": ordered}
 
-    def toggle_monitor(self, kind: str, item_id: int) -> Any:
+    def set_monitored(self, kind: str, item_id: int, monitored: bool | None = None) -> Any:
+        """Marca ou desmarca o filme ou a série (`None` alterna) e devolve o item como ficou."""
         if kind not in ("movie", "series"):
             raise NotFound("Not Found")
         try:
             item = self.lib.movie(item_id) if kind == "movie" else self.lib.series(item_id)
         except KeyError:
             raise NotFound("item not found") from None
-        self.lib.set_monitored(kind, item_id, not item.monitored)
+        self.lib.set_monitored(kind, item_id, not item.monitored if monitored is None
+                               else monitored)  # fmt: skip
         return self.lib.movie(item_id) if kind == "movie" else self.lib.series(item_id)
+
+    def toggle_monitor(self, kind: str, item_id: int) -> Any:
+        return self.set_monitored(kind, item_id)
 
     def _videos_for(self, key: str) -> list[str]:
         """`movie:1`, `episode:7` ou `series:2` (todos os episódios: o decisor vê o que falta)."""
@@ -819,6 +896,108 @@ class Service:
         changes["asr_model"] = values.get("asr_model", "").strip()
         return self._save(changes, secrets)
 
+    # A API manda só o que mudou. As regras são as mesmas das telas antigas: o Radarr/Sonarr que
+    # veio é limpo e, se ligado, relido; idiomas sem repetição; motor só entre os oferecidos;
+    # modelo e URL iguais ao padrão ficam vazios; servidor de transcrição exige URL.
+
+    def _arr_with(self, kind: str, given: Mapping[str, Any]) -> ArrConfig:
+        """O Radarr/Sonarr salvo com os campos que vieram por cima, limpos."""
+        data = {**getattr(self.lib.config(), kind).model_dump(), **given}
+        for name in ("host", "base_url"):
+            data[name] = str(data[name] or "").strip()
+        data["excluded_tags"] = tuple(str(t).strip() for t in data["excluded_tags"]
+                                      if str(t).strip())  # fmt: skip
+        data["excluded_series_types"] = tuple(t for t in data["excluded_series_types"]
+                                              if t in SERIES_TYPES)  # fmt: skip
+        pairs = [(str(r).strip(), str(lo).strip()) for r, lo in data["path_mappings"]]
+        data["path_mappings"] = tuple((r, lo) for r, lo in pairs if r and lo)
+        return ArrConfig.model_validate(data)
+
+    def patch_settings(self, changes: Mapping[str, Any],
+                       secrets: Mapping[str, str | None]) -> Outcome:  # fmt: skip
+        """Grava só os campos que vieram (nomes da `AppConfig`) e as chaves (vazio apaga)."""
+        config = self.lib.config()
+        unknown = changes.keys() - PATCHABLE
+        if unknown:
+            fields = ", ".join(sorted(unknown))
+            return Outcome(f"Not saved, unknown: {fields}", error=True, status=422)
+        out: dict[str, Any] = {}
+        arrs: dict[str, ArrConfig] = {}
+        for kind in ("radarr", "sonarr"):
+            if kind in changes:
+                try:
+                    arrs[kind] = self._arr_with(kind, changes[kind])
+                except (ValidationError, TypeError, ValueError):
+                    return Outcome(f"Not saved, check: {kind}", error=True, status=422)
+        if "target_languages" in changes:
+            targets = list(dict.fromkeys(norm_lang(str(t)) for t in changes["target_languages"]))
+            if not targets:
+                return Outcome("Pick at least one target language.", error=True, status=422)
+            out["target_languages"] = targets
+        if "fallback_languages" in changes:
+            given = (str(c).strip() for c in changes["fallback_languages"])
+            out["fallback_languages"] = list(dict.fromkeys(norm_lang(c) for c in given if c))
+        if "components" in changes:
+            valid = {i["id"]: {p.id for p in i["providers"]} for i in self.interfaces(config)}
+            picked = {k: v for k, v in dict(changes["components"]).items()
+                      if v in valid.get(k, ())}  # fmt: skip
+            out["components"] = {**config.components, **picked}
+        provider = changes.get("llm_provider", config.llm_provider)
+        if provider not in LLM_PRESETS:
+            provider = config.llm_provider
+        if "llm_provider" in changes:
+            out["llm_provider"] = provider
+        if changes.get("llm_effort") in ("low", "medium"):
+            out["llm_effort"] = changes["llm_effort"]
+        if "llm_model" in changes:
+            model = str(changes["llm_model"] or "").strip()
+            out["llm_model"] = "" if model == llm_defaults(provider)[1] else model
+        if "llm_base_url" in changes:
+            url = str(changes["llm_base_url"] or "").strip()
+            out["llm_base_url"] = "" if url == llm_defaults("custom")[0] else url
+        if changes.keys() & {"asr_mode", "asr_url", "asr_model"}:
+            mode = changes.get("asr_mode", config.asr_mode)
+            url = str(changes.get("asr_url", config.asr_url) or "").strip()
+            if mode in REMOTE_IDS and not url:
+                return Outcome("Transcription: put the server URL.", error=True, status=422)
+            out["asr_mode"], out["asr_url"] = mode, url
+            out["asr_model"] = str(changes.get("asr_model", config.asr_model) or "").strip()
+        out.update({name: changes[name] for name in PLAIN_SETTINGS if name in changes})
+        outcome = self._save({**arrs, **out}, {k: v or "" for k, v in secrets.items()})
+        if not outcome.error:
+            for kind, arr in arrs.items():
+                if arr.enabled:
+                    self.lib.request_run(f"sync_{kind}")
+        return outcome
+
+    def test_screen(self, target: str, changes: Mapping[str, Any],
+                    secrets: Mapping[str, str | None]) -> Outcome:  # fmt: skip
+        """Testa a conexão com o que a tela tem agora: o salvo, com o digitado por cima."""
+        config = self.lib.config()
+        typed = {k: (v or "").strip() for k, v in secrets.items()}
+
+        def field(name: str) -> str:
+            return str(changes.get(name, getattr(config, name)) or "").strip()
+
+        if target in ARR_KEY_ENV:
+            kind: ArrKind = "radarr" if target == "radarr" else "sonarr"
+            try:
+                arr = self._arr_with(kind, changes.get(kind, {}))
+            except (ValidationError, TypeError, ValueError):
+                return Outcome(f"{kind.capitalize()}: check the fields.", error=True, status=422)
+            return self.test_arr(kind, arr, typed.get(ARR_KEY_ENV[kind], ""))
+        if target == "tmdb":
+            return self.test_tmdb(typed.get("TMDB_READ_ACCESS_TOKEN", ""))
+        if target == "llm":
+            provider = field("llm_provider")
+            key = typed.get(LLM_KEY_ENV.get(provider, ""), "")
+            return self.test_llm(provider, field("llm_base_url"), field("llm_model"),
+                                 field("llm_effort"), key)  # fmt: skip
+        if target == "asr":
+            return self.test_asr(field("asr_mode"), field("asr_url"), field("asr_model"),
+                                 typed.get("C3PARR_ASR_API_KEY", ""))  # fmt: skip
+        raise NotFound("Not Found")
+
     # --- system ---
 
     def task_rows(self) -> list[dict[str, Any]]:
@@ -840,19 +1019,26 @@ class Service:
         self.lib.request_run(name)
         return Outcome(f"{task.label}: starting.")
 
-    def alerts_view(self) -> dict[str, Any]:
-        """Os alertas como estavam antes de abrir a página; abrir marca os abertos como vistos
-        (os de configuração só somem configurando)."""
+    def alerts_data(self) -> dict[str, Any]:
+        """Os alertas e o que falta configurar. Não marca nada como visto."""
         alerts = self.catalog.alerts()
         names: dict[str, list[str]] = {}
         for a in alerts:
             for mid in a.media_ids:
                 with suppress(KeyError):
                     names.setdefault(a.key, []).append(Path(self.catalog.media(mid).video).name)
-        setup = self.setup_needed()
+        return {"alerts": alerts, "names": names, "step_names": ACTION_LABELS,
+                "setup": self.setup_needed()}  # fmt: skip
+
+    def mark_alerts_seen(self) -> None:
         self.catalog.mark_alerts_seen()
-        return {"alerts": alerts, "names": names, "step_names": ACTION_LABELS, "setup": setup,
-                "alerts_unseen": len(setup)}  # fmt: skip
+
+    def alerts_view(self) -> dict[str, Any]:
+        """Os alertas como estavam antes de abrir a página; abrir marca os abertos como vistos
+        (os de configuração só somem configurando)."""
+        data = self.alerts_data()
+        self.mark_alerts_seen()
+        return {**data, "alerts_unseen": len(data["setup"])}
 
     def retry_alert(self, key: str) -> Outcome:
         alert = next((a for a in self.catalog.alerts(include_resolved=False) if a.key == key), None)

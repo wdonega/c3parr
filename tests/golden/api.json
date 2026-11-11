@@ -1,0 +1,1675 @@
+{
+ "dashboard": {
+  "activity": {
+   "extracted": 1,
+   "failed": 1,
+   "queued": 2,
+   "synced": 0,
+   "transcriptions": 0,
+   "translations": 1
+  },
+  "alerts_open": 1,
+  "episodes": {
+   "done": 2,
+   "shows": 2,
+   "total": 5
+  },
+  "languages": [
+   {
+    "embedded": 0,
+    "external": 3,
+    "lang": "pt-BR",
+    "missing": 4,
+    "name": "Portuguese (Brazil)",
+    "ours": 2,
+    "target": true
+   },
+   {
+    "embedded": 0,
+    "external": 2,
+    "lang": "es",
+    "missing": 6,
+    "name": "Spanish",
+    "ours": 1,
+    "target": true
+   },
+   {
+    "embedded": 4,
+    "external": 0,
+    "lang": "en",
+    "missing": 0,
+    "name": "English",
+    "ours": 0,
+    "target": false
+   },
+   {
+    "embedded": 0,
+    "external": 1,
+    "lang": "pt",
+    "missing": 0,
+    "name": "Portuguese (Portugal)",
+    "ours": 0,
+    "target": false
+   }
+  ],
+  "made": [
+   {
+    "count": 1,
+    "lang": "es"
+   },
+   {
+    "count": 1,
+    "lang": "pt-BR"
+   }
+  ],
+  "movies": {
+   "done": 1,
+   "total": 4
+  },
+  "warnings": [
+   {
+    "detail": "The latest is Radarr 6. c3parr is made for it; update Radarr to keep the library in sync.",
+    "level": "warn",
+    "title": "Radarr 5 is out of date"
+   }
+  ]
+ },
+ "job_cancelled": {
+  "action": null,
+  "can_cancel": false,
+  "can_retry": true,
+  "created_at": "<ts>",
+  "error": null,
+  "finished_at": null,
+  "has_report": false,
+  "has_subtitle": false,
+  "id": 4,
+  "language": null,
+  "message": "cancelamento pedido",
+  "name": "Roma.mkv",
+  "origin": null,
+  "priority": false,
+  "progress": 0.0,
+  "started_at": null,
+  "status": "cancelled",
+  "step": "Subtitle pt-BR",
+  "steps": [
+   {
+    "label": "Audio",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Metadata (TMDb)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Transcription",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Reference subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Bridge subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Sync",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "User bible",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Context (bible)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Name correction",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Translation",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Formatting",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Write subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Original transcript",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Series memory",
+    "state": "pending",
+    "text": "waiting"
+   }
+  ],
+  "video": "<root>/movies/Roma (2018)/Roma.mkv",
+  "warnings": []
+ },
+ "job_done": {
+  "action": "extrair",
+  "can_cancel": false,
+  "can_retry": true,
+  "created_at": "<ts>",
+  "error": null,
+  "finished_at": "<ts>",
+  "has_report": true,
+  "has_subtitle": true,
+  "id": 1,
+  "language": "en",
+  "message": null,
+  "name": "Supernatural - S01E01 - Pilot.mkv",
+  "origin": "rotina",
+  "priority": false,
+  "progress": 1.0,
+  "started_at": "<ts>",
+  "status": "done",
+  "step": "Extract embedded subtitle → en",
+  "steps": [
+   {
+    "label": "Audio",
+    "state": "done",
+    "text": "done · 3 s"
+   },
+   {
+    "label": "Transcription",
+    "state": "skipped",
+    "text": "skipped · já há legenda"
+   },
+   {
+    "label": "Translation",
+    "state": "cached",
+    "text": "from cache · llm"
+   }
+  ],
+  "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv",
+  "warnings": []
+ },
+ "job_failed": {
+  "action": "traduzir",
+  "can_cancel": false,
+  "can_retry": true,
+  "created_at": "<ts>",
+  "error": "LLM fora do ar",
+  "finished_at": "<ts>",
+  "has_report": false,
+  "has_subtitle": false,
+  "id": 3,
+  "language": "pt-BR",
+  "message": null,
+  "name": "Supernatural - S01E02 - Wendigo.mkv",
+  "origin": "rotina",
+  "priority": false,
+  "progress": 0.0,
+  "started_at": "<ts>",
+  "status": "failed",
+  "step": "Translate → pt-BR",
+  "steps": [
+   {
+    "label": "Audio",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Metadata (TMDb)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Transcription",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Reference subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Bridge subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Sync",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "User bible",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Context (bible)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Name correction",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Translation",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Formatting",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Write subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Original transcript",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Series memory",
+    "state": "pending",
+    "text": "waiting"
+   }
+  ],
+  "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv",
+  "warnings": []
+ },
+ "job_queued": {
+  "action": "traduzir",
+  "can_cancel": true,
+  "can_retry": false,
+  "created_at": "<ts>",
+  "error": null,
+  "finished_at": null,
+  "has_report": false,
+  "has_subtitle": false,
+  "id": 6,
+  "language": "pt-BR",
+  "message": null,
+  "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+  "origin": "rotina",
+  "priority": false,
+  "progress": 0.0,
+  "started_at": null,
+  "status": "queued",
+  "step": "Translate → pt-BR",
+  "steps": [
+   {
+    "label": "Audio",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Metadata (TMDb)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Transcription",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Reference subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Bridge subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Sync",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "User bible",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Context (bible)",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Name correction",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Translation",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Formatting",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Write subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Original transcript",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Series memory",
+    "state": "pending",
+    "text": "waiting"
+   }
+  ],
+  "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv",
+  "warnings": []
+ },
+ "job_running": {
+  "action": "traduzir",
+  "can_cancel": true,
+  "can_retry": false,
+  "created_at": "<ts>",
+  "error": null,
+  "finished_at": null,
+  "has_report": false,
+  "has_subtitle": false,
+  "id": 5,
+  "language": "pt-BR",
+  "message": "bloco 44/94",
+  "name": "Oldboy.mkv",
+  "origin": "manual",
+  "priority": true,
+  "progress": 0.47,
+  "started_at": "<ts>",
+  "status": "running",
+  "step": "Translate → pt-BR",
+  "steps": [
+   {
+    "label": "Audio",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Metadata (TMDb)",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Transcription",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Reference subtitle",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Bridge subtitle",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Sync",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "User bible",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Context (bible)",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Name correction",
+    "state": "done",
+    "text": "done"
+   },
+   {
+    "label": "Translation",
+    "state": "running",
+    "text": "bloco 44/94"
+   },
+   {
+    "label": "Formatting",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Write subtitle",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Original transcript",
+    "state": "pending",
+    "text": "waiting"
+   },
+   {
+    "label": "Series memory",
+    "state": "pending",
+    "text": "waiting"
+   }
+  ],
+  "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
+  "warnings": []
+ },
+ "job_warned": {
+  "action": "traduzir",
+  "can_cancel": false,
+  "can_retry": true,
+  "created_at": "<ts>",
+  "error": null,
+  "finished_at": "<ts>",
+  "has_report": true,
+  "has_subtitle": false,
+  "id": 2,
+  "language": "pt-BR",
+  "message": null,
+  "name": "Parasite.mkv",
+  "origin": "rotina",
+  "priority": false,
+  "progress": 1.0,
+  "started_at": "<ts>",
+  "status": "done_with_warnings",
+  "step": "Translate → pt-BR",
+  "steps": [
+   {
+    "label": "Metadata (TMDb)",
+    "state": "warning",
+    "text": "with warning · TMDb não achou"
+   }
+  ],
+  "video": "<root>/movies/Parasite (2019)/Parasite.mkv",
+  "warnings": [
+   {
+    "effect": "nomes sem conferir",
+    "label": "Metadata (TMDb)",
+    "reason": "TMDb não achou",
+    "stage": "metadados"
+   }
+  ]
+ },
+ "movies": {
+  "counts": {
+   "all": 4,
+   "complete": 1,
+   "missing": 3,
+   "queued": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Incendies (2010)",
+    "id": 1,
+    "job": null,
+    "missing": [],
+    "monitored": true,
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     },
+     {
+      "kind": "external",
+      "lang": "es"
+     },
+     {
+      "kind": "external",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Incendies",
+    "video": "<root>/movies/Incendies (2010)/Incendies.mkv",
+    "year": 2010
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Oldboy (2003)",
+    "id": 3,
+    "job": {
+     "id": 5,
+     "label": "Translate → pt-BR",
+     "progress": 0.47,
+     "status": "running"
+    },
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": true,
+    "subs": [],
+    "title": "Oldboy",
+    "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
+    "year": 2003
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Parasite (2019)",
+    "id": 2,
+    "job": null,
+    "missing": [
+     "es"
+    ],
+    "monitored": true,
+    "subs": [
+     {
+      "kind": "external",
+      "lang": "pt"
+     },
+     {
+      "kind": "ours",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Parasite",
+    "video": "<root>/movies/Parasite (2019)/Parasite.mkv",
+    "year": 2019
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Roma (2018)",
+    "id": 4,
+    "job": null,
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": false,
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     }
+    ],
+    "title": "Roma",
+    "video": "<root>/movies/Roma (2018)/Roma.mkv",
+    "year": 2018
+   }
+  ],
+  "total": 4
+ },
+ "movies_missing": {
+  "counts": {
+   "all": 4,
+   "complete": 1,
+   "missing": 3,
+   "queued": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Oldboy (2003)",
+    "id": 3,
+    "job": {
+     "id": 5,
+     "label": "Translate → pt-BR",
+     "progress": 0.47,
+     "status": "running"
+    },
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": true,
+    "subs": [],
+    "title": "Oldboy",
+    "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv",
+    "year": 2003
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Parasite (2019)",
+    "id": 2,
+    "job": null,
+    "missing": [
+     "es"
+    ],
+    "monitored": true,
+    "subs": [
+     {
+      "kind": "external",
+      "lang": "pt"
+     },
+     {
+      "kind": "ours",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Parasite",
+    "video": "<root>/movies/Parasite (2019)/Parasite.mkv",
+    "year": 2019
+   },
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Roma (2018)",
+    "id": 4,
+    "job": null,
+    "missing": [
+     "pt-BR",
+     "es"
+    ],
+    "monitored": false,
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     }
+    ],
+    "title": "Roma",
+    "video": "<root>/movies/Roma (2018)/Roma.mkv",
+    "year": 2018
+   }
+  ],
+  "total": 3
+ },
+ "movies_search": {
+  "counts": {
+   "all": 1,
+   "complete": 1,
+   "missing": 0,
+   "queued": 0
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "added_at": "<ts>",
+    "folder": "<root>/movies/Incendies (2010)",
+    "id": 1,
+    "job": null,
+    "missing": [],
+    "monitored": true,
+    "subs": [
+     {
+      "kind": "embedded",
+      "lang": "en"
+     },
+     {
+      "kind": "external",
+      "lang": "es"
+     },
+     {
+      "kind": "external",
+      "lang": "pt-BR"
+     }
+    ],
+    "title": "Incendies",
+    "video": "<root>/movies/Incendies (2010)/Incendies.mkv",
+    "year": 2010
+   }
+  ],
+  "total": 1
+ },
+ "queue": {
+  "counts": {
+   "all": 6,
+   "cancelled": 1,
+   "done": 2,
+   "failed": 1,
+   "queued": 1,
+   "running": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": null,
+    "id": 6,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 0.0,
+    "started_at": null,
+    "status": "queued",
+    "step": "Translate → pt-BR",
+    "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv"
+   },
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": null,
+    "id": 5,
+    "language": "pt-BR",
+    "message": "bloco 44/94",
+    "name": "Oldboy.mkv",
+    "origin": "manual",
+    "priority": true,
+    "progress": 0.47,
+    "started_at": "<ts>",
+    "status": "running",
+    "step": "Translate → pt-BR",
+    "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv"
+   },
+   {
+    "action": null,
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": null,
+    "id": 4,
+    "language": null,
+    "message": "cancelamento pedido",
+    "name": "Roma.mkv",
+    "origin": null,
+    "priority": false,
+    "progress": 0.0,
+    "started_at": null,
+    "status": "cancelled",
+    "step": "Subtitle pt-BR",
+    "video": "<root>/movies/Roma (2018)/Roma.mkv"
+   },
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": "LLM fora do ar",
+    "finished_at": "<ts>",
+    "id": 3,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Supernatural - S01E02 - Wendigo.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 0.0,
+    "started_at": "<ts>",
+    "status": "failed",
+    "step": "Translate → pt-BR",
+    "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
+   },
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": "<ts>",
+    "id": 2,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Parasite.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 1.0,
+    "started_at": "<ts>",
+    "status": "done_with_warnings",
+    "step": "Translate → pt-BR",
+    "video": "<root>/movies/Parasite (2019)/Parasite.mkv"
+   },
+   {
+    "action": "extrair",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": "<ts>",
+    "id": 1,
+    "language": "en",
+    "message": null,
+    "name": "Supernatural - S01E01 - Pilot.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 1.0,
+    "started_at": "<ts>",
+    "status": "done",
+    "step": "Extract embedded subtitle → en",
+    "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv"
+   }
+  ],
+  "total": 6
+ },
+ "queue_failed": {
+  "counts": {
+   "all": 6,
+   "cancelled": 1,
+   "done": 2,
+   "failed": 1,
+   "queued": 1,
+   "running": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": "LLM fora do ar",
+    "finished_at": "<ts>",
+    "id": 3,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Supernatural - S01E02 - Wendigo.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 0.0,
+    "started_at": "<ts>",
+    "status": "failed",
+    "step": "Translate → pt-BR",
+    "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
+   }
+  ],
+  "total": 1
+ },
+ "queue_search": {
+  "counts": {
+   "all": 3,
+   "cancelled": 0,
+   "done": 1,
+   "failed": 1,
+   "queued": 1,
+   "running": 0
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": null,
+    "id": 6,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 0.0,
+    "started_at": null,
+    "status": "queued",
+    "step": "Translate → pt-BR",
+    "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv"
+   },
+   {
+    "action": "traduzir",
+    "created_at": "<ts>",
+    "error": "LLM fora do ar",
+    "finished_at": "<ts>",
+    "id": 3,
+    "language": "pt-BR",
+    "message": null,
+    "name": "Supernatural - S01E02 - Wendigo.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 0.0,
+    "started_at": "<ts>",
+    "status": "failed",
+    "step": "Translate → pt-BR",
+    "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
+   },
+   {
+    "action": "extrair",
+    "created_at": "<ts>",
+    "error": null,
+    "finished_at": "<ts>",
+    "id": 1,
+    "language": "en",
+    "message": null,
+    "name": "Supernatural - S01E01 - Pilot.mkv",
+    "origin": "rotina",
+    "priority": false,
+    "progress": 1.0,
+    "started_at": "<ts>",
+    "status": "done",
+    "step": "Extract embedded subtitle → en",
+    "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv"
+   }
+  ],
+  "total": 3
+ },
+ "settings": {
+  "config": {
+   "asr_always": false,
+   "asr_enabled": true,
+   "asr_mode": "local",
+   "asr_model": "",
+   "asr_url": "",
+   "components": {},
+   "delete_ours_on_human": true,
+   "derived_on_main_change": "regenerate",
+   "embedded_resolves": true,
+   "external_resolves": true,
+   "fallback_languages": [
+    "en",
+    "es",
+    "fr",
+    "it",
+    "de",
+    "pt"
+   ],
+   "fix_external_in_place": true,
+   "forced_resolves": false,
+   "foreign_tag": "first",
+   "llm_base_url": "http://llm.test:8080/v1",
+   "llm_effort": "low",
+   "llm_model": "modelo-x",
+   "llm_provider": "custom",
+   "monitor_new": true,
+   "new_external_becomes_main": true,
+   "radarr": {
+    "base_url": "",
+    "enabled": true,
+    "exclude_season_zero": false,
+    "excluded_series_types": [],
+    "excluded_tags": [
+     "skip"
+    ],
+    "host": "radarr.test",
+    "only_monitored": false,
+    "path_mappings": [
+     [
+      "/data/movies",
+      "<root>/movies"
+     ]
+    ],
+    "port": 7878,
+    "ssl": false,
+    "timeout_s": 60
+   },
+   "search_interval_minutes": 360,
+   "sonarr": {
+    "base_url": "",
+    "enabled": true,
+    "exclude_season_zero": false,
+    "excluded_series_types": [],
+    "excluded_tags": [],
+    "host": "",
+    "only_monitored": false,
+    "path_mappings": [],
+    "port": 8989,
+    "ssl": false,
+    "timeout_s": 60
+   },
+   "sync_interval_minutes": 60,
+   "sync_new_external": true,
+   "target_languages": [
+    "pt-BR",
+    "es"
+   ],
+   "theme": "robo",
+   "use_embedded": true,
+   "wait_minutes": 60
+  },
+  "options": {
+   "arr_keys": {
+    "radarr": "RADARR_API_KEY",
+    "sonarr": "SONARR_API_KEY"
+   },
+   "engines": [
+    {
+     "id": "transcricao",
+     "label": "Transcription (ASR)",
+     "providers": [
+      {
+       "description": "Whisper via CTranslate2 on CPU, with VAD and per-span language",
+       "id": "faster-whisper"
+      },
+      {
+       "description": "whisper.cpp (Metal / Vulkan / CUDA / CPU), large-v3-turbo",
+       "id": "whisper-cpp"
+      }
+     ],
+     "selected": "falso"
+    },
+    {
+     "id": "sincronizacao",
+     "label": "Sync",
+     "providers": [
+      {
+       "description": "Fuzzy text matching, for a reference in the audio language",
+       "id": "texto"
+      },
+      {
+       "description": "Multilingual embeddings + monotonic alignment + landmark curve",
+       "id": "embeddings"
+      },
+      {
+       "description": "Speech rhythm (offset and frame rate), no text and no model",
+       "id": "tempo"
+      },
+      {
+       "description": "Text when same language; embeddings or speech rhythm across languages",
+       "id": "auto"
+      }
+     ],
+     "selected": "texto"
+    },
+    {
+     "id": "fonte_legenda",
+     "label": "Subtitle source",
+     "providers": [
+      {
+       "description": "A .srt, .ass or .ssa file provided by the user",
+       "id": "arquivo"
+      }
+     ],
+     "selected": "arquivo"
+    },
+    {
+     "id": "escrita_legenda",
+     "label": "Subtitle format",
+     "providers": [
+      {
+       "description": "SubRip in UTF-8, numbered from 1",
+       "id": "srt"
+      }
+     ],
+     "selected": "srt"
+    }
+   ],
+   "languages": [
+    {
+     "code": "pt-BR",
+     "name": "Portuguese (Brazil)"
+    },
+    {
+     "code": "pt",
+     "name": "Portuguese (Portugal)"
+    },
+    {
+     "code": "en",
+     "name": "English"
+    },
+    {
+     "code": "es",
+     "name": "Spanish"
+    },
+    {
+     "code": "fr",
+     "name": "French"
+    },
+    {
+     "code": "it",
+     "name": "Italian"
+    },
+    {
+     "code": "de",
+     "name": "German"
+    },
+    {
+     "code": "nl",
+     "name": "Dutch"
+    },
+    {
+     "code": "ar",
+     "name": "Arabic"
+    },
+    {
+     "code": "he",
+     "name": "Hebrew"
+    },
+    {
+     "code": "tr",
+     "name": "Turkish"
+    },
+    {
+     "code": "ru",
+     "name": "Russian"
+    },
+    {
+     "code": "uk",
+     "name": "Ukrainian"
+    },
+    {
+     "code": "pl",
+     "name": "Polish"
+    },
+    {
+     "code": "cs",
+     "name": "Czech"
+    },
+    {
+     "code": "ro",
+     "name": "Romanian"
+    },
+    {
+     "code": "hu",
+     "name": "Hungarian"
+    },
+    {
+     "code": "el",
+     "name": "Greek"
+    },
+    {
+     "code": "sv",
+     "name": "Swedish"
+    },
+    {
+     "code": "no",
+     "name": "Norwegian"
+    },
+    {
+     "code": "da",
+     "name": "Danish"
+    },
+    {
+     "code": "fi",
+     "name": "Finnish"
+    },
+    {
+     "code": "ja",
+     "name": "Japanese"
+    },
+    {
+     "code": "ko",
+     "name": "Korean"
+    },
+    {
+     "code": "zh",
+     "name": "Chinese"
+    },
+    {
+     "code": "hi",
+     "name": "Hindi"
+    },
+    {
+     "code": "th",
+     "name": "Thai"
+    },
+    {
+     "code": "vi",
+     "name": "Vietnamese"
+    },
+    {
+     "code": "id",
+     "name": "Indonesian"
+    },
+    {
+     "code": "ca",
+     "name": "Catalan"
+    }
+   ],
+   "llm_providers": [
+    {
+     "default_model": "",
+     "default_url": "",
+     "effort": false,
+     "id": "custom",
+     "key": "C3PARR_LLM_API_KEY",
+     "label": "Local / custom (OpenAI-compatible URL)",
+     "site": "https://github.com/ollama/ollama#ollama"
+    },
+    {
+     "default_model": "gpt-4.1-mini",
+     "default_url": "https://api.openai.com/v1",
+     "effort": false,
+     "id": "openai",
+     "key": "OPENAI_API_KEY",
+     "label": "OpenAI (ChatGPT)",
+     "site": "https://platform.openai.com/"
+    },
+    {
+     "default_model": "claude-haiku-5-5",
+     "default_url": "https://api.anthropic.com",
+     "effort": true,
+     "id": "anthropic",
+     "key": "ANTHROPIC_API_KEY",
+     "label": "Anthropic (Claude)",
+     "site": "https://platform.claude.com/"
+    },
+    {
+     "default_model": "gemini-flash-latest",
+     "default_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+     "effort": true,
+     "id": "gemini",
+     "key": "GEMINI_API_KEY",
+     "label": "Google (Gemini)",
+     "site": "https://aistudio.google.com/"
+    },
+    {
+     "default_model": "deepseek-chat",
+     "default_url": "https://api.deepseek.com/v1",
+     "effort": false,
+     "id": "deepseek",
+     "key": "DEEPSEEK_API_KEY",
+     "label": "DeepSeek",
+     "site": "https://platform.deepseek.com/"
+    }
+   ],
+   "series_types": [
+    "standard",
+    "daily",
+    "anime"
+   ],
+   "themes": [
+    "robo"
+   ],
+   "tmdb_attribution": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+   "tmdb_builtin": false
+  },
+  "secrets": {
+   "ANTHROPIC_API_KEY": "",
+   "C3PARR_ASR_API_KEY": "",
+   "C3PARR_LLM_API_KEY": "",
+   "DEEPSEEK_API_KEY": "",
+   "GEMINI_API_KEY": "",
+   "OPENAI_API_KEY": "",
+   "RADARR_API_KEY": "settings",
+   "SONARR_API_KEY": "",
+   "TMDB_READ_ACCESS_TOKEN": ""
+  },
+  "shown": {
+   "llm_base_url": "http://llm.test:8080/v1",
+   "llm_model": "modelo-x",
+   "llm_model_from_env": false,
+   "llm_url_from_env": false
+  }
+ },
+ "shell": {
+  "alerts_unseen": 3,
+  "movies": 4,
+  "pending": 2,
+  "release_url": "<varies>",
+  "repo_url": "https://github.com/wdonega/c3parr",
+  "running": {
+   "action": "traduzir",
+   "created_at": "<ts>",
+   "error": null,
+   "finished_at": null,
+   "id": 5,
+   "language": "pt-BR",
+   "message": "bloco 44/94",
+   "name": "Oldboy.mkv",
+   "origin": "manual",
+   "priority": true,
+   "progress": 0.47,
+   "started_at": "<ts>",
+   "status": "running",
+   "step": "Translate → pt-BR",
+   "video": "<root>/movies/Oldboy (2003)/Oldboy.mkv"
+  },
+  "setup": [
+   {
+    "detail": "Sonarr → Settings → General → API Key.",
+    "href": "/settings/library/sonarr",
+    "title": "Sonarr needs its address and API key"
+   },
+   {
+    "detail": "Without metadata the original language and character names are guessed.",
+    "href": "/settings/integrations",
+    "title": "No TMDb key"
+   }
+  ],
+  "shows": 2,
+  "theme": "robo",
+  "version": "<varies>"
+ },
+ "show": {
+  "folder": "<root>/tv/Supernatural",
+  "id": 1,
+  "monitored": true,
+  "seasons": [
+   {
+    "episodes": [
+     {
+      "episode": 1,
+      "id": 1,
+      "job": null,
+      "missing": [],
+      "name": "Supernatural - S01E01 - Pilot.mkv",
+      "season": 1,
+      "subs": [
+       {
+        "kind": "embedded",
+        "lang": "en"
+       },
+       {
+        "kind": "ours",
+        "lang": "es"
+       },
+       {
+        "kind": "external",
+        "lang": "pt-BR"
+       }
+      ],
+      "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E01 - Pilot.mkv"
+     },
+     {
+      "episode": 2,
+      "id": 2,
+      "job": null,
+      "missing": [
+       "pt-BR",
+       "es"
+      ],
+      "name": "Supernatural - S01E02 - Wendigo.mkv",
+      "season": 1,
+      "subs": [
+       {
+        "kind": "embedded",
+        "lang": "en"
+       }
+      ],
+      "video": "<root>/tv/Supernatural/Season 1/Supernatural - S01E02 - Wendigo.mkv"
+     }
+    ],
+    "season": 1
+   },
+   {
+    "episodes": [
+     {
+      "episode": 1,
+      "id": 3,
+      "job": {
+       "id": 6,
+       "label": "Translate → pt-BR",
+       "progress": 0.0,
+       "status": "queued"
+      },
+      "missing": [
+       "pt-BR",
+       "es"
+      ],
+      "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+      "season": 2,
+      "subs": [],
+      "video": "<root>/tv/Supernatural/Season 2/Supernatural - S02E01 - In My Time of Dying.mkv"
+     }
+    ],
+    "season": 2
+   },
+   {
+    "episodes": [
+     {
+      "episode": null,
+      "id": 4,
+      "job": null,
+      "missing": [
+       "es"
+      ],
+      "name": "Supernatural - Extra.mkv",
+      "season": null,
+      "subs": [
+       {
+        "kind": "external",
+        "lang": "pt-BR"
+       }
+      ],
+      "video": "<root>/tv/Supernatural/Extras/Supernatural - Extra.mkv"
+     }
+    ],
+    "season": null
+   }
+  ],
+  "title": "Supernatural",
+  "year": 2005
+ },
+ "shows": {
+  "counts": {
+   "all": 2,
+   "complete": 1,
+   "missing": 1,
+   "queued": 1
+  },
+  "page": 1,
+  "pages": 1,
+  "rows": [
+   {
+    "added_at": "<ts>",
+    "done": 1,
+    "folder": "<root>/tv/Dark",
+    "id": 2,
+    "missing": 0,
+    "monitored": true,
+    "queued": false,
+    "title": "Dark",
+    "total": 1,
+    "year": 2017
+   },
+   {
+    "added_at": "<ts>",
+    "done": 1,
+    "folder": "<root>/tv/Supernatural",
+    "id": 1,
+    "missing": 2,
+    "monitored": true,
+    "queued": true,
+    "title": "Supernatural",
+    "total": 4,
+    "year": 2005
+   }
+  ],
+  "total": 2
+ },
+ "system_alerts": {
+  "alerts": [
+   {
+    "count": 2,
+    "first_at": "<ts>",
+    "items": [
+     "Supernatural - S01E02 - Wendigo.mkv"
+    ],
+    "key": "traduzir:pt-BR:llm",
+    "kind": "traduzir",
+    "last_at": "<ts>",
+    "message": "LLM fora do ar",
+    "resolved_at": null,
+    "seen": false,
+    "step": "Translate",
+    "target": "pt-BR"
+   },
+   {
+    "count": 1,
+    "first_at": "<ts>",
+    "items": [
+     "Roma.mkv"
+    ],
+    "key": "probe:old",
+    "kind": "sondar",
+    "last_at": "<ts>",
+    "message": "could not read old.mkv",
+    "resolved_at": "<ts>",
+    "seen": false,
+    "step": "sondar",
+    "target": "old.mkv"
+   }
+  ],
+  "setup": [
+   {
+    "detail": "Sonarr → Settings → General → API Key.",
+    "href": "/settings/library/sonarr",
+    "title": "Sonarr needs its address and API key"
+   },
+   {
+    "detail": "Without metadata the original language and character names are guessed.",
+    "href": "/settings/integrations",
+    "title": "No TMDb key"
+   }
+  ]
+ },
+ "system_logs": [
+  {
+   "level": "WARNING",
+   "message": "aviso de exemplo",
+   "name": "c3parr.test",
+   "time": "<time>"
+  }
+ ],
+ "system_status": {
+  "about": [
+   {
+    "label": "Version",
+    "value": "<varies>"
+   },
+   {
+    "label": "Python",
+    "value": "<varies>"
+   },
+   {
+    "label": "Database",
+    "value": "<root>/c3parr.db"
+   },
+   {
+    "label": "Queue",
+    "value": "<root>/cache/fila.db"
+   },
+   {
+    "label": "Cache",
+    "value": "<root>/cache"
+   },
+   {
+    "label": "TMDb",
+    "value": "This product uses the TMDB API but is not endorsed or certified by TMDB."
+   }
+  ],
+  "providers": [
+   {
+    "detail": "",
+    "label": "Transcription (ASR)",
+    "ok": true,
+    "provider": "falso"
+   },
+   {
+    "detail": "",
+    "label": "Sync",
+    "ok": true,
+    "provider": "texto"
+   },
+   {
+    "detail": "missing key: TMDB_READ_ACCESS_TOKEN",
+    "label": "Metadata",
+    "ok": false,
+    "provider": "tmdb"
+   },
+   {
+    "detail": "",
+    "label": "Context (bible)",
+    "ok": true,
+    "provider": "llm"
+   },
+   {
+    "detail": "",
+    "label": "Translation",
+    "ok": true,
+    "provider": "llm"
+   },
+   {
+    "detail": "",
+    "label": "Subtitle source",
+    "ok": true,
+    "provider": "arquivo"
+   },
+   {
+    "detail": "",
+    "label": "Subtitle format",
+    "ok": true,
+    "provider": "srt"
+   }
+  ],
+  "secrets": [
+   {
+    "name": "HF_TOKEN",
+    "source": ""
+   },
+   {
+    "name": "TMDB_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "TMDB_READ_ACCESS_TOKEN",
+    "source": ""
+   },
+   {
+    "name": "ANTHROPIC_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "FISH_AUDIO_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "C3PARR_LLM_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "C3PARR_ASR_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "RADARR_API_KEY",
+    "source": "Settings"
+   },
+   {
+    "name": "SONARR_API_KEY",
+    "source": ""
+   }
+  ],
+  "warnings": [
+   {
+    "detail": "The latest is Radarr 6. c3parr is made for it; update Radarr to keep the library in sync.",
+    "level": "warn",
+    "title": "Radarr 5 is out of date"
+   }
+  ]
+ },
+ "system_tasks": [
+  {
+   "interval": "1 h",
+   "label": "Sync with Radarr",
+   "last_run": "<ts>",
+   "name": "sync_radarr",
+   "next_run": "<ts>",
+   "requested": false,
+   "result": "4 movies, 0 new",
+   "running": false
+  },
+  {
+   "interval": "1 h",
+   "label": "Sync with Sonarr",
+   "last_run": null,
+   "name": "sync_sonarr",
+   "next_run": "<ts>",
+   "requested": true,
+   "result": null,
+   "running": false
+  },
+  {
+   "interval": "6 h",
+   "label": "Process library (decide and queue what is missing)",
+   "last_run": null,
+   "name": "search_missing",
+   "next_run": "<ts>",
+   "requested": false,
+   "result": null,
+   "running": false
+  }
+ ]
+}
