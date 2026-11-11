@@ -47,6 +47,7 @@ build-backend = "uv_build"
 dev = [
     "hypothesis>=6.170.12",
     "mypy>=2.4.0",
+    "playwright>=1.65.0",
     "pytest>=9.1.1",
     "ruff>=0.17.3",
 ]
@@ -70,13 +71,14 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["faster_whisper.*", "soundfile"]
+module = ["faster_whisper.*", "sentence_transformers.*", "soundfile"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not models and not network'"
+addopts = "-m 'not models and not network and not e2e'"
 markers = [
     "models: usa modelos reais (lento, baixa pesos)",
     "network: faz chamadas de rede reais",
+    "e2e: navegador de verdade (Playwright); rode com `pytest -m e2e`",
 ]

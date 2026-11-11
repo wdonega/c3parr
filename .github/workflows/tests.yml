@@ -1,0 +1,45 @@
+# Lint, types and tests on every pull request and every push to main.
+# The Docker workflow only builds the image: this one is what says the code still works.
+# Runs with the same uv version the Dockerfile uses and only the `web` extra, so the optional
+# packages (faster-whisper, sentence-transformers and their gigabytes of torch) stay out.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.1"
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # The tests cut a 4 s video with ffmpeg to probe real files.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install uv
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install the project
+        run: uv sync --frozen --extra web
+      - name: Lint
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+      - name: Types
+        run: uv run --no-sync mypy
+      - name: Tests
+        run: uv run --no-sync pytest -q
