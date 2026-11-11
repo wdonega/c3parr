@@ -90,8 +90,8 @@ export function jobName(job: { name: string; item: JobItem | null }): { title: s
 /** Cor do pôster de mentira: sempre a mesma para o mesmo título. */
 export function posterHue(title: string): number {
   let hash = 0
-  for (const char of title) hash = (hash * 31 + char.charCodeAt(0)) % 360
-  return hash
+  for (const char of title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return Math.round((hash * 137.508) % 360) // o ângulo áureo espalha títulos parecidos
 }
 
 /** O que foi feito, em palavras: `Translated to pt-BR`, `Extracted en from the video`. */

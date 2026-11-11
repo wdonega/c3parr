@@ -120,15 +120,15 @@ Both images also run without a GPU: whisper.cpp picks the fastest CPU code for t
 
 ## Setup, step by step
 
-The screenshots come from a real install next to Radarr, Sonarr, Bazarr and Jellyfin.
+The screenshots show the interface with an example library.
 
 ### 1. Connect Radarr
 
-**Settings → Library → Radarr.** Turn on **Enabled**, then fill in the address and port. On the same Docker network it is the container name (`radarr`, `7878`). Get the API key from Radarr → Settings → General. Leave **Path Mappings** empty when both see the media at the same path (`/data`).
+**Settings → Library → Radarr.** Turn on **Use Radarr**, then fill in the address and port. On the same Docker network it is the container name (`radarr`, `7878`). Get the API key from Radarr → Settings → General. Leave **Path mappings** empty when both see the media at the same path (`/data`).
 
 <img src="assets/screenshots/01-radarr.png" alt="Settings, Library, Radarr" width="800">
 
-**Test connection** answers with the Radarr version. After **Save**, the *Sync with Radarr* task reads the library right away and then every hour.
+**Test connection** answers next to the button with the Radarr version. A bar with **Save** shows up as soon as something changes; after saving, the *Sync with Radarr* task reads the library right away and then every hour.
 
 <img src="assets/screenshots/02-radarr-test.png" alt="Radarr connected" width="800">
 
@@ -140,7 +140,7 @@ The same on the **Sonarr** tab (`sonarr`, `8989`). Sonarr has two more filters: 
 
 ### 3. Pick the translator (LLM)
 
-**Settings → Integrations → LLM.** Use your own OpenAI-compatible server (llama.cpp, Ollama, vLLM) with its URL and model.
+**Settings → Integrations → Translation model.** Use your own OpenAI-compatible server (llama.cpp, Ollama, vLLM) with its URL and model.
 
 <img src="assets/screenshots/04-integrations-own-llm.png" alt="Own LLM server" width="800">
 
@@ -150,7 +150,7 @@ Or pick a cloud provider. The model in use is filled in, the link points to wher
 
 ### 4. Pick where the transcription runs
 
-**Settings → Integrations → Transcription.** It is only used when an item has no usable subtitle at all. **Local** runs whisper.cpp in the container. A **separate server** (another machine with a GPU) works through an OpenAI-compatible API or a whisper-asr-webservice like Bazarr's. TMDb needs nothing: c3parr has its own key.
+**Settings → Integrations → Transcription.** It is only used when an item has no usable subtitle at all. **This machine** runs whisper.cpp in the container. A **separate server** (another machine with a GPU) works through an OpenAI-compatible API or a whisper-asr-webservice like Bazarr's. TMDb needs nothing: c3parr has its own key.
 
 <img src="assets/screenshots/08-asr-server.png" alt="Transcription on a separate server" width="800">
 
@@ -168,18 +168,26 @@ Or pick a cloud provider. The model in use is filled in, the link points to wher
 
 ### 7. Watch it work
 
-Each episode shows the subtitles it has. **Add to queue** sends it ahead of the hourly routine.
+**Movies** and **TV Shows** show each item with the subtitles it has: inside the video, from another source, made by c3parr, or missing. The button on an item that misses one (**Make pt-BR**) sends it ahead of the hourly routine.
+
+<img src="assets/screenshots/18-movies.png" alt="Movies with the subtitles each one has" width="800">
+
+A show opens the seasons that still have work to do.
 
 <img src="assets/screenshots/14-series.png" alt="A series with its subtitle languages" width="800">
 
-The queue shows each step live: here the English subtitle was extracted from the video and is being translated to pt-BR, block by block.
+The queue shows what runs now, what comes next in the order it will run, and what finished. Here a movie is being translated to pt-BR, block by block.
 
 <img src="assets/screenshots/15-queue.png" alt="The queue translating an episode" width="800">
 
-**System → Tasks** lists the routines: the Radarr and Sonarr syncs and the run that decides what each item is missing. The **Dashboard** sums it all up.
+**System → Tasks** lists the routines: the Radarr and Sonarr syncs and the run that decides what each item is missing. The **Overview** sums it all up.
 
 <img src="assets/screenshots/16-tasks.png" alt="System, Tasks" width="800">
-<img src="assets/screenshots/09-dashboard.png" alt="Dashboard" width="800">
+<img src="assets/screenshots/09-dashboard.png" alt="Overview" width="800">
+
+### Install it as an app
+
+The interface is a PWA: on a phone or a desktop browser, use *Install* (Chrome, Edge) or *Add to Home Screen* (Safari). Browsers only offer it over HTTPS, so put c3parr behind your reverse proxy with a certificate.
 
 ## Extra: transcription on another machine
 
@@ -237,7 +245,7 @@ Only needed when c3parr runs on a small box: if its machine already has a good G
    curl http://<gpu-machine>:9000/v1/audio/transcriptions -F file=@sample.wav
    ```
 
-4. In c3parr, **Settings → Integrations → Transcription**: **Where it runs** = *Server: OpenAI-compatible*, **Server URL** = `http://<gpu-machine>:9000/v1`, **Model** empty (the server uses the model it started with). **Test connection**, then **Save**. The next transcription in the queue goes to the server.
+4. In c3parr, **Settings → Integrations → Transcription**: **Where it runs** = *OpenAI-compatible server*, **Server URL** = `http://<gpu-machine>:9000/v1`, **Model** empty (the server uses the model it started with). **Test connection**, then **Save**. The next transcription in the queue goes to the server.
 
 <img src="assets/screenshots/17-asr-remote-connected.png" alt="Transcription pointing at a whisper server on another machine" width="800">
 
@@ -249,6 +257,27 @@ uv run pytest                 # tests (no models, no network)
 uv run ruff check . && uv run mypy src
 uv run c3parr-web             # http://127.0.0.1:8484
 ```
+
+The interface lives in `frontend/` (React, Vite, TypeScript) and talks to the JSON API under `/api/v1` (contract at `/api/docs`). The Docker image builds it; from source, build it once and `c3parr-web` serves it:
+
+```bash
+cd frontend
+npm ci
+npm run build                 # into src/c3parr/web/dist, served by c3parr-web
+npm run dev                   # or: hot reload on :5173, talking to c3parr-web on :8484
+npm run typecheck && npm run lint && npm test
+```
+
+Browser tests drive the built interface against an example library:
+
+```bash
+uv run playwright install chromium   # once
+uv run pytest -m e2e tests/e2e/test_spa.py
+```
+
+The TypeScript types in `frontend/src/api/types.ts` come from the API contract. After changing `src/c3parr/web/schemas.py`, write them again with `C3PARR_UPDATE_GOLDEN=1 uv run pytest tests/test_frontend_types.py`.
+
+Without the build, `c3parr-web` falls back to the previous HTML pages; `C3PARR_UI=legacy` forces them.
 
 For local transcription install whisper.cpp (`brew install whisper.cpp` on a Mac, with Metal).
 

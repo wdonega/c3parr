@@ -43,6 +43,16 @@ RUN archs="${CUDA_ARCHS}"; \
  && cp -a build/bin/whisper-cli /out/ \
  && find build -name "*.so*" -exec cp -a {} /out/ \;
 
+# ---------- interface (frontend) ----------
+# O build é o mesmo em qualquer arquitetura: roda na do builder, sem emulação. O resultado vai
+# para dentro do pacote Python (src/c3parr/web/dist) e a imagem final não leva o Node.
+FROM --platform=$BUILDPLATFORM node:24-slim AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 # ---------- base de runtime ----------
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS base-cuda
 # no Jetson o driver vem do host, e o hook cudacompat do nvidia-container-toolkit dá panic com
@@ -68,6 +78,7 @@ ENV UV_PYTHON=python3 UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 UV_LINK_MO
 COPY pyproject.toml uv.lock LICENSE ./
 RUN uv sync --frozen --no-dev --extra web --no-install-project
 COPY src ./src
+COPY --from=frontend /app/src/c3parr/web/dist ./src/c3parr/web/dist
 RUN uv sync --frozen --no-dev --extra web --no-editable
 
 COPY --from=whisper /out /opt/whisper

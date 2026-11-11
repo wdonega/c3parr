@@ -1,8 +1,12 @@
-# só entra no build o que a imagem usa: pyproject.toml, uv.lock, LICENSE, src/ e docker/
+# só entra no build o que a imagem usa: pyproject.toml, uv.lock, LICENSE, src/, docker/ e o
+# frontend (a interface é construída dentro da imagem; o build local e o node_modules não entram)
 *
 !pyproject.toml
 !uv.lock
 !LICENSE
 !src/
 !docker/
+!frontend/
 **/__pycache__
+frontend/node_modules
+src/c3parr/web/dist
