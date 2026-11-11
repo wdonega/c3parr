@@ -113,8 +113,8 @@ Every image is built for **x86 (amd64)** and **ARM (arm64)**; Docker picks the r
 
 | Tag | GPU |
 |---|---|
-| `latest`, `latest-cuda`, `revN`, `revN-cuda`, `1.0.N` | NVIDIA: RTX 20xx–50xx on x86; Jetson Orin, Thor and DGX Spark on ARM |
-| `latest-vulkan`, `revN-vulkan`, `1.0.N-vulkan` | AMD, Intel and others through Mesa |
+| `latest`, `latest-cuda`, `revN`, `revN-cuda`, `1.1.N` | NVIDIA: RTX 20xx–50xx on x86; Jetson Orin, Thor and DGX Spark on ARM |
+| `latest-vulkan`, `revN-vulkan`, `1.1.N-vulkan` | AMD, Intel and others through Mesa |
 
 Both images also run without a GPU: whisper.cpp picks the fastest CPU code for the machine at start. On an **RK3588** (Mali-G610), leave `/dev/dri` out: the Vulkan driver for that GPU fails, and the CPU is faster there anyway.
 

@@ -1,12 +1,12 @@
 # Builds the c3parr image in two variants (cuda, vulkan) for x86 (linux/amd64) and ARM
 # (linux/arm64), publishes them to ghcr.io/wdonega/c3parr and creates a GitHub Release.
 # N = number of commits up to this one, so it grows with the history (same scheme as bigos-image):
-#   cuda (the default)  revN, revN-cuda, latest, latest-cuda, 1.0.N, 1.0.N-cuda
-#   vulkan              revN-vulkan, latest-vulkan, 1.0.N-vulkan
-#   release             v1.0.N (git tag + GitHub Release with the changes since the previous one)
+#   cuda (the default)  revN, revN-cuda, latest, latest-cuda, 1.1.N, 1.1.N-cuda
+#   vulkan              revN-vulkan, latest-vulkan, 1.1.N-vulkan
+#   release             v1.1.N (git tag + GitHub Release with the changes since the previous one)
 # Each tag is a multi-arch manifest: docker pulls the amd64 or arm64 image by itself.
 # Every variant/arch builds on a native runner: nvcc under QEMU emulation would take hours.
-# Pull requests only build. To start a new line (1.1.N, 2.0.N…) change VERSION_PREFIX below.
+# Pull requests only build. To start a new line (1.2.N, 2.0.N…) change VERSION_PREFIX below.
 name: Docker image
 
 # Only what goes into the image builds, publishes and releases: the same files the .dockerignore
@@ -46,7 +46,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
-  VERSION_PREFIX: "1.0"
+  VERSION_PREFIX: "1.1"
 
 jobs:
   revision:
