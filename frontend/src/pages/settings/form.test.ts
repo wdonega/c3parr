@@ -9,6 +9,7 @@ import {
   isEdited,
   llmModelShown,
   llmUrlShown,
+  locksOut,
   setArrField,
   setField,
   setLlmModel,
@@ -112,6 +113,16 @@ describe('campos do LLM', () => {
     const chosen = setLlmProvider(setLlmModel(EMPTY, view, 'my-model'), view, 'openai')
     expect(llmModelShown(chosen, view)).toBe('my-model')
   })
+})
+
+it('avisa quando a lista de hosts deixaria de fora o endereço em uso', () => {
+  expect(locksOut([], 'c3parr.example.com')).toBe(false) // vazia aceita todos
+  expect(locksOut(['c3parr.example.com'], 'C3PARR.example.com')).toBe(false)
+  expect(locksOut(['c3parr.example.com'], '192.168.0.100')).toBe(true)
+  expect(locksOut([' ', ''], '192.168.0.100')).toBe(false)
+  for (const local of ['localhost', '127.0.0.1', '[::1]']) {
+    expect(locksOut(['c3parr.example.com'], local)).toBe(false) // localhost sempre funciona
+  }
 })
 
 it('escreve minutos como gente lê', () => {

@@ -11,6 +11,7 @@ import {
   llmModelShown,
   llmProvider,
   llmUrlShown,
+  locksOut,
   setLlmModel,
   setLlmProvider,
   setLlmUrl,
@@ -190,7 +191,7 @@ function Minutes({ form, name, label, hint, min }: Tab & { name: 'wait_minutes' 
 // --- Library ---
 
 /** Lista separada por vírgulas, guardando o texto digitado para a vírgula não "sumir". */
-function Tags({ label, value, onChange, edited, hint }: { label: string; value: string[]; onChange: (value: string[]) => void; edited: boolean; hint: string }) {
+function Tags({ label, value, onChange, edited, hint }: { label: string; value: string[]; onChange: (value: string[]) => void; edited: boolean; hint: ReactNode }) {
   const [text, setText] = useState(value.join(', '))
   const parsed = (raw: string) => raw.split(',').map((t) => t.trim()).filter(Boolean)
   const shown = JSON.stringify(parsed(text)) === JSON.stringify(value) ? text : value.join(', ')
@@ -779,7 +780,19 @@ export function GeneralTab({ form }: Tab) {
         label="Allowed hosts"
         value={form.value('allowed_hosts')}
         edited={form.edited('allowed_hosts')}
-        hint="Comma separated names and addresses c3parr answers to, like c3parr.example.com, 192.168.0.100. Leave empty to allow all. localhost always works."
+        hint={
+          <>
+            Comma separated names and addresses c3parr answers to, like c3parr.example.com, 192.168.0.100. Behind a
+            reverse proxy, use the name the proxy sends in the Host header. Leave empty to allow all. If a wrong name
+            locks you out, open c3parr through localhost and fix it here: localhost always works.
+            {locksOut(form.value('allowed_hosts'), window.location.hostname) && (
+              <span className="warn" role="alert" style={{ display: 'block', marginTop: 6 }}>
+                You are using {window.location.hostname} now, and it is not in this list. Saving like this stops c3parr
+                from answering at this address.
+              </span>
+            )}
+          </>
+        }
         onChange={(value) => form.set('allowed_hosts', value)}
       />
       <Text

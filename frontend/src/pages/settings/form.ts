@@ -119,6 +119,15 @@ export function setLlmProvider(draft: Draft, view: SettingsView, id: string): Dr
   return setField(draft, view.config, 'llm_provider', id)
 }
 
+const LOCAL = ['localhost', '127.0.0.1', '::1', '[::1]']
+
+/** A lista de hosts aceitos deixaria de fora o nome pelo qual a página está aberta agora? */
+export function locksOut(allowed: string[], hostname: string): boolean {
+  const here = hostname.trim().toLowerCase()
+  const names = allowed.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  return names.length > 0 && !LOCAL.includes(here) && !names.includes(here)
+}
+
 /** `360` → `6 h`; `90` → `1 h 30 min`. */
 export function humanMinutes(minutes: number): string {
   if (!Number.isFinite(minutes) || minutes < 60) return `${minutes || 0} min`
