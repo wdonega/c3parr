@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import { api, LIVE } from '../api/client'
 import type { Shell as ShellData } from '../api/types'
 import { jobName, percent } from '../lib/format'
@@ -234,6 +235,30 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   )
 }
 
+/** Saiu versão nova do c3parr e a aba ainda está na antiga: oferece recarregar. */
+function UpdateNotice() {
+  const {
+    needRefresh: [ready, setReady],
+    updateServiceWorker,
+  } = useRegisterSW()
+  if (!ready) return null
+  return (
+    <div className="notice" role="status" style={{ position: 'sticky', top: 12, zIndex: 10 }}>
+      <Icon name="refresh" size={18} className="accent" />
+      <div className="grow">
+        <strong>A new version of c3parr is ready</strong>
+        <span>Reload to use it. Nothing you saved is lost.</span>
+      </div>
+      <button type="button" className="btn" onClick={() => setReady(false)}>
+        Later
+      </button>
+      <button type="button" className="btn primary" onClick={() => void updateServiceWorker(true)}>
+        Reload
+      </button>
+    </div>
+  )
+}
+
 export function Shell() {
   const shell = useShell()
   const [searching, setSearching] = useState(false)
@@ -253,6 +278,7 @@ export function Shell() {
     <div className="shell">
       <Sidebar shell={shell.data} onSearch={() => setSearching(true)} />
       <main className="main">
+        <UpdateNotice />
         <Outlet />
       </main>
       <TabBar shell={shell.data} />

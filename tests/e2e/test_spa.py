@@ -380,3 +380,30 @@ def test_on_a_phone_the_task_details_open_over_the_list(phone: Page, spa: Served
     sheet.get_by_role("button", name="Close").click()
     expect(sheet).not_to_be_visible()
     expect(phone).not_to_have_url(re.compile("job="))
+
+
+# --- PWA ---
+
+
+def test_the_interface_can_be_installed_and_keeps_its_shell_offline(
+    desktop: Page, spa: Served
+) -> None:
+    manifest = desktop.evaluate(
+        """async () => {
+            const link = document.querySelector('link[rel=manifest]')
+            return link ? (await fetch(link.href)).json() : null
+        }"""
+    )
+    assert manifest and manifest["display"] == "standalone" and manifest["start_url"] == "/"
+    sizes = {(icon["sizes"], icon.get("purpose", "any")) for icon in manifest["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes
+
+    # o service worker assume a página e guarda a casca: sem rede, a interface ainda abre
+    desktop.evaluate("() => navigator.serviceWorker.ready.then(() => true)")
+    desktop.reload()
+    desktop.wait_for_function("navigator.serviceWorker.controller !== null")
+    desktop.context.set_offline(True)
+    desktop.reload()
+    expect(desktop.get_by_role("navigation", name="Main").first).to_be_visible()
+    expect(desktop.get_by_role("link", name="C3PARR")).to_be_visible()
+    desktop.context.set_offline(False)

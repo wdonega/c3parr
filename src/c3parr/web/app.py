@@ -210,7 +210,8 @@ def serve_spa(app: FastAPI, dist: Path) -> None:
             raise HTTPException(404)
         file = (root / path).resolve()
         if path and file.is_file() and root in file.parents:  # favicon, manifest, sw.js, ícones
-            return FileResponse(file, headers=fresh)
+            kind = "application/manifest+json" if file.suffix == ".webmanifest" else None
+            return FileResponse(file, headers=fresh, media_type=kind)
         return FileResponse(root / "index.html", headers=fresh)
 
 

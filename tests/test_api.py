@@ -290,3 +290,45 @@ def test_the_last_connection_test_is_kept_until_what_it_tested_changes(
         api.patch("/settings", json={"secrets": {"TMDB_READ_ACCESS_TOKEN": "good"}})
         assert api.get("/settings").json()["tests"] == {}  # a chave mudou: o teste não vale mais
         assert api.post("/settings/test/invented").status_code == 404
+
+
+# --- a interface nova servida pelo app ---
+
+
+def test_the_app_serves_the_built_interface_and_keeps_the_api_apart(tmp_path: Path) -> None:
+    from uikit import fake_runner, settings_for
+
+    from c3parr.jobs.queue import JobQueue
+    from c3parr.library.store import Library
+    from c3parr.web.app import create_app
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>the interface</html>")
+    (dist / "assets" / "app.js").write_text("console.log(1)")
+    (dist / "sw.js").write_text("// service worker")
+    (dist / "manifest.webmanifest").write_text("{}")
+    (tmp_path / "secret.txt").write_text("outside the build")
+    app = create_app(settings=settings_for(tmp_path), queue=JobQueue(tmp_path / "fila.db"),
+                     runner=fake_runner(), start_worker=False,
+                     library=Library(tmp_path / "c3parr.db"), ui="spa", dist=dist)  # fmt: skip
+    with TestClient(app) as client:
+        # qualquer endereço de página devolve a interface: as rotas são resolvidas no navegador
+        for path in ("/", "/dashboard", "/movies", "/tv/3", "/settings/library/radarr", "/nope"):
+            page = client.get(path)
+            assert page.status_code == 200 and page.text == "<html>the interface</html>", path
+            assert page.headers["cache-control"] == "no-cache"  # sempre a versão atual
+        assert client.get("/assets/app.js").text == "console.log(1)"
+        worker = client.get("/sw.js")
+        assert worker.text == "// service worker" and worker.headers["cache-control"] == "no-cache"
+        manifest = client.get("/manifest.webmanifest")
+        assert manifest.headers["content-type"].startswith("application/manifest+json")
+
+        # a API e os arquivos continuam o que são: o que não existe é 404, não a página
+        assert client.get("/api/v1/shell").json()["pending"] == 0
+        assert client.get("/health").json() == {"ok": True}
+        for path in ("/api/v1/nope", "/api/nope", "/assets/nope.js", "/static/nope.png"):
+            assert client.get(path).status_code == 404, path
+        # nada fora da pasta do build sai por aqui
+        for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/assets/../../secret.txt"):
+            assert "outside the build" not in client.get(path).text, path
