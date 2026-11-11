@@ -2,6 +2,7 @@
 // /settings/library/radarr), então links guardados continuam valendo.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { BASE } from './lib/base'
 import { Movies, Shows } from './pages/Library'
 import { Overview } from './pages/Overview'
 import { Queue } from './pages/Queue'
@@ -15,7 +16,8 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000, retry: 1 } },
 })
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
   {
     element: <Shell />,
     children: [
@@ -34,7 +36,9 @@ const router = createBrowserRouter([
       { path: '*', element: <NotFound /> },
     ],
   },
-])
+  ],
+  { basename: BASE || '/' },
+)
 
 export default function App() {
   return (

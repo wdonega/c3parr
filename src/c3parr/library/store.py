@@ -105,6 +105,13 @@ class AppConfig(Model):
     """Tempo desde que o arquivo apareceu até a rotina gerar a legenda que falta."""
     search_interval_minutes: int = Field(360, ge=5)
     theme: str = "robo"
+    # --- como o c3parr é servido (Settings → General → Host) ---
+    url_base: str = ""
+    """Caminho sob o qual um proxy reverso serve o c3parr (`/c3parr`); vazio = na raiz."""
+    instance_name: str = "c3parr"
+    """Nome desta instalação: aparece na aba do navegador e no app instalado."""
+    allowed_hosts: tuple[str, ...] = ()
+    """Nomes pelos quais o c3parr aceita ser chamado (cabeçalho Host); vazio = qualquer um."""
     components: dict[str, str] = Field(default_factory=dict)
     """Provider escolhido por interface; o que faltar usa o padrão do `Settings`."""
     llm_provider: str = "custom"

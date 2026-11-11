@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useBlocker, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { AppConfig, ArrConfig, SettingsView, TestResult } from '../../api/types'
+import { BASE, cleanBase } from '../../lib/base'
 import { plural } from '../../lib/format'
 import { NotFound, PageHead } from '../../shell/Shell'
 import { Loading } from '../../ui/controls'
@@ -22,7 +23,7 @@ import {
   type ArrKind,
   type Draft,
 } from './form'
-import { EnginesTab, IntegrationsTab, LanguagesTab, LibraryTab, SubtitlesTab } from './tabs'
+import { EnginesTab, GeneralTab, IntegrationsTab, LanguagesTab, LibraryTab, SubtitlesTab } from './tabs'
 
 const PAGES = [
   ['library', 'Library'],
@@ -30,6 +31,7 @@ const PAGES = [
   ['languages', 'Languages'],
   ['engines', 'Engines'],
   ['subtitles', 'Subtitles'],
+  ['general', 'General'],
 ] as const
 
 /** O que cada aba recebe para ler e mexer no rascunho. */
@@ -81,6 +83,12 @@ export function SettingsPage() {
     mutationFn: () => api.saveSettings(toPatch(draft)),
     onSuccess: async (result) => {
       if (!report(result)) return false
+      // a URL base ou o nome mudaram: a página é aberta de novo no endereço que passou a valer
+      if ('url_base' in draft.changes || 'instance_name' in draft.changes) {
+        const base = 'url_base' in draft.changes ? cleanBase(String(draft.changes.url_base)) : BASE
+        window.location.assign(`${base}/settings/general`)
+        return true
+      }
       setDraft(EMPTY)
       setTested({})
       await client.invalidateQueries({ queryKey: ['settings'] })
@@ -147,6 +155,7 @@ export function SettingsPage() {
       {page === 'languages' && <LanguagesTab form={form} />}
       {page === 'engines' && <EnginesTab form={form} />}
       {page === 'subtitles' && <SubtitlesTab form={form} />}
+      {page === 'general' && <GeneralTab form={form} />}
 
       {dirty && (
         <div className="save-bar" role="region" aria-label="Unsaved changes">

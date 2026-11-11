@@ -391,16 +391,55 @@ def test_the_interface_can_be_installed_and_keeps_its_shell_offline(
             return link ? (await fetch(link.href)).json() : null
         }"""
     )
-    assert manifest and manifest["display"] == "standalone" and manifest["start_url"] == "/"
+    assert manifest and manifest["display"] == "standalone"
+    assert manifest["start_url"] == "." and manifest["scope"] == "."  # relativos à URL base
     sizes = {(icon["sizes"], icon.get("purpose", "any")) for icon in manifest["icons"]}
     assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes
 
-    # o service worker assume a página e guarda a casca: sem rede, a interface ainda abre
+    # o service worker assume a página (ele guarda código, fontes e pôsteres, não os dados)
     desktop.evaluate("() => navigator.serviceWorker.ready.then(() => true)")
+    desktop.wait_for_timeout(1500)  # primeira visita: nada de "versão nova", não havia anterior
+    expect(desktop.get_by_text("A new version of c3parr is ready")).to_have_count(0)
     desktop.reload()
     desktop.wait_for_function("navigator.serviceWorker.controller !== null")
-    desktop.context.set_offline(True)
+    scope = desktop.evaluate("() => navigator.serviceWorker.ready.then((r) => r.scope)")
+    assert scope == spa.url + "/"
+
+
+# --- atrás de um proxy reverso ---
+
+
+def test_the_interface_moves_to_a_url_base_and_keeps_working_there(
+    desktop: Page, spa: Served
+) -> None:
+    desktop.goto(spa.url + "/settings/general")
+    host = desktop.get_by_role("region", name="Host")
+    expect(host.get_by_label("Bind address and port")).to_have_value("127.0.0.1:8484")
+    host.get_by_label("URL base").fill("c3parr/")
+    host.get_by_label("Instance name").fill("Sala")
+    save_bar(desktop).get_by_role("button", name="Save 2 changes").click()
+
+    # salvou: a página reabre no endereço novo, já com o nome novo na aba
+    expect(desktop).to_have_url(spa.url + "/c3parr/settings/general")
+    expect(desktop).to_have_title("Settings · Sala")
+    expect(host.get_by_label("URL base")).to_have_value("/c3parr")
+    assert spa.world.library.config().url_base == "/c3parr"
+
+    # menu, dados, imagens e recarregar num endereço fundo: tudo sob o prefixo
+    go(desktop, "Movies")
+    expect(desktop).to_have_url(spa.url + "/c3parr/movies")
+    expect(desktop.locator("article.media")).to_have_count(4)
+    go(desktop, "TV Shows")
+    desktop.get_by_role("link", name="Supernatural").click()
+    expect(desktop).to_have_url(re.compile("/c3parr/tv/\\d+$"))
     desktop.reload()
-    expect(desktop.get_by_role("navigation", name="Main").first).to_be_visible()
-    expect(desktop.get_by_role("link", name="C3PARR")).to_be_visible()
-    desktop.context.set_offline(False)
+    expect(desktop).to_have_title("Supernatural · Sala")
+    expect(desktop.get_by_role("region", name="Seasons")).to_contain_text("In My Time of Dying")
+    logo = desktop.locator(".brand img")
+    assert logo.evaluate("(img) => img.complete && img.naturalWidth > 0")
+    assert logo.get_attribute("src") == "/c3parr/logo.png"
+
+    # aberto sem o prefixo (direto pela porta, para consertar): vai sozinho para o endereço certo
+    desktop.goto(spa.url + "/queue")
+    expect(desktop).to_have_url(spa.url + "/c3parr/queue")
+    expect(desktop).to_have_title("Queue · Sala")

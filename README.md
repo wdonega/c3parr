@@ -185,6 +185,25 @@ The queue shows what runs now, what comes next in the order it will run, and wha
 <img src="assets/screenshots/16-tasks.png" alt="System, Tasks" width="800">
 <img src="assets/screenshots/09-dashboard.png" alt="Overview" width="800">
 
+### Behind a reverse proxy
+
+**Settings → General → Host** has what a reverse proxy needs:
+
+- **URL base**: the path c3parr is served under, like `/c3parr`. Empty serves it at the root of the name. It takes effect when you save, with no restart, and c3parr answers with and without it, so it works whether the proxy passes the path as it is or strips the prefix. `C3PARR_URL_BASE` sets it from the compose file.
+- **Allowed hosts**: the names c3parr answers to (`c3parr.example.com`). Empty allows all; `localhost` always works, so the container healthcheck is never locked out.
+- **Instance name**: shown in the browser tab and as the name of the installed app.
+
+The bind address and port are shown there but come from `C3PARR_HOST` and `C3PARR_PORT`: in Docker, the compose file decides the port. With nginx, for a path:
+
+```nginx
+location /c3parr/ {
+    proxy_pass http://c3parr:8484;
+    proxy_set_header Host $host;
+}
+```
+
+<img src="assets/screenshots/19-general-host.png" alt="Settings, General, Host" width="800">
+
 ### Install it as an app
 
 The interface is a PWA: on a phone or a desktop browser, use *Install* (Chrome, Edge) or *Add to Home Screen* (Safari). Browsers only offer it over HTTPS, so put c3parr behind your reverse proxy with a certificate.

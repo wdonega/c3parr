@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { api, LIVE } from '../api/client'
 import type { Shell as ShellData } from '../api/types'
+import { INSTANCE, withBase } from '../lib/base'
 import { jobName, percent } from '../lib/format'
 import { Bar, Empty } from '../ui/controls'
 import { Icon, type IconName } from '../ui/Icon'
@@ -27,7 +28,7 @@ export function PageHead({
   children?: ReactNode
 }) {
   useEffect(() => {
-    document.title = `${title} · c3parr`
+    document.title = `${title} · ${INSTANCE}`
   }, [title])
   return (
     <header className="page-head">
@@ -72,7 +73,7 @@ function Sidebar({ shell, onSearch }: { shell?: ShellData; onSearch: () => void 
   return (
     <nav className="side" aria-label="Main">
       <Link to="/dashboard" className="brand">
-        <img src="/logo.png" alt="" />
+        <img src={withBase('/logo.png')} alt="" />
         <span>C3PARR</span>
       </Link>
       <div className="nav-group">
@@ -241,7 +242,9 @@ function UpdateNotice() {
     needRefresh: [ready, setReady],
     updateServiceWorker,
   } = useRegisterSW()
-  if (!ready) return null
+  // na primeira visita o service worker acabou de ser instalado: não há versão anterior a trocar
+  const [updating] = useState(() => !!navigator.serviceWorker?.controller)
+  if (!ready || !updating) return null
   return (
     <div className="notice" role="status" style={{ position: 'sticky', top: 12, zIndex: 10 }}>
       <Icon name="refresh" size={18} className="accent" />

@@ -1,6 +1,7 @@
 // O que é próprio de legenda e biblioteca: pôster, legendas por origem, tarefa do item.
 import { useState, type ReactNode } from 'react'
 import type { JobRef, Sub } from '../api/types'
+import { withBase } from '../lib/base'
 import { percent, place, posterHue } from '../lib/format'
 import { Bar } from './controls'
 
@@ -23,7 +24,7 @@ export function Poster({
       className={`poster ${size ?? ''}`}
       style={{ background: `oklch(0.38 0.085 ${posterHue(title)})` }}
     >
-      {image && <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} />}
+      {image && <img src={withBase(src)} alt="" loading="lazy" onError={() => setBroken(true)} />}
       {children}
       {!image && size !== 'thumb' && <span className="name">{title}</span>}
     </div>

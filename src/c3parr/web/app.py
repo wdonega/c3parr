@@ -4,8 +4,10 @@ O que cada tela mostra e o que cada ação faz está em `service.py`. Configs e 
 SQLite (`c3parr.db`).
 """
 
+import html
+import json
 import logging
-import os
+import re
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -15,7 +17,7 @@ from typing import Any
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from c3parr import __version__
@@ -38,7 +40,14 @@ from c3parr.providers.registry import build_factories
 from c3parr.recipes import full as full_recipe
 from c3parr.web import service
 from c3parr.web.api import build_api
-from c3parr.web.service import Clients, LogBuffer, NotFound, Service, components_for
+from c3parr.web.service import (
+    Clients,
+    LogBuffer,
+    NotFound,
+    Service,
+    components_for,
+    listening,
+)
 
 log = logging.getLogger("c3parr.web")
 HERE = Path(__file__).parent
@@ -108,26 +117,80 @@ def _fetch_poster(lib: Library, kind: ArrKind, url: str) -> bytes | None:
         return None
 
 
-def serve_spa(app: FastAPI, dist: Path) -> None:
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+"""Sempre aceitos: o healthcheck do contêiner e quem está na própria máquina."""
+
+
+class HostMiddleware:
+    """O que Settings → General → Host decide, aplicado a cada requisição, sem reiniciar:
+
+    - URL base: o que chega com o prefixo (`/c3parr/movies`) é atendido como se não tivesse. O
+      que chega sem ele também é: serve ao proxy que tira o prefixo antes de repassar, e a quem
+      entra direto pela porta para consertar um prefixo errado.
+    - Hosts aceitos: com a lista preenchida, um cabeçalho Host fora dela é recusado.
+    """
+
+    def __init__(self, app: Any, svc: Service) -> None:
+        self.app = app
+        self.svc = svc
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        host = self.svc.host()
+        if host.allowed:
+            header = dict(scope["headers"]).get(b"host", b"").decode("latin-1").lower()
+            name = header[1:].split("]")[0] if header.startswith("[") else header.split(":")[0]
+            if name not in host.allowed and name not in LOCAL_HOSTS:
+                refused = PlainTextResponse(
+                    f"c3parr does not answer as {name or 'this host'}. Add it to "
+                    "Settings → General → Allowed hosts.\n", status_code=400)  # fmt: skip
+                await refused(scope, receive, send)
+                return
+        base, path = host.url_base, scope["path"]
+        if base and (path == base or path.startswith(base + "/")):
+            scope = {**scope, "path": path[len(base) :] or "/"}
+            scope["raw_path"] = scope["path"].encode()
+        await self.app(scope, receive, send)
+
+
+def serve_spa(app: FastAPI, dist: Path, svc: Service) -> None:
     """Serve a interface: os arquivos do build e, para qualquer outro endereço, a página dela
-    (as rotas /movies, /tv/3… são resolvidas no navegador)."""
+    (as rotas /movies, /tv/3… são resolvidas no navegador). A página sai com a URL base e o nome
+    da instalação escritos nela: é dali que a interface sabe onde está."""
     root = dist.resolve()
     built = (root / "index.html").exists()
+    template = (root / "index.html").read_text(encoding="utf-8") if built else ""
     if built:
         app.mount("/assets", StaticFiles(directory=root / "assets"), name="assets")
     fresh = {"Cache-Control": "no-cache"}  # a página e o service worker sempre na versão atual
 
+    def index() -> HTMLResponse:
+        host = svc.host()
+        boot = json.dumps({"base": host.url_base, "name": host.name}).replace("<", "\\u003c")
+        head = f'<head><base href="{host.url_base}/"><script>window.__C3PARR__={boot}</script>'
+        page = template.replace("<head>", head, 1)
+        title = f"<title>{html.escape(host.name)}</title>"
+        return HTMLResponse(re.sub(r"<title>.*?</title>", lambda _: title, page, count=1),
+                            headers=fresh)  # fmt: skip
+
+    def manifest(file: Path) -> Response:
+        data = json.loads(file.read_text(encoding="utf-8"))
+        data["name"] = data["short_name"] = svc.host().name  # o app instalado leva o nome
+        return Response(json.dumps(data), media_type="application/manifest+json", headers=fresh)
+
     @app.get("/{path:path}", include_in_schema=False, response_model=None)
-    def page(path: str) -> FileResponse | PlainTextResponse:
+    def page(path: str) -> Response:
         if path.startswith(("api/", "assets/")):
             raise HTTPException(404)
         if not built:
             return PlainTextResponse(NOT_BUILT, status_code=503)
         file = (root / path).resolve()
-        if path and file.is_file() and root in file.parents:  # favicon, manifest, sw.js, ícones
-            kind = "application/manifest+json" if file.suffix == ".webmanifest" else None
-            return FileResponse(file, headers=fresh, media_type=kind)
-        return FileResponse(root / "index.html", headers=fresh)
+        if path and file.is_file() and root in file.parents:  # favicon, sw.js, ícones
+            return manifest(file) if file.suffix == ".webmanifest" else FileResponse(
+                file, headers=fresh)  # fmt: skip
+        return index()
 
 
 def create_app(
@@ -238,7 +301,8 @@ def create_app(
     def health() -> dict[str, bool]:
         return {"ok": True}
 
-    serve_spa(app, dist or DIST)
+    serve_spa(app, dist or DIST, svc)
+    app.add_middleware(HostMiddleware, svc=svc)
     return app
 
 
@@ -247,6 +311,5 @@ def serve() -> None:
 
     fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
     logging.basicConfig(level=logging.INFO, format=fmt)
-    host = os.environ.get("C3PARR_HOST", "127.0.0.1")
-    port = int(os.environ.get("C3PARR_PORT", "8484"))
+    host, port = listening()
     uvicorn.run(create_app(), host=host, port=port)

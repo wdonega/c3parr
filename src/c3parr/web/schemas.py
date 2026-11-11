@@ -188,6 +188,8 @@ class Shell(Out):
     version: str
     repo_url: str
     release_url: str
+    name: str
+    """O nome desta instalação (Settings → General)."""
     theme: str
     pending: int
     alerts_unseen: int
@@ -421,7 +423,17 @@ class TestResult(ActionResult):
     """Quanto o teste levou."""
 
 
+class Listening(Out):
+    """Onde o servidor escuta. Vem do ambiente (C3PARR_HOST, C3PARR_PORT), não de Settings."""
+
+    address: str
+    port: int
+    url_base_from_env: str
+    """A URL base que vem de C3PARR_URL_BASE e vale enquanto a de Settings estiver vazia."""
+
+
 class SettingsView(Out):
+    listening: Listening
     tests: dict[str, TestRecord]
     config: AppConfig
     shown: SettingsShown

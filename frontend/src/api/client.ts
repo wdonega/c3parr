@@ -1,4 +1,5 @@
 // A API do c3parr (/api/v1). Os formatos vêm de ./types, gerados do contrato do servidor.
+import { withBase } from '../lib/base'
 import type {
   ActionResult,
   Alerts,
@@ -29,7 +30,7 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = '/api/v1'
+const BASE = withBase('/api/v1')
 
 type Params = Record<string, string | number | undefined>
 

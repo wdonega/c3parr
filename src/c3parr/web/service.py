@@ -8,6 +8,7 @@ O que fala com o mundo de fora (Radarr/Sonarr, TMDb, LLM, servidor de transcriç
 import hashlib
 import json
 import logging
+import os
 import platform
 import re
 import time
@@ -134,6 +135,7 @@ PLAIN_SETTINGS = (*SUBTITLE_FLAGS, *SUBTITLE_CHOICES, "wait_minutes", "search_in
                   "monitor_new", "sync_interval_minutes", "theme")  # fmt: skip
 PATCHABLE = frozenset({
     *PLAIN_SETTINGS, "radarr", "sonarr", "target_languages", "fallback_languages", "components",
+    "url_base", "instance_name", "allowed_hosts",
     "llm_provider", "llm_model", "llm_base_url", "llm_effort", "asr_mode", "asr_url", "asr_model",
 })  # fmt: skip
 
@@ -151,6 +153,34 @@ TEST_INPUTS: dict[str, frozenset[str]] = {
     "asr": frozenset({"asr_mode", "asr_url", "asr_model", "C3PARR_ASR_API_KEY", "components"}),
     "tmdb": frozenset({"TMDB_READ_ACCESS_TOKEN"}),
 }  # fmt: skip
+
+
+URL_BASE = re.compile(r"[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*")
+DEFAULT_NAME = "c3parr"
+
+
+class Host(NamedTuple):
+    """Como o c3parr é servido (Settings → General → Host)."""
+
+    url_base: str
+    """`/c3parr`, ou vazio na raiz."""
+    name: str
+    allowed: frozenset[str]
+    """Nomes aceitos no cabeçalho Host; vazio = qualquer um."""
+
+
+def clean_url_base(text: str) -> str | None:
+    """`c3parr/`, ` /c3parr ` → `/c3parr`; vazio → vazio (na raiz). `None`: não serve de caminho."""
+    path = text.strip().strip("/")
+    if not path:
+        return ""
+    return f"/{path}" if URL_BASE.fullmatch(path) else None
+
+
+def listening() -> tuple[str, int]:
+    """Onde o servidor escuta. Vem do ambiente: no Docker, quem decide a porta é o compose."""
+    port = os.environ.get("C3PARR_PORT", "")
+    return os.environ.get("C3PARR_HOST", "127.0.0.1"), int(port) if port.isdigit() else 8484
 
 
 class NotFound(Exception):
@@ -332,6 +362,19 @@ class Service:
         self.themes = themes
         self.clients = clients
         self._poster_misses: dict[str, float] = {}
+        self._host: Host | None = None
+
+    # --- como é servido ---
+
+    def host(self) -> Host:
+        """URL base, nome e hosts aceitos. Lido uma vez e de novo quando Settings grava: o
+        servidor consulta isto a cada requisição."""
+        if self._host is None:
+            cfg = self.lib.config()
+            base = cfg.url_base or clean_url_base(os.environ.get("C3PARR_URL_BASE", "")) or ""
+            self._host = Host(base, cfg.instance_name or DEFAULT_NAME,
+                              frozenset(h.lower() for h in cfg.allowed_hosts))  # fmt: skip
+        return self._host
 
     # --- chaves ---
 
@@ -361,7 +404,8 @@ class Service:
         """O que aparece em toda tela: contadores do menu, o que falta configurar e a tarefa
         que está rodando."""
         setup = self.setup_needed()
-        return {"theme": self.theme(), "pending": self.pending(), "setup": setup,
+        return {"theme": self.theme(), "name": self.host().name, "pending": self.pending(),
+                "setup": setup,
                 "alerts_unseen": self.unseen_alerts() + len(setup),
                 "movies": len(self.lib.movies()), "shows": len(self.lib.series_list()),
                 "running": self.running_job()}  # fmt: skip
@@ -903,6 +947,7 @@ class Service:
             self.lib.set_secret(name, value if value and value != env.get(name) else None)
         try:
             self.lib.update_config(**changes)
+            self._host = None
             self.refresh_secrets()
         except ValidationError as e:
             fields = ", ".join(str(err["loc"][0]) for err in e.errors())
@@ -975,6 +1020,17 @@ class Service:
                 return Outcome("Transcription: put the server URL.", error=True, status=422)
             out["asr_mode"], out["asr_url"] = mode, url
             out["asr_model"] = str(changes.get("asr_model", config.asr_model) or "").strip()
+        if "url_base" in changes:
+            base = clean_url_base(str(changes["url_base"] or ""))
+            if base is None:
+                return Outcome("URL base: use a path like /c3parr (letters, digits, - and _).",
+                               error=True, status=422)  # fmt: skip
+            out["url_base"] = base
+        if "instance_name" in changes:
+            out["instance_name"] = str(changes["instance_name"] or "").strip()[:60] or DEFAULT_NAME
+        if "allowed_hosts" in changes:
+            hosts = (str(h).strip().lower() for h in changes["allowed_hosts"])
+            out["allowed_hosts"] = list(dict.fromkeys(h for h in hosts if h))
         out.update({name: changes[name] for name in PLAIN_SETTINGS if name in changes})
         outcome = self._save({**arrs, **out}, {k: v or "" for k, v in secrets.items()})
         if not outcome.error:

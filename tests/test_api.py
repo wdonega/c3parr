@@ -332,3 +332,107 @@ def test_the_app_serves_the_built_interface_and_keeps_the_api_apart(tmp_path: Pa
         # nada fora da pasta do build sai por aqui
         for path in ("/../secret.txt", "/%2e%2e/secret.txt", "/assets/../../secret.txt"):
             assert "outside the build" not in client.get(path).text, path
+
+
+# --- Settings → General → Host: atrás de um proxy reverso ---
+
+
+def _served(tmp_path: Path) -> TestClient:
+    from uikit import fake_runner, settings_for
+
+    from c3parr.jobs.queue import JobQueue
+    from c3parr.library.store import Library
+    from c3parr.web.app import create_app
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html><head><title>c3parr</title></head>page</html>")
+    (dist / "assets" / "app.js").write_text("console.log(1)")
+    (dist / "manifest.webmanifest").write_text('{"name": "c3parr", "short_name": "c3parr"}')
+    app = create_app(settings=settings_for(tmp_path), queue=JobQueue(tmp_path / "fila.db"),
+                     runner=fake_runner(), start_worker=False,
+                     library=Library(tmp_path / "c3parr.db"), dist=dist)  # fmt: skip
+    return TestClient(app)
+
+
+def _save(client: TestClient, **changes: Any) -> tuple[int, str]:
+    response = client.patch("/api/v1/settings", json={"changes": changes})
+    return response.status_code, response.json()["message"]
+
+
+def test_a_url_base_serves_everything_under_a_path_and_still_at_the_root(tmp_path: Path) -> None:
+    with _served(tmp_path) as client:
+        root = client.get("/movies").text
+        assert '<base href="/">' in root and '"base": ""' in root  # na raiz, por padrão
+
+        assert _save(client, url_base=" c3parr/ ") == (200, "Saved.")  # vale ao salvar
+        assert client.get("/api/v1/settings").json()["config"]["url_base"] == "/c3parr"
+        for path in ("/c3parr", "/c3parr/", "/c3parr/tv/3", "/tv/3"):
+            page = client.get(path)
+            assert page.status_code == 200, path
+            # a página diz à interface de onde tudo parte, venha o pedido com o prefixo ou sem
+            assert '<base href="/c3parr/">' in page.text and '"base": "/c3parr"' in page.text
+        assert client.get("/c3parr/assets/app.js").text == "console.log(1)"
+        assert client.get("/c3parr/api/v1/shell").json()["pending"] == 0
+        assert client.get("/api/v1/shell").json()["pending"] == 0  # proxy que tira o prefixo
+        assert client.get("/health").json() == {"ok": True}  # o healthcheck não muda
+        assert client.get("/c3parr/api/v1/nope").status_code == 404
+        assert "page" in client.get("/c3parrx/api/v1/shell").text  # outro caminho: não é a API
+
+        assert _save(client, url_base="/apps/c3parr") == (200, "Saved.")
+        assert client.get("/apps/c3parr/api/v1/shell").status_code == 200
+        for bad in ("a b", "/c3parr?x=1", '/"><script>', "http://x/y"):
+            assert _save(client, url_base=bad)[0] == 422, bad
+        assert _save(client, url_base="")[0] == 200
+        assert '<base href="/">' in client.get("/apps/c3parr/movies").text  # voltou para a raiz
+
+
+def test_the_url_base_can_come_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("C3PARR_URL_BASE", "subs")
+    with _served(tmp_path) as client:
+        assert '<base href="/subs/">' in client.get("/").text
+        assert (
+            client.get("/subs/api/v1/settings").json()["listening"]["url_base_from_env"] == "/subs"
+        )
+        _save(client, url_base="/c3parr")  # o de Settings passa na frente
+        assert '<base href="/c3parr/">' in client.get("/").text
+
+
+def test_the_instance_name_goes_to_the_tab_and_the_installed_app(tmp_path: Path) -> None:
+    with _served(tmp_path) as client:
+        assert "<title>c3parr</title>" in client.get("/").text
+        assert _save(client, instance_name="  Sala <b> ")[0] == 200
+        page = client.get("/").text
+        assert "<title>Sala &lt;b&gt;</title>" in page and '"name": "Sala \\u003cb>"' in page
+        manifest = client.get("/manifest.webmanifest")
+        assert manifest.headers["content-type"].startswith("application/manifest+json")
+        assert manifest.json() == {"name": "Sala <b>", "short_name": "Sala <b>"}
+        assert client.get("/api/v1/shell").json()["name"] == "Sala <b>"
+        _save(client, instance_name="   ")  # vazio volta ao nome padrão
+        assert client.get("/api/v1/shell").json()["name"] == "c3parr"
+
+
+def test_allowed_hosts_refuse_other_names_but_never_localhost(tmp_path: Path) -> None:
+    with _served(tmp_path) as client:
+
+        def status(host: str) -> int:
+            return client.get("/api/v1/shell", headers={"host": host}).status_code
+
+        assert status("anything.test") == 200  # lista vazia: aceita todos
+        assert _save(client, allowed_hosts=[" C3PARR.example.com ", "192.168.0.100", ""])[0] == 200
+        config = client.get("/api/v1/settings", headers={"host": "localhost"}).json()["config"]
+        assert config["allowed_hosts"] == ["c3parr.example.com", "192.168.0.100"]
+
+        assert status("c3parr.example.com") == 200 and status("C3PARR.EXAMPLE.COM:443") == 200
+        assert status("192.168.0.100:8484") == 200
+        for local in ("localhost", "127.0.0.1:8484", "[::1]:8484"):  # healthcheck e a máquina
+            assert status(local) == 200, local
+        refused = client.get("/movies", headers={"host": "evil.test"})
+        assert refused.status_code == 400 and "Allowed hosts" in refused.text
+        assert status("evil.test") == 400 and status("c3parr.example.com.evil.test") == 400
+
+        client.patch("/api/v1/settings", json={"changes": {"allowed_hosts": []}},
+                     headers={"host": "localhost"})  # fmt: skip
+        assert status("evil.test") == 200

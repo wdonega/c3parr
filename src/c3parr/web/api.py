@@ -5,6 +5,7 @@ As regras são as do `Service`, as mesmas das rotas HTML. Aqui só se traduz par
 `{"ok": false, "message": …}`; o que não existe responde 404.
 """
 
+import os
 from collections.abc import Iterable
 from typing import Any
 
@@ -24,6 +25,8 @@ from c3parr.web.service import (
     STEP_LABELS,
     Outcome,
     Service,
+    clean_url_base,
+    listening,
 )
 
 POSTER_MAX_AGE = 7 * 24 * 3600
@@ -118,6 +121,7 @@ def build_api(svc: Service) -> APIRouter:
             version=__version__,
             repo_url=REPO_URL,
             release_url=release_url(),
+            name=data["name"],
             theme=data["theme"],
             pending=data["pending"],
             alerts_unseen=data["alerts_unseen"],
@@ -296,7 +300,10 @@ def build_api(svc: Service) -> APIRouter:
                                          for p in i["providers"]])
             for i in view["interfaces"]
         ]  # fmt: skip
+        address, port = listening()
+        from_env = clean_url_base(os.environ.get("C3PARR_URL_BASE", "")) or ""
         return s.SettingsView(
+            listening=s.Listening(address=address, port=port, url_base_from_env=from_env),
             config=config,
             shown=s.SettingsShown(
                 llm_model=config.llm_model or defaults[config.llm_provider][1],

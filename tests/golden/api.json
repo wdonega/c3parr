@@ -1420,6 +1420,7 @@
  },
  "settings": {
   "config": {
+   "allowed_hosts": [],
    "asr_always": false,
    "asr_enabled": true,
    "asr_mode": "local",
@@ -1441,6 +1442,7 @@
    "fix_external_in_place": true,
    "forced_resolves": false,
    "foreign_tag": "first",
+   "instance_name": "c3parr",
    "llm_base_url": "http://llm.test:8080/v1",
    "llm_effort": "low",
    "llm_model": "modelo-x",
@@ -1488,8 +1490,14 @@
     "es"
    ],
    "theme": "robo",
+   "url_base": "",
    "use_embedded": true,
    "wait_minutes": 60
+  },
+  "listening": {
+   "address": "127.0.0.1",
+   "port": 8484,
+   "url_base_from_env": ""
   },
   "options": {
    "arr_keys": {
@@ -1760,6 +1768,7 @@
  "shell": {
   "alerts_unseen": 3,
   "movies": 4,
+  "name": "c3parr",
   "pending": 2,
   "release_url": "<varies>",
   "repo_url": "https://github.com/wdonega/c3parr",

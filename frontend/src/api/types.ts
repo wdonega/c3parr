@@ -49,6 +49,9 @@ export interface AppConfig {
   wait_minutes: number
   search_interval_minutes: number
   theme: string
+  url_base: string
+  instance_name: string
+  allowed_hosts: string[]
   components: Record<string, string>
   llm_provider: string
   llm_base_url: string
@@ -240,6 +243,12 @@ export interface LibraryCount {
   done: number
 }
 
+export interface Listening {
+  address: string
+  port: number
+  url_base_from_env: string
+}
+
 export interface LlmProvider {
   id: string
   label: string
@@ -360,6 +369,7 @@ export interface SettingsShown {
 }
 
 export interface SettingsView {
+  listening: Listening
   tests: Record<string, TestRecord>
   config: AppConfig
   shown: SettingsShown
@@ -377,6 +387,7 @@ export interface Shell {
   version: string
   repo_url: string
   release_url: string
+  name: string
   theme: string
   pending: number
   alerts_unseen: number

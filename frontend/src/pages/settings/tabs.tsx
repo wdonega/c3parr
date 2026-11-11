@@ -2,6 +2,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import type { AppConfig, TestRecord, TestResult } from '../../api/types'
+import { cleanBase, withBase } from '../../lib/base'
 import { timeAgo } from '../../lib/format'
 import { Field, Segmented, SwitchRow } from '../../ui/controls'
 import { Icon } from '../../ui/Icon'
@@ -559,7 +560,10 @@ export function IntegrationsTab({ form }: Tab) {
           hint="Yours comes from themoviedb.org, under Settings → API."
         />
         <TestRow form={form} target="tmdb" />
-        <p className="hint muted">{view.options.tmdb_attribution}</p>
+        <p className="hint muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src={withBase('/tmdb.svg')} alt="TMDB" style={{ height: 12 }} />
+          {view.options.tmdb_attribution}
+        </p>
       </Section>
     </>
   )
@@ -728,5 +732,63 @@ export function SubtitlesTab({ form }: Tab) {
         <Minutes form={form} name="search_interval_minutes" label="Process the library every (minutes)" min={5} />
       </Section>
     </>
+  )
+}
+
+// --- General ---
+
+export function GeneralTab({ form }: Tab) {
+  const { listening } = form.view
+  const typed = form.value('url_base')
+  const base = cleanBase(typed) || listening.url_base_from_env
+  const where = `${window.location.origin}${base}/`
+  return (
+    <Section
+      title="Host"
+      about="How c3parr is reached. This is what lets it sit behind a reverse proxy, at the root of a name or under a path."
+      state={
+        <StateLine tone="muted">
+          Listening on {listening.address}:{listening.port}
+        </StateLine>
+      }
+    >
+      <Field
+        label="Bind address and port"
+        hint="Set by C3PARR_HOST and C3PARR_PORT when c3parr starts. In Docker, the compose file decides the port the network sees."
+      >
+        <input className="input code short" value={`${listening.address}:${listening.port}`} readOnly />
+      </Field>
+      <Text
+        label="URL base"
+        optional
+        code
+        placeholder="/c3parr"
+        value={typed}
+        edited={form.edited('url_base')}
+        hint={
+          <>
+            For a reverse proxy that serves c3parr under a path. Empty serves it at the root. It takes effect when you
+            save, with no restart, and c3parr keeps answering without it too. With this, the address is{' '}
+            <span className="mono">{where}</span>
+            {!typed && listening.url_base_from_env ? ' (from C3PARR_URL_BASE)' : ''}.
+          </>
+        }
+        onChange={(value) => form.set('url_base', value)}
+      />
+      <Tags
+        label="Allowed hosts"
+        value={form.value('allowed_hosts')}
+        edited={form.edited('allowed_hosts')}
+        hint="Comma separated names and addresses c3parr answers to, like c3parr.example.com, 192.168.0.100. Leave empty to allow all. localhost always works."
+        onChange={(value) => form.set('allowed_hosts', value)}
+      />
+      <Text
+        label="Instance name"
+        value={form.value('instance_name')}
+        edited={form.edited('instance_name')}
+        hint="Shown in the browser tab and as the name of the installed app."
+        onChange={(value) => form.set('instance_name', value)}
+      />
+    </Section>
   )
 }
