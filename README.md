@@ -39,7 +39,8 @@ The result is written as `<video>.<lang>.c3parr.srt`. When a better subtitle sho
   - Movies and TV Shows, each item with a Monitored flag;
   - a queue with live progress;
   - System pages: Tasks, Alerts, Logs and Status;
-  - Settings with a change counter on Save, plus a test-connection button for every service.
+  - Settings with a change counter on Save, plus a test-connection button for every service;
+  - in English, Portuguese (Brazil) and Spanish (Mexico).
 - **CLI** for single files: `c3parr movie.mkv --dst pt-BR`.
 
 ## Hardware: do you need a GPU?
@@ -208,6 +209,12 @@ location /c3parr/ {
 
 The interface is a PWA: on a phone or a desktop browser, use *Install* (Chrome, Edge) or *Add to Home Screen* (Safari). Browsers only offer it over HTTPS, so put c3parr behind your reverse proxy with a certificate.
 
+### Language
+
+The interface speaks English (US), Portuguese (Brazil) and Spanish (Mexico). The first time, it opens in the language of your browser: any Portuguese opens in Portuguese, any Spanish in Spanish, everything else in English. To change it, use the picker at the bottom of the menu (on a phone, in **More**). The choice is saved in that browser, so each person and each device keeps its own.
+
+Logs, error messages that come from other services (Radarr, Sonarr, the LLM) and the summaries of the scheduled tasks stay in English.
+
 ## Extra: transcription on another machine
 
 Only needed when c3parr runs on a small box: if its machine already has a good GPU, skip this. Transcription is the only heavy step, and it can run on another machine with a GPU. On a NanoPi M5 (CPU only), a 42-minute episode took 66 minutes; through a Jetson Orin Nano on the network, about 3 minutes, audio upload included.
@@ -291,8 +298,10 @@ Browser tests drive the built interface against an example library:
 
 ```bash
 uv run playwright install chromium   # once
-uv run pytest -m e2e tests/e2e/test_spa.py
+uv run pytest -m e2e tests/e2e
 ```
+
+The texts of the interface live in `frontend/src/i18n`: `en.ts` is the source, and `pt-BR.ts` and `es-MX.ts` must have the same keys (the type checker and `npm test` say when they don't). A sentence the server says gets a code in `MESSAGES` (`src/c3parr/web/service.py`) and a `msg.<code>` key in the three catalogs; `uv run pytest tests/test_i18n_contract.py` checks that both sides match.
 
 The TypeScript types in `frontend/src/api/types.ts` come from the API contract. After changing `src/c3parr/web/schemas.py`, write them again with `C3PARR_UPDATE_GOLDEN=1 uv run pytest tests/test_frontend_types.py`.
 

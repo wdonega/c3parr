@@ -5,8 +5,9 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { api, LIVE } from '../api/client'
 import type { Shell as ShellData } from '../api/types'
+import { getLocale, LOCALE_NAMES, LOCALES, setLocale, t, useLocale, type Locale } from '../i18n'
 import { INSTANCE, withBase } from '../lib/base'
-import { jobName, percent } from '../lib/format'
+import { jobName, percent, stepLabel } from '../lib/format'
 import { Bar, Empty } from '../ui/controls'
 import { Icon, type IconName } from '../ui/Icon'
 import { Poster } from '../ui/media'
@@ -34,7 +35,7 @@ export function PageHead({
     <header className="page-head">
       <div className="page-title">
         {crumbs && (
-          <nav className="crumbs" aria-label="Breadcrumb">
+          <nav className="crumbs" aria-label={t('nav.breadcrumb')}>
             <Link to={crumbs.to}>{crumbs.label}</Link>
             <Icon name="right" size={14} className="muted" />
             <span aria-current="page">{title}</span>
@@ -68,49 +69,70 @@ function Item({
   )
 }
 
+/** Troca o idioma da interface. A escolha vale para este navegador e fica guardada nele. */
+export function LanguagePicker({ compact }: { compact?: boolean }) {
+  return (
+    <label className={compact ? 'language compact' : 'row language'}>
+      <Icon name="globe" size={compact ? 14 : 18} className={compact ? undefined : 'accent'} />
+      <span className={compact ? 'sr-only' : 'grow'}>{t('common.language')}</span>
+      <select
+        aria-label={compact ? t('common.language') : undefined}
+        value={getLocale()}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {LOCALES.map((locale) => (
+          <option key={locale} value={locale} lang={locale}>
+            {LOCALE_NAMES[locale]}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 function Sidebar({ shell, onSearch }: { shell?: ShellData; onSearch: () => void }) {
   const running = shell?.running
   return (
-    <nav className="side" aria-label="Main">
+    <nav className="side" aria-label={t('nav.main')}>
       <Link to="/dashboard" className="brand">
         <img src={withBase('/logo.png')} alt="" />
         <span>C3PARR</span>
       </Link>
       <div className="nav-group">
-        <Item to="/dashboard" icon="overview" label="Overview" />
+        <Item to="/dashboard" icon="overview" label={t('nav.overview')} />
         <button type="button" className="nav-item" onClick={onSearch} style={{ border: 0, background: 'none' }}>
           <Icon name="search" size={18} />
-          <span>Search</span>
+          <span>{t('nav.search')}</span>
           <span className="kbd" style={{ marginLeft: 'auto' }}>
             ⌘K
           </span>
         </button>
       </div>
       <div className="nav-group">
-        <span className="nav-label">Library</span>
-        <Item to="/movies" icon="movies" label="Movies">
+        <span className="nav-label">{t('nav.library')}</span>
+        <Item to="/movies" icon="movies" label={t('nav.movies')}>
           {shell && <span className="count">{shell.movies}</span>}
         </Item>
-        <Item to="/tv" icon="tv" label="TV Shows">
+        <Item to="/tv" icon="tv" label={t('nav.shows')}>
           {shell && <span className="count">{shell.shows}</span>}
         </Item>
       </div>
       <div className="nav-group">
-        <span className="nav-label">Activity</span>
-        <Item to="/queue" icon="queue" label="Queue">
+        <span className="nav-label">{t('nav.activity')}</span>
+        <Item to="/queue" icon="queue" label={t('nav.queue')}>
           {!!shell?.pending && (
-            <span className="badge" aria-label={`${shell.pending} unfinished tasks`}>
+            <span className="badge" aria-label={t('nav.pending', { n: shell.pending })}>
               {shell.pending}
             </span>
           )}
         </Item>
       </div>
       <div className="nav-group">
-        <span className="nav-label">Admin</span>
-        <Item to="/settings" icon="settings" label="Settings" />
-        <Item to="/system" icon="system" label="System">
+        <span className="nav-label">{t('nav.admin')}</span>
+        <Item to="/settings" icon="settings" label={t('nav.settings')} />
+        <Item to="/system" icon="system" label={t('nav.system')}>
           {!!shell?.alerts_unseen && (
-            <span className="badge bad" aria-label={`${shell.alerts_unseen} alerts to look at`}>
+            <span className="badge bad" aria-label={t('nav.alerts', { n: shell.alerts_unseen })}>
               {shell.alerts_unseen}
             </span>
           )}
@@ -120,14 +142,14 @@ function Sidebar({ shell, onSearch }: { shell?: ShellData; onSearch: () => void 
         <Link to={`/queue?job=${running.id}`} className="now">
           <span className="eyebrow live">
             <span className="dot" />
-            Running now
+            {t('common.runningNow')}
           </span>
           <span className="truncate" style={{ fontSize: 13, fontWeight: 500 }}>
             {jobName(running).title}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ flex: 1 }}>
-              <Bar value={running.progress} label={running.step} />
+              <Bar value={running.progress} label={stepLabel(running.action, running.language, running.step)} />
             </span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)' }}>
               {percent(running.progress)}
@@ -136,6 +158,7 @@ function Sidebar({ shell, onSearch }: { shell?: ShellData; onSearch: () => void 
         </Link>
       )}
       <div className="side-foot" style={running ? undefined : { marginTop: 'auto' }}>
+        <LanguagePicker compact />
         {shell && (
           <a className="mono" href={shell.release_url} target="_blank" rel="noopener">
             v{shell.version}
@@ -162,14 +185,14 @@ function TabBar({ shell }: { shell?: ShellData }) {
     </NavLink>
   )
   return (
-    <nav className="tabbar" aria-label="Main">
-      {tab('/dashboard', 'overview', 'Overview')}
-      {tab('/movies', 'movies', 'Movies')}
-      {tab('/tv', 'tv', 'TV Shows')}
-      {tab('/queue', 'queue', shell?.pending ? `Queue · ${shell.pending}` : 'Queue')}
+    <nav className="tabbar" aria-label={t('nav.main')}>
+      {tab('/dashboard', 'overview', t('nav.overview'))}
+      {tab('/movies', 'movies', t('nav.movies'))}
+      {tab('/tv', 'tv', t('nav.shows'))}
+      {tab('/queue', 'queue', shell?.pending ? t('nav.queueCount', { n: shell.pending }) : t('nav.queue'))}
       <Link to="/more" aria-current={more ? 'page' : undefined}>
         <Icon name="more" size={20} />
-        {shell?.alerts_unseen ? `More · ${shell.alerts_unseen}` : 'More'}
+        {shell?.alerts_unseen ? t('nav.moreCount', { n: shell.alerts_unseen }) : t('nav.more')}
       </Link>
     </nav>
   )
@@ -210,14 +233,14 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   )
 
   return (
-    <dialog ref={dialog} className="palette" onClose={close} aria-label="Search movies and shows">
+    <dialog ref={dialog} className="palette" onClose={close} aria-label={t('search.title')}>
       <label className="search">
         <Icon name="search" />
         <input
           type="search"
           value={text}
-          placeholder="Search movies and shows"
-          aria-label="Search movies and shows"
+          placeholder={t('search.title')}
+          aria-label={t('search.title')}
           autoComplete="off"
           onChange={(event) => setText(event.target.value)}
         />
@@ -227,8 +250,8 @@ function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
         {movies.map((m) => hit(`m${m.id}`, m.title, m.year, m.poster, `/movies?q=${encodeURIComponent(m.title)}`))}
         {shows.map((s) => hit(`s${s.id}`, s.title, s.year, s.poster, `/tv/${s.id}`))}
         {text.trim() && found.isSuccess && movies.length + shows.length === 0 && (
-          <Empty icon="search" title="Nothing found">
-            <p>No movie or show matches “{text.trim()}”.</p>
+          <Empty icon="search" title={t('search.none')}>
+            <p>{t('search.noMatch', { text: text.trim() })}</p>
           </Empty>
         )}
       </div>
@@ -249,20 +272,21 @@ function UpdateNotice() {
     <div className="notice" role="status" style={{ position: 'sticky', top: 12, zIndex: 10 }}>
       <Icon name="refresh" size={18} className="accent" />
       <div className="grow">
-        <strong>A new version of c3parr is ready</strong>
-        <span>Reload to use it. Nothing you saved is lost.</span>
+        <strong>{t('update.title')}</strong>
+        <span>{t('update.body')}</span>
       </div>
       <button type="button" className="btn" onClick={() => setReady(false)}>
-        Later
+        {t('update.later')}
       </button>
       <button type="button" className="btn primary" onClick={() => void updateServiceWorker(true)}>
-        Reload
+        {t('update.reload')}
       </button>
     </div>
   )
 }
 
 export function Shell() {
+  useLocale()
   const shell = useShell()
   const [searching, setSearching] = useState(false)
 
@@ -292,6 +316,7 @@ export function Shell() {
 
 /** No celular, o que não cabe na barra de abas. */
 export function More() {
+  useLocale()
   const shell = useShell()
   const [searching, setSearching] = useState(false)
   const link = (to: string, icon: IconName, label: string, note?: ReactNode) => (
@@ -304,20 +329,23 @@ export function More() {
   )
   return (
     <>
-      <PageHead title="More" />
+      <PageHead title={t('nav.more')} />
       <section className="card rows">
         <button type="button" className="row row-btn" style={{ borderTop: 0 }} onClick={() => setSearching(true)}>
           <Icon name="search" size={18} className="accent" />
-          <span className="grow">Search movies and shows</span>
+          <span className="grow">{t('search.title')}</span>
           <Icon name="right" className="muted" />
         </button>
-        {link('/settings', 'settings', 'Settings')}
+        {link('/settings', 'settings', t('nav.settings'))}
         {link(
           '/system',
           'system',
-          'System',
+          t('nav.system'),
           shell.data?.alerts_unseen ? <span className="badge bad">{shell.data.alerts_unseen}</span> : undefined,
         )}
+      </section>
+      <section className="card">
+        <LanguagePicker />
       </section>
       <Palette open={searching} onClose={() => setSearching(false)} />
     </>
@@ -325,13 +353,14 @@ export function More() {
 }
 
 export function NotFound() {
+  useLocale()
   return (
     <>
-      <PageHead title="Page not found" />
+      <PageHead title={t('notFound.title')} />
       <section className="card">
-        <Empty icon="alert" title="There is nothing at this address">
+        <Empty icon="alert" title={t('notFound.body')}>
           <Link to="/dashboard" className="btn">
-            Go to the overview
+            {t('notFound.back')}
           </Link>
         </Empty>
       </section>

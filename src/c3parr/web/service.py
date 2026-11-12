@@ -19,6 +19,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, NamedTuple
 from urllib.parse import urlencode, urlsplit
 
@@ -187,12 +188,102 @@ class NotFound(Exception):
     """O item pedido não existe (vira 404 na rota)."""
 
 
+Param = str | int | float
+NO_PARAMS: Mapping[str, Param] = MappingProxyType({})
+
+# O que o servidor diz ao usuário. A frase daqui é a de inglês; a API manda junto o código e os
+# parâmetros, e a interface escreve no idioma dela (frontend/src/i18n, chaves `msg.<código>`).
+# Um parâmetro `x_key` diz que `x` é um nome que a interface também sabe traduzir.
+MESSAGES = {
+    "queue.cancelled": "{n} task(s) cancelled.",
+    "queue.none_waiting": "Nothing is waiting in the queue.",
+    "queue.retried": "{n} task(s) back in the queue.",
+    "queue.none_failed": "No failed task to run again.",
+    "library.select_one": "Select at least one item.",
+    "library.unreadable": "{n} item(s) could not be read (see System → Alerts).",
+    "library.covered": "Nothing to do: every target language is covered.",
+    "library.queued": "{n} item(s) in the queue ({steps} new step(s)).",
+    "test.arr_connected": "{name} {version}: connected.",
+    "test.arr_outdated": "{name} {version}: connected. Update it: the latest is {latest}.",
+    "test.arr_fields": "{name}: check the fields.",
+    "test.tmdb_no_token": "TMDb: no read access token.",
+    "test.connected": "{name}: connected.",
+    "test.error": "{name}: {detail}",
+    "test.llm_unknown": "LLM: unknown provider {provider}.",
+    "test.asr_remote": "Transcription: connected.{extra}",
+    "test.asr_local": "Transcription: {engine} ready on this machine.{extra}",
+    "test.asr_error": "Transcription: {detail}",
+    "settings.saved": "Saved.",
+    "settings.invalid": "Not saved, check: {fields}",
+    "settings.unknown": "Not saved, unknown: {fields}",
+    "settings.no_target": "Pick at least one target language.",
+    "settings.asr_url": "Transcription: put the server URL.",
+    "settings.url_base": "URL base: use a path like /c3parr (letters, digits, - and _).",
+    "task.starting": "{task}: starting.",
+    "alert.resolved": "Alert already resolved.",
+    "alert.still_failing": "Still failing for {n} item(s).",
+    "alert.retrying": "Retrying: {n} step(s) queued.",
+}
+# O mínimo que falta configurar: código → (título, detalhe). Chaves `setup.<código>.title|detail`.
+SETUP = {
+    "connect_arr": ("Connect Radarr or Sonarr",
+                    "c3parr reads its library from them, like Bazarr does."),
+    "arr_incomplete": ("{name} needs its address and API key",
+                       "{name} → Settings → General → API Key."),
+    "no_llm": ("No LLM configured",
+               "Translations need an LLM: pick a provider and its key, or the URL and model of "
+               "your own server."),
+    "no_llm_key": ("No API key for the LLM ({provider})",
+                   "Translations need the key of the chosen provider."),
+    "no_tmdb": ("No TMDb key",
+                "Without metadata the original language and character names are guessed."),
+}  # fmt: skip
+# Avisos de configuração: código → (título, detalhe). Chaves `notice.<código>.title|detail`.
+NOTICES = {
+    "arr_outdated": ("{name} {found} is out of date",
+                     "The latest is {name} {latest}. c3parr is made for it; update {name} to "
+                     "keep the library in sync."),
+    "asr_remote": ("Transcription on a separate server", "{url} ({provider})."),
+    "asr_cpu": ("Transcription runs on the CPU",
+                "Measured here: about {minutes} min per hour of video. A GPU build of "
+                "whisper.cpp (Metal, Vulkan, CUDA) is 5-8x faster."),
+    "asr_backend": ("Transcription on {backend}",
+                    "Measured here: about {minutes} min per hour of video."),
+    "asr_faster_whisper": ("Transcription runs on the CPU (faster-whisper)",
+                           "About 10 min per hour of video. Install whisper.cpp "
+                           "(brew install whisper.cpp) to use the GPU."),
+    "image_subs": ("{n} item(s) have image subtitles",
+                   "PGS/VobSub tracks need OCR and are ignored; text tracks and the audio are "
+                   "used instead."),
+}  # fmt: skip
+
+
 class Outcome(NamedTuple):
     """Resultado de uma ação, em palavras para o usuário."""
 
     message: str
     error: bool = False
     status: int = 200
+    code: str = ""
+    """Qual frase de `MESSAGES` é; vazio quando o texto veio de fora (erro do Radarr, do LLM)."""
+    params: Mapping[str, Param] = NO_PARAMS
+
+
+def say(code: str, *, error: bool = False, status: int = 200, **params: Param) -> Outcome:
+    """A frase de `MESSAGES` com os parâmetros no lugar, e o código para a interface traduzir."""
+    return Outcome(MESSAGES[code].format(**params), error, status, code, params)
+
+
+def setup_item(code: str, href: str, **params: Param) -> dict[str, Any]:
+    title, detail = SETUP[code]
+    return {"title": title.format(**params), "detail": detail.format(**params), "href": href,
+            "code": code, "params": params}  # fmt: skip
+
+
+def notice(code: str, level: str, **params: Param) -> dict[str, Any]:
+    title, detail = NOTICES[code]
+    return {"level": level, "title": title.format(**params), "detail": detail.format(**params),
+            "code": code, "params": params}  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -259,7 +350,7 @@ def interval_label(delta: timedelta) -> str:
     return f"{minutes} min"
 
 
-def job_steps(job: Job, planned: list[str]) -> list[dict[str, str]]:
+def job_steps(job: Job, planned: list[str]) -> list[dict[str, Any]]:
     """Linha do tempo das etapas: as já rodadas (com motivo) e as que ainda vêm."""
     if job.etapas:
         out = []
@@ -274,18 +365,22 @@ def job_steps(job: Job, planned: list[str]) -> list[dict[str, str]]:
             if s.reason:
                 text += f" · {s.reason}"
             label = STEP_LABELS.get(s.name) or ACTION_LABELS.get(s.name, s.name)
-            out.append({"label": label, "state": state, "text": text})
+            out.append({"name": s.name, "label": label, "state": state, "text": text,
+                        "seconds": s.seconds or None, "provider": s.provider or None,
+                        "reason": s.reason or None})  # fmt: skip
         return out
     current = planned.index(job.etapa) if job.etapa in planned else -1
     out = []
     for i, name in enumerate(planned):
+        reason = None
         if job.status == "processando" and i < current:
             state, text = "ok", "done"
         elif job.status == "processando" and i == current:
-            state, text = "running", job.mensagem or "running"
+            state, text, reason = "running", job.mensagem or "running", job.mensagem or None
         else:
             state, text = "pending", "waiting"
-        out.append({"label": STEP_LABELS.get(name, name), "state": state, "text": text})
+        out.append({"name": name, "label": STEP_LABELS.get(name, name), "state": state,
+                    "text": text, "seconds": None, "provider": None, "reason": reason})  # fmt: skip
     return out
 
 
@@ -410,7 +505,7 @@ class Service:
                 "movies": len(self.lib.movies()), "shows": len(self.lib.series_list()),
                 "running": self.running_job()}  # fmt: skip
 
-    def setup_needed(self) -> list[dict[str, str]]:
+    def setup_needed(self) -> list[dict[str, Any]]:
         """O mínimo para funcionar e que ainda falta. Fica em System → Alerts e no contador até
         ser configurado: abrir a página não faz sumir."""
         cfg = self.lib.config()
@@ -418,70 +513,49 @@ class Service:
         out = []
         arrs = [k for k in ("radarr", "sonarr") if getattr(cfg, k).enabled]
         if not arrs:
-            out.append({"title": "Connect Radarr or Sonarr",
-                        "detail": "c3parr reads its library from them, like Bazarr does.",
-                        "href": "/settings/library/radarr"})  # fmt: skip
+            out.append(setup_item("connect_arr", "/settings/library/radarr"))
         for kind in arrs:
             if not getattr(cfg, kind).host or ARR_KEY_ENV[kind] not in secrets:
-                out.append({"title": f"{kind.capitalize()} needs its address and API key",
-                            "detail": f"{kind.capitalize()} → Settings → General → API Key.",
-                            "href": f"/settings/library/{kind}"})  # fmt: skip
+                out.append(setup_item("arr_incomplete", f"/settings/library/{kind}",
+                                      name=kind.capitalize()))  # fmt: skip
         flavor = cfg.llm_provider if cfg.llm_provider in LLM_PRESETS else "custom"
         url, model = llm_defaults(flavor)
         if flavor == "custom" and not ((cfg.llm_base_url or url) and (cfg.llm_model or model)):
-            out.append({"title": "No LLM configured",
-                        "detail": "Translations need an LLM: pick a provider and its key, or "
-                        "the URL and model of your own server.",
-                        "href": "/settings/integrations"})  # fmt: skip
+            out.append(setup_item("no_llm", "/settings/integrations"))
         elif flavor != "custom" and LLM_KEY_ENV[flavor] not in secrets:
-            out.append({"title": f"No API key for the LLM ({flavor})",
-                        "detail": "Translations need the key of the chosen provider.",
-                        "href": "/settings/integrations"})  # fmt: skip
+            out.append(setup_item("no_llm_key", "/settings/integrations", provider=flavor))
         if "TMDB_READ_ACCESS_TOKEN" not in secrets and not tmdb_meta.BUILTIN_READ_TOKEN:
-            out.append({"title": "No TMDb key",
-                        "detail": "Without metadata the original language and character names "
-                        "are guessed.", "href": "/settings/integrations"})  # fmt: skip
+            out.append(setup_item("no_tmdb", "/settings/integrations"))
         return out
 
-    def warnings(self) -> list[dict[str, str]]:
+    def warnings(self) -> list[dict[str, Any]]:
         """Avisos de configuração (não são falhas: não repetem nem viram alerta)."""
-        out: list[dict[str, str]] = []
+        out: list[dict[str, Any]] = []
         cfg = self.lib.config()
         for kind in ("radarr", "sonarr"):  # *arr fora da versão major mais nova: aviso fixo
             found = major(self.lib.meta(f"{kind}_version") or "")
             latest = int(self.lib.meta(f"{kind}_latest_major") or 0)
             if getattr(cfg, kind).enabled and found and latest and found < latest:
-                name = kind.capitalize()
-                out.append({"level": "warn", "title": f"{name} {found} is out of date",
-                            "detail": f"The latest is {name} {latest}. c3parr is made for it; "
-                            f"update {name} to keep the library in sync."})  # fmt: skip
+                out.append(notice("arr_outdated", "warn", name=kind.capitalize(), found=found,
+                                  latest=latest))  # fmt: skip
         asr = components_for(self.settings, cfg).get("transcricao")
         if asr is not None and asr.provider in REMOTE_IDS.values():
-            out.append({"level": "info", "title": "Transcription on a separate server",
-                        "detail": f"{cfg.asr_url} ({asr.provider})."})  # fmt: skip
+            out.append(notice("asr_remote", "info", url=cfg.asr_url, provider=asr.provider))
         elif asr is not None and asr.provider == "whisper-cpp":
             speed = measured_speed()
             if speed and str(speed.get("backend", "")).upper() == "CPU":
                 minutes = float(speed["seconds_per_minute"])
-                out.append({"level": "warn", "title": "Transcription runs on the CPU",
-                            "detail": f"Measured here: about {minutes:.0f} min per hour of video."
-                            " A GPU build of whisper.cpp (Metal, Vulkan, CUDA) is 5-8x faster."
-                            })  # fmt: skip
+                out.append(notice("asr_cpu", "warn", minutes=f"{minutes:.0f}"))
             elif speed:
                 minutes = float(speed["seconds_per_minute"])
-                out.append({"level": "info", "title": f"Transcription on {speed['backend']}",
-                            "detail": f"Measured here: about {minutes:.1f} min per hour of video."
-                            })  # fmt: skip
+                out.append(notice("asr_backend", "info", backend=str(speed["backend"]),
+                                  minutes=f"{minutes:.1f}"))  # fmt: skip
         elif asr is not None and asr.provider == "faster-whisper":
-            out.append({"level": "warn", "title": "Transcription runs on the CPU (faster-whisper)",
-                        "detail": "About 10 min per hour of video. Install whisper.cpp "
-                        "(brew install whisper.cpp) to use the GPU."})  # fmt: skip
+            out.append(notice("asr_faster_whisper", "warn"))
         images = sum(1 for m in self.catalog.all_media() if m.probe
                      and any(not t.text_based for t in m.probe.subtitles))  # fmt: skip
         if images:
-            out.append({"level": "info", "title": f"{images} item(s) have image subtitles",
-                        "detail": "PGS/VobSub tracks need OCR and are ignored; text tracks and "
-                        "the audio are used instead."})  # fmt: skip
+            out.append(notice("image_subs", "info", n=images))
         return out
 
     # --- dashboard ---
@@ -569,11 +643,11 @@ class Service:
 
     def cancel_queued(self) -> Outcome:
         n = self.jobs.cancel_queued()
-        return Outcome(f"{n} task(s) cancelled." if n else "Nothing is waiting in the queue.")
+        return say("queue.cancelled", n=n) if n else say("queue.none_waiting")
 
     def retry_failed(self) -> Outcome:
         n = self.jobs.retry_failed()
-        return Outcome(f"{n} task(s) back in the queue." if n else "No failed task to run again.")
+        return say("queue.retried", n=n) if n else say("queue.none_failed")
 
     def move_to_top(self, job_id: int) -> dict[str, Any]:
         self.job(job_id)
@@ -582,7 +656,8 @@ class Service:
 
     def job_extra(self, job: Job) -> dict[str, Any]:
         """O que a tarefa está fazendo agora e os passos da pipeline já registrados no vídeo."""
-        stage = STEP_LABELS.get(job.etapa or "") if job.status == "processando" else None
+        stage_name = (job.etapa or None) if job.status == "processando" else None
+        stage = STEP_LABELS.get(stage_name or "")
         steps = self.catalog.steps(job.media_id) if job.media_id is not None else {}
         order = list(ACTION_LABELS)
         done = sorted(steps.values(), key=lambda r: (
@@ -590,7 +665,7 @@ class Service:
         pipeline = [{"action": r.action, "label": ACTION_LABELS.get(r.action, r.action),
                      "language": r.lang or None, "state": r.state, "detail": r.detail,
                      "attempts": r.attempts, "updated_at": r.updated_at} for r in done]  # fmt: skip
-        return {"stage": stage, "pipeline": pipeline}
+        return {"stage": stage, "stage_name": stage_name, "pipeline": pipeline}
 
     def job(self, job_id: int) -> Job:
         try:
@@ -801,14 +876,14 @@ class Service:
 
     def add_to_queue(self, keys: list[str]) -> Outcome:
         if not keys:
-            return Outcome("Select at least one item.", error=True)
+            return say("library.select_one", error=True)
         videos = [v for key in keys for v in self._videos_for(key)]
         steps, items, failed = self._process(videos)
         if failed:
-            return Outcome(f"{failed} item(s) could not be read (see System → Alerts).", error=True)
+            return say("library.unreadable", error=True, n=failed)
         if not items:
-            return Outcome("Nothing to do: every target language is covered.")
-        return Outcome(f"{items} item(s) in the queue ({steps} new step(s)).")
+            return say("library.covered")
+        return say("library.queued", n=items, steps=steps)
 
     # --- settings ---
 
@@ -869,15 +944,16 @@ class Service:
             return Outcome(e.message, error=True)
         latest = self.clients.latest_major(kind)
         found = major(version)
-        note = f" Update it: the latest is {latest}." if found and found < latest else ""
-        return Outcome(f"{kind.capitalize()} {version}: connected.{note}")
+        if found and found < latest:
+            return say("test.arr_outdated", name=kind.capitalize(), version=version, latest=latest)
+        return say("test.arr_connected", name=kind.capitalize(), version=version)
 
     def test_tmdb(self, token: str) -> Outcome:
         secrets = self.effective_secrets()
         token = (token or secrets.get("TMDB_READ_ACCESS_TOKEN", "")
                  or tmdb_meta.BUILTIN_READ_TOKEN)  # fmt: skip
         if not token:
-            return Outcome("TMDb: no read access token.", error=True)
+            return say("test.tmdb_no_token", error=True)
         health = self.clients.tmdb(TMDbConfig(token=token, timeout_s=15)).health()
         return self._tested("TMDb", health.ok, health.detail)
 
@@ -886,7 +962,7 @@ class Service:
         config = self.lib.config()
         flavor = provider or config.llm_provider
         if flavor not in LLM_PRESETS:
-            return Outcome(f"LLM: unknown provider {flavor}.", error=True)
+            return say("test.llm_unknown", error=True, provider=flavor)
         url, default_model = llm_defaults(flavor)
         key = api_key or self.effective_secrets().get(LLM_KEY_ENV[flavor])
         llm = LLMConfig(
@@ -900,7 +976,7 @@ class Service:
         try:
             client = self.clients.llm(llm)
         except ProviderError as e:
-            return Outcome(f"LLM: {e.message}", error=True)
+            return say("test.error", error=True, name="LLM", detail=e.message)
         ok, detail = client.health()
         return self._tested("LLM", ok, detail)
 
@@ -908,7 +984,7 @@ class Service:
         config = self.lib.config()
         secrets = self.effective_secrets()
         mode = mode or config.asr_mode
-        done = "connected."
+        local_engine = ""
         if mode in REMOTE_IDS:
             key = api_key or secrets.get("C3PARR_ASR_API_KEY")
             remote = self.clients.remote_asr(
@@ -923,18 +999,21 @@ class Service:
             try:
                 engine = self.factories["transcricao"].create(local["transcricao"], secrets)
             except ProviderError as e:
-                return Outcome(f"Transcription: {e.message}", error=True)
+                return say("test.asr_error", error=True, detail=e.message)
             health = engine.health()
-            done = f"{engine.info.id} ready on this machine."
-        if health.ok:
-            return Outcome(
-                f"Transcription: {done}" + (f" {health.detail}" if health.detail else "")
-            )
-        return Outcome(f"Transcription: {health.detail}", error=True)
+            local_engine = engine.info.id
+        if not health.ok:
+            return say("test.asr_error", error=True, detail=health.detail)
+        extra = f" {health.detail}" if health.detail else ""
+        if local_engine:
+            return say("test.asr_local", engine=local_engine, extra=extra)
+        return say("test.asr_remote", extra=extra)
 
     @staticmethod
     def _tested(name: str, ok: bool, detail: str) -> Outcome:
-        return Outcome(f"{name}: connected.") if ok else Outcome(f"{name}: {detail}", error=True)
+        if ok:
+            return say("test.connected", name=name)
+        return say("test.error", error=True, name=name, detail=detail)
 
     def _save(self, changes: dict[str, Any], secrets: Mapping[str, str]) -> Outcome:
         """Grava as chaves que vieram e a configuração. Config inválida não é gravada."""
@@ -951,8 +1030,8 @@ class Service:
             self.refresh_secrets()
         except ValidationError as e:
             fields = ", ".join(str(err["loc"][0]) for err in e.errors())
-            return Outcome(f"Not saved, check: {fields}", error=True, status=422)
-        return Outcome("Saved.")
+            return say("settings.invalid", error=True, status=422, fields=fields)
+        return say("settings.saved")
 
     # A interface manda só o que mudou. As regras: o Radarr/Sonarr que veio é limpo e, se ligado,
     # relido; idiomas sem repetição; motor só entre os oferecidos; modelo e URL iguais ao padrão
@@ -978,7 +1057,7 @@ class Service:
         unknown = changes.keys() - PATCHABLE
         if unknown:
             fields = ", ".join(sorted(unknown))
-            return Outcome(f"Not saved, unknown: {fields}", error=True, status=422)
+            return say("settings.unknown", error=True, status=422, fields=fields)
         out: dict[str, Any] = {}
         arrs: dict[str, ArrConfig] = {}
         for kind in ("radarr", "sonarr"):
@@ -986,11 +1065,11 @@ class Service:
                 try:
                     arrs[kind] = self._arr_with(kind, changes[kind])
                 except (ValidationError, TypeError, ValueError):
-                    return Outcome(f"Not saved, check: {kind}", error=True, status=422)
+                    return say("settings.invalid", error=True, status=422, fields=kind)
         if "target_languages" in changes:
             targets = list(dict.fromkeys(norm_lang(str(t)) for t in changes["target_languages"]))
             if not targets:
-                return Outcome("Pick at least one target language.", error=True, status=422)
+                return say("settings.no_target", error=True, status=422)
             out["target_languages"] = targets
         if "fallback_languages" in changes:
             given = (str(c).strip() for c in changes["fallback_languages"])
@@ -1017,14 +1096,13 @@ class Service:
             mode = changes.get("asr_mode", config.asr_mode)
             url = str(changes.get("asr_url", config.asr_url) or "").strip()
             if mode in REMOTE_IDS and not url:
-                return Outcome("Transcription: put the server URL.", error=True, status=422)
+                return say("settings.asr_url", error=True, status=422)
             out["asr_mode"], out["asr_url"] = mode, url
             out["asr_model"] = str(changes.get("asr_model", config.asr_model) or "").strip()
         if "url_base" in changes:
             base = clean_url_base(str(changes["url_base"] or ""))
             if base is None:
-                return Outcome("URL base: use a path like /c3parr (letters, digits, - and _).",
-                               error=True, status=422)  # fmt: skip
+                return say("settings.url_base", error=True, status=422)
             out["url_base"] = base
         if "instance_name" in changes:
             out["instance_name"] = str(changes["instance_name"] or "").strip()[:60] or DEFAULT_NAME
@@ -1049,7 +1127,8 @@ class Service:
         guarda o resultado, para a tela mostrar o último teste sem refazer."""
         started = time.perf_counter()
         outcome = self._test(target, changes, secrets)
-        record = {"ok": not outcome.error, "message": outcome.message,
+        record = {"ok": not outcome.error, "message": outcome.message, "code": outcome.code,
+                  "params": dict(outcome.params),
                   "at": datetime.now(UTC).isoformat(timespec="seconds"),
                   "ms": round((time.perf_counter() - started) * 1000)}  # fmt: skip
         self.lib.set_meta(f"test_{target}", json.dumps(record))
@@ -1077,7 +1156,7 @@ class Service:
             try:
                 arr = self._arr_with(kind, changes.get(kind, {}))
             except (ValidationError, TypeError, ValueError):
-                return Outcome(f"{kind.capitalize()}: check the fields.", error=True, status=422)
+                return say("test.arr_fields", error=True, status=422, name=kind.capitalize())
             return self.test_arr(kind, arr, typed.get(ARR_KEY_ENV[kind], ""))
         if target == "tmdb":
             return self.test_tmdb(typed.get("TMDB_READ_ACCESS_TOKEN", ""))
@@ -1110,7 +1189,7 @@ class Service:
         if task is None:
             raise NotFound("unknown task")
         self.lib.request_run(name)
-        return Outcome(f"{task.label}: starting.")
+        return say("task.starting", task=task.label, task_key=f"routine.{task.name}")
 
     def alerts_data(self) -> dict[str, Any]:
         """Os alertas e o que falta configurar. Não marca nada como visto."""
@@ -1129,15 +1208,15 @@ class Service:
     def retry_alert(self, key: str) -> Outcome:
         alert = next((a for a in self.catalog.alerts(include_resolved=False) if a.key == key), None)
         if alert is None:
-            return Outcome("Alert already resolved.")
+            return say("alert.resolved")
         videos = []
         for mid in alert.media_ids:
             with suppress(KeyError):
                 videos.append(self.catalog.media(mid).video)
         steps, _, failed = self._process(videos)
         if failed:
-            return Outcome(f"Still failing for {failed} item(s).", error=True)
-        return Outcome(f"Retrying: {steps} step(s) queued.")
+            return say("alert.still_failing", error=True, n=failed)
+        return say("alert.retrying", n=steps)
 
     def log_records(self) -> list[dict[str, str]]:
         return list(reversed(self.logs.records))
@@ -1154,21 +1233,22 @@ class Service:
                 ok, detail = True, ""
             except ProviderError as e:
                 ok, detail = False, str(e)
-            out.append({"label": label, "provider": spec.provider, "ok": ok, "detail": detail})
+            out.append({"id": iface, "label": label, "provider": spec.provider, "ok": ok,
+                        "detail": detail})  # fmt: skip
         return out
 
     def status_view(self) -> dict[str, Any]:
         about = [
-            ("Version", __version__),
-            ("Python", platform.python_version()),
-            ("Database", str(self.lib.path)),
-            ("Queue", str(self.jobs.path)),
-            ("Cache", str(self.settings.cache_dir)),
+            ("version", "Version", __version__),
+            ("python", "Python", platform.python_version()),
+            ("database", "Database", str(self.lib.path)),
+            ("queue", "Queue", str(self.jobs.path)),
+            ("cache", "Cache", str(self.settings.cache_dir)),
         ]
         stored = self.lib.secrets()
         env = self.clients.env_secrets()
-        present = [(name, "Settings" if name in stored else ".env / environment" if name in env
+        present = [(name, "settings" if name in stored else "environment" if name in env
                     else "") for name in SECRET_NAMES]  # fmt: skip
-        about.append(("TMDb", tmdb_meta.ATTRIBUTION))
+        about.append(("tmdb", "TMDb", tmdb_meta.ATTRIBUTION))
         return {"about": about, "providers": self.provider_status(), "secrets": present,
                 "warnings": self.warnings()}  # fmt: skip

@@ -68,8 +68,14 @@
   },
   "warnings": [
    {
+    "code": "arr_outdated",
     "detail": "The latest is Radarr 6. c3parr is made for it; update Radarr to keep the library in sync.",
     "level": "warn",
+    "params": {
+     "found": 5,
+     "latest": 6,
+     "name": "Radarr"
+    },
     "title": "Radarr 5 is out of date"
    }
   ]
@@ -102,77 +108,134 @@
   "priority": false,
   "progress": 0.0,
   "stage": null,
+  "stage_name": null,
   "started_at": null,
   "status": "cancelled",
   "step": "Subtitle pt-BR",
   "steps": [
    {
     "label": "Audio",
+    "name": "audio",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Metadata (TMDb)",
+    "name": "metadados",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Transcription",
+    "name": "transcricao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Reference subtitle",
+    "name": "referencia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Bridge subtitle",
+    "name": "ponte",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Sync",
+    "name": "sincronizacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "User bible",
+    "name": "biblia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Context (bible)",
+    "name": "contexto",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Name correction",
+    "name": "nomes",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Translation",
+    "name": "traducao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Formatting",
+    "name": "formatacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Write subtitle",
+    "name": "escrita",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Original transcript",
+    "name": "escrita_original",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Series memory",
+    "name": "memoria",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    }
@@ -218,22 +281,35 @@
   "priority": false,
   "progress": 1.0,
   "stage": null,
+  "stage_name": null,
   "started_at": "<ts>",
   "status": "done",
   "step": "Extract embedded subtitle → en",
   "steps": [
    {
     "label": "Audio",
+    "name": "audio",
+    "provider": null,
+    "reason": null,
+    "seconds": 3.0,
     "state": "done",
     "text": "done · 3 s"
    },
    {
     "label": "Transcription",
+    "name": "transcricao",
+    "provider": null,
+    "reason": "já há legenda",
+    "seconds": null,
     "state": "skipped",
     "text": "skipped · já há legenda"
    },
    {
     "label": "Translation",
+    "name": "traducao",
+    "provider": "llm",
+    "reason": null,
+    "seconds": null,
     "state": "cached",
     "text": "from cache · llm"
    }
@@ -279,77 +355,134 @@
   "priority": false,
   "progress": 0.0,
   "stage": null,
+  "stage_name": null,
   "started_at": "<ts>",
   "status": "failed",
   "step": "Translate → pt-BR",
   "steps": [
    {
     "label": "Audio",
+    "name": "audio",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Metadata (TMDb)",
+    "name": "metadados",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Transcription",
+    "name": "transcricao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Reference subtitle",
+    "name": "referencia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Bridge subtitle",
+    "name": "ponte",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Sync",
+    "name": "sincronizacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "User bible",
+    "name": "biblia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Context (bible)",
+    "name": "contexto",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Name correction",
+    "name": "nomes",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Translation",
+    "name": "traducao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Formatting",
+    "name": "formatacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Write subtitle",
+    "name": "escrita",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Original transcript",
+    "name": "escrita_original",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Series memory",
+    "name": "memoria",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    }
@@ -385,77 +518,134 @@
   "priority": false,
   "progress": 0.0,
   "stage": null,
+  "stage_name": null,
   "started_at": null,
   "status": "queued",
   "step": "Translate → pt-BR",
   "steps": [
    {
     "label": "Audio",
+    "name": "audio",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Metadata (TMDb)",
+    "name": "metadados",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Transcription",
+    "name": "transcricao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Reference subtitle",
+    "name": "referencia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Bridge subtitle",
+    "name": "ponte",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Sync",
+    "name": "sincronizacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "User bible",
+    "name": "biblia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Context (bible)",
+    "name": "contexto",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Name correction",
+    "name": "nomes",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Translation",
+    "name": "traducao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Formatting",
+    "name": "formatacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Write subtitle",
+    "name": "escrita",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Original transcript",
+    "name": "escrita_original",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Series memory",
+    "name": "memoria",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    }
@@ -491,77 +681,134 @@
   "priority": true,
   "progress": 0.47,
   "stage": "Translation",
+  "stage_name": "traducao",
   "started_at": "<ts>",
   "status": "running",
   "step": "Translate → pt-BR",
   "steps": [
    {
     "label": "Audio",
+    "name": "audio",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Metadata (TMDb)",
+    "name": "metadados",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Transcription",
+    "name": "transcricao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Reference subtitle",
+    "name": "referencia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Bridge subtitle",
+    "name": "ponte",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Sync",
+    "name": "sincronizacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "User bible",
+    "name": "biblia",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Context (bible)",
+    "name": "contexto",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Name correction",
+    "name": "nomes",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "done",
     "text": "done"
    },
    {
     "label": "Translation",
+    "name": "traducao",
+    "provider": null,
+    "reason": "block 44 of 94",
+    "seconds": null,
     "state": "running",
     "text": "block 44 of 94"
    },
    {
     "label": "Formatting",
+    "name": "formatacao",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Write subtitle",
+    "name": "escrita",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Original transcript",
+    "name": "escrita_original",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    },
    {
     "label": "Series memory",
+    "name": "memoria",
+    "provider": null,
+    "reason": null,
+    "seconds": null,
     "state": "pending",
     "text": "waiting"
    }
@@ -607,12 +854,17 @@
   "priority": false,
   "progress": 1.0,
   "stage": null,
+  "stage_name": null,
   "started_at": "<ts>",
   "status": "done_with_warnings",
   "step": "Translate → pt-BR",
   "steps": [
    {
     "label": "Metadata (TMDb)",
+    "name": "metadados",
+    "provider": null,
+    "reason": "TMDb não achou",
+    "seconds": null,
     "state": "warning",
     "text": "with warning · TMDb não achou"
    }
@@ -668,6 +920,7 @@
     "folder": "<root>/movies/Oldboy (2003)",
     "id": 3,
     "job": {
+     "action": "traduzir",
      "id": 5,
      "label": "Translate → pt-BR",
      "language": "pt-BR",
@@ -749,6 +1002,7 @@
     "folder": "<root>/movies/Oldboy (2003)",
     "id": 3,
     "job": {
+     "action": "traduzir",
      "id": 5,
      "label": "Translate → pt-BR",
      "language": "pt-BR",
@@ -856,6 +1110,7 @@
     "folder": "<root>/movies/Oldboy (2003)",
     "id": 3,
     "job": {
+     "action": "traduzir",
      "id": 5,
      "label": "Translate → pt-BR",
      "language": "pt-BR",
@@ -1801,13 +2056,19 @@
   },
   "setup": [
    {
+    "code": "arr_incomplete",
     "detail": "Sonarr → Settings → General → API Key.",
     "href": "/settings/library/sonarr",
+    "params": {
+     "name": "Sonarr"
+    },
     "title": "Sonarr needs its address and API key"
    },
    {
+    "code": "no_tmdb",
     "detail": "Without metadata the original language and character names are guessed.",
     "href": "/settings/integrations",
+    "params": {},
     "title": "No TMDb key"
    }
   ],
@@ -1875,6 +2136,7 @@
       "episode": 1,
       "id": 3,
       "job": {
+       "action": "traduzir",
        "id": 6,
        "label": "Translate → pt-BR",
        "language": "pt-BR",
@@ -1996,13 +2258,19 @@
   ],
   "setup": [
    {
+    "code": "arr_incomplete",
     "detail": "Sonarr → Settings → General → API Key.",
     "href": "/settings/library/sonarr",
+    "params": {
+     "name": "Sonarr"
+    },
     "title": "Sonarr needs its address and API key"
    },
    {
+    "code": "no_tmdb",
     "detail": "Without metadata the original language and character names are guessed.",
     "href": "/settings/integrations",
+    "params": {},
     "title": "No TMDb key"
    }
   ]
@@ -2018,26 +2286,32 @@
  "system_status": {
   "about": [
    {
+    "id": "version",
     "label": "Version",
     "value": "<varies>"
    },
    {
+    "id": "python",
     "label": "Python",
     "value": "<varies>"
    },
    {
+    "id": "database",
     "label": "Database",
     "value": "<root>/c3parr.db"
    },
    {
+    "id": "queue",
     "label": "Queue",
     "value": "<root>/cache/fila.db"
    },
    {
+    "id": "cache",
     "label": "Cache",
     "value": "<root>/cache"
    },
    {
+    "id": "tmdb",
     "label": "TMDb",
     "value": "This product uses the TMDB API but is not endorsed or certified by TMDB."
    }
@@ -2045,42 +2319,49 @@
   "providers": [
    {
     "detail": "",
+    "id": "transcricao",
     "label": "Transcription (ASR)",
     "ok": true,
     "provider": "falso"
    },
    {
     "detail": "",
+    "id": "sincronizacao",
     "label": "Sync",
     "ok": true,
     "provider": "texto"
    },
    {
     "detail": "missing key: TMDB_READ_ACCESS_TOKEN",
+    "id": "metadados",
     "label": "Metadata",
     "ok": false,
     "provider": "tmdb"
    },
    {
     "detail": "",
+    "id": "contexto",
     "label": "Context (bible)",
     "ok": true,
     "provider": "llm"
    },
    {
     "detail": "",
+    "id": "traducao",
     "label": "Translation",
     "ok": true,
     "provider": "llm"
    },
    {
     "detail": "",
+    "id": "fonte_legenda",
     "label": "Subtitle source",
     "ok": true,
     "provider": "arquivo"
    },
    {
     "detail": "",
+    "id": "escrita_legenda",
     "label": "Subtitle format",
     "ok": true,
     "provider": "srt"
@@ -2117,7 +2398,7 @@
    },
    {
     "name": "RADARR_API_KEY",
-    "source": "Settings"
+    "source": "settings"
    },
    {
     "name": "SONARR_API_KEY",
@@ -2126,8 +2407,14 @@
   ],
   "warnings": [
    {
+    "code": "arr_outdated",
     "detail": "The latest is Radarr 6. c3parr is made for it; update Radarr to keep the library in sync.",
     "level": "warn",
+    "params": {
+     "found": 5,
+     "latest": 6,
+     "name": "Radarr"
+    },
     "title": "Radarr 5 is out of date"
    }
   ]

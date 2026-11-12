@@ -141,9 +141,9 @@ def test_upcoming_follows_the_run_order_and_a_task_can_jump_to_the_top(
     show = api.get(f"/shows/{ids['Supernatural']}").json()
     episode = show["seasons"][1]["episodes"][0]
     assert episode["name"] == DYING and episode["title"] == "In My Time of Dying"
-    assert episode["job"] == {"id": ids["queued"], "label": "Translate → pt-BR",
-                              "language": "pt-BR", "status": "queued", "progress": 0.0,
-                              "position": 3}  # fmt: skip
+    assert episode["job"] == {"id": ids["queued"], "action": "traduzir",
+                              "label": "Translate → pt-BR", "language": "pt-BR",
+                              "status": "queued", "progress": 0.0, "position": 3}  # fmt: skip
     oldboy = next(m for m in api.get("/movies").json()["rows"] if m["title"] == "Oldboy")
     assert oldboy["job"]["status"] == "running" and oldboy["job"]["position"] is None
 
@@ -152,13 +152,15 @@ def test_cancel_everything_waiting_and_run_the_failed_again(world: World, api: T
     queue, ids = world.queue, world.ids
     queue.submit("/m/other.mkv", "pt-BR")
     cancelled = api.post("/queue/cancel-queued").json()
-    assert cancelled == {"ok": True, "message": "2 task(s) cancelled."}
+    assert cancelled == {"ok": True, "message": "2 task(s) cancelled.",
+                         "code": "queue.cancelled", "params": {"n": 2}}  # fmt: skip
     assert queue.get(ids["queued"]).status == "cancelada"
     assert queue.get(ids["running"]).status == "processando"  # a que roda continua
     assert api.post("/queue/cancel-queued").json()["message"] == "Nothing is waiting in the queue."
 
     retried = api.post("/queue/retry-failed").json()
-    assert retried == {"ok": True, "message": "1 task(s) back in the queue."}
+    assert retried == {"ok": True, "message": "1 task(s) back in the queue.",
+                       "code": "queue.retried", "params": {"n": 1}}  # fmt: skip
     assert queue.get(ids["failed"]).status == "na_fila"
     assert api.post("/queue/retry-failed").json()["message"] == "No failed task to run again."
     counts = api.get("/queue").json()["counts"]

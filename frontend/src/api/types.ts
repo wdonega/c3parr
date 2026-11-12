@@ -3,6 +3,8 @@
 //   C3PARR_UPDATE_GOLDEN=1 uv run pytest tests/test_frontend_types.py
 
 export interface ActionResult {
+  code: string
+  params: Record<string, string | number>
   ok: boolean
   message: string
 }
@@ -136,6 +138,7 @@ export interface EpisodeRow {
 }
 
 export interface Fact {
+  id: string
   label: string
   value: string
 }
@@ -162,6 +165,7 @@ export interface JobDetail {
   finished_at: string | null
   item: JobItem | null
   stage: string | null
+  stage_name: string | null
   steps: Step[]
   pipeline: PipelineStep[]
   warnings: Degraded[]
@@ -192,6 +196,7 @@ export interface JobPage {
 
 export interface JobRef {
   id: number
+  action: string | null
   label: string
   language: string | null
   status: "queued" | "running"
@@ -297,6 +302,8 @@ export interface MovieRow {
 }
 
 export interface Notice {
+  code: string
+  params: Record<string, string | number>
   level: "warn" | "info"
   title: string
   detail: string
@@ -313,6 +320,7 @@ export interface PipelineStep {
 }
 
 export interface ProviderStatus {
+  id: string
   label: string
   provider: string
   ok: boolean
@@ -342,7 +350,7 @@ export interface Season {
 
 export interface SecretSource {
   name: string
-  source: string
+  source: "settings" | "environment" | ""
 }
 
 export interface SettingsOptions {
@@ -378,6 +386,8 @@ export interface SettingsView {
 }
 
 export interface SetupItem {
+  code: string
+  params: Record<string, string | number>
   title: string
   detail: string
   href: string
@@ -437,9 +447,13 @@ export interface Status {
 }
 
 export interface Step {
+  name: string
   label: string
   state: "done" | "cached" | "skipped" | "failed" | "warning" | "running" | "pending"
   text: string
+  seconds: number | null
+  provider: string | null
+  reason: string | null
 }
 
 export interface Sub {
@@ -459,6 +473,8 @@ export interface TaskRow {
 }
 
 export interface TestRecord {
+  code: string
+  params: Record<string, string | number>
   ok: boolean
   message: string
   at: string
@@ -466,6 +482,8 @@ export interface TestRecord {
 }
 
 export interface TestResult {
+  code: string
+  params: Record<string, string | number>
   ok: boolean
   message: string
   ms: number | null

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, ApiError, LIVE } from '../api/client'
 import type { EpisodeRow, Season } from '../api/types'
-import { plural } from '../lib/format'
+import { t, useLocale } from '../i18n'
 import { NotFound, PageHead } from '../shell/Shell'
 import { Bar, Loading, Switch } from '../ui/controls'
 import { Icon } from '../ui/Icon'
@@ -40,7 +40,7 @@ function SeasonBlock({
   const missing = episodes.filter(waiting)
   const keys = episodes.map(episodeKey)
   const allPicked = keys.length > 0 && keys.every((key) => picked.has(key))
-  const name = season.season === null ? 'Other files' : `Season ${season.season}`
+  const name = season.season === null ? t('show.other') : t('show.season', { n: season.season })
 
   return (
     <div>
@@ -55,23 +55,25 @@ function SeasonBlock({
           <Icon name={open ? 'down' : 'right'} className={open ? 'accent' : 'muted'} />
           <span style={{ fontWeight: 600 }}>{name}</span>
           <span className="muted" style={{ fontSize: 13 }}>
-            {done === episodes.length ? plural(episodes.length, 'episode') : `${done} of ${episodes.length} complete`}
+            {done === episodes.length
+              ? t('show.episodes', { n: episodes.length })
+              : t('show.doneOf', { done, total: episodes.length })}
           </span>
           {done < episodes.length && (
             <span style={{ flex: '0 1 140px' }}>
-              <Bar value={episodes.length ? done / episodes.length : 0} label={`${name} complete`} />
+              <Bar value={episodes.length ? done / episodes.length : 0} label={t('show.seasonComplete', { season: name })} />
             </span>
           )}
           <span className="spacer" />
           {queued > 0 && (
             <span className="accent" style={{ fontSize: 13 }}>
-              {queued} in the queue
+              {t('show.inQueue', { n: queued })}
             </span>
           )}
           {done === episodes.length && (
             <span className="ok" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
               <Icon name="check" size={14} />
-              Complete
+              {t('common.complete')}
             </span>
           )}
         </button>
@@ -83,7 +85,7 @@ function SeasonBlock({
             disabled={busy}
             onClick={() => onAdd(missing.map(episodeKey))}
           >
-            Add {missing.length} missing
+            {t('library.addMissing', { n: missing.length })}
           </button>
         )}
       </div>
@@ -96,14 +98,14 @@ function SeasonBlock({
               checked={allPicked}
               onChange={(event) => onPick(keys, event.target.checked)}
             />
-            Select every episode of this season
+            {t('show.selectSeason')}
           </label>
           {episodes.map((episode) => (
             <div key={episode.id} className="row">
               <input
                 type="checkbox"
                 className="check"
-                aria-label={`Select ${episode.title ?? episode.name}`}
+                aria-label={t('common.selectItem', { title: episode.title ?? episode.name })}
                 checked={picked.has(episodeKey(episode))}
                 onChange={(event) => onPick([episodeKey(episode)], event.target.checked)}
               />
@@ -124,7 +126,7 @@ function SeasonBlock({
                     disabled={busy}
                     onClick={() => onAdd([episodeKey(episode)])}
                   >
-                    Make {episode.missing.join(', ')}
+                    {t('library.make', { langs: episode.missing.join(', ') })}
                   </button>
                 )}
               </span>
@@ -137,6 +139,7 @@ function SeasonBlock({
 }
 
 export function Show() {
+  useLocale()
   const id = Number(useParams().id)
   const { add, monitor, sync } = useLibraryActions()
   const show = useQuery({
@@ -159,7 +162,7 @@ export function Show() {
   if (!data) {
     return (
       <>
-        <PageHead title="TV show" crumbs={{ label: 'TV Shows', to: '/tv' }} />
+        <PageHead title={t('show.title')} crumbs={{ label: t('nav.shows'), to: '/tv' }} />
         <Loading error={show.error} />
       </>
     )
@@ -186,14 +189,14 @@ export function Show() {
 
   return (
     <>
-      <PageHead title={data.title} crumbs={{ label: 'TV Shows', to: '/tv' }}>
+      <PageHead title={data.title} crumbs={{ label: t('nav.shows'), to: '/tv' }}>
         <button type="button" className="btn" disabled={sync.isPending} onClick={() => sync.mutate('sonarr')}>
           <Icon name="refresh" size={15} />
-          Sync with Sonarr
+          {t('library.sync', { arr: 'Sonarr' })}
         </button>
       </PageHead>
 
-      <section className="card pad" aria-label="Show" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
+      <section className="card pad" aria-label={t('show.section')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
         <Poster title={data.title} src={data.poster} size="small" />
         <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 10 }}>
@@ -207,14 +210,18 @@ export function Show() {
           </span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13 }}>
-              <span style={{ flex: 1, color: 'var(--text-2)' }}>Episodes with every subtitle</span>
+              <span style={{ flex: 1, color: 'var(--text-2)' }}>{t('overview.episodesAll')}</span>
               <span className="num" style={{ fontWeight: 600 }}>
                 {done} <span className="muted" style={{ fontWeight: 400 }}>/ {episodes.length}</span>
               </span>
             </div>
-            <Bar value={episodes.length ? done / episodes.length : 0} thick label="Episodes with every subtitle" />
+            <Bar value={episodes.length ? done / episodes.length : 0} thick label={t('overview.episodesAll')} />
             <span className="muted" style={{ fontSize: 12 }}>
-              {queued > 0 ? `${queued} in the queue` : missing > 0 ? `${missing} missing` : 'Nothing to do'}
+              {queued > 0
+                ? t('show.inQueue', { n: queued })
+                : missing > 0
+                  ? t('show.missing', { n: missing })
+                  : t('show.nothing')}
             </span>
           </div>
         </div>
@@ -222,12 +229,12 @@ export function Show() {
           <div className="switch-row">
             <Switch
               checked={data.monitored}
-              label="Monitored"
+              label={t('library.monitored')}
               onChange={(monitored) => monitor.mutate({ kind: 'series', id: data.id, monitored })}
             />
             <div>
-              <span className="name">Monitored</span>
-              <span className="hint muted">New episodes get their subtitles in the routine</span>
+              <span className="name">{t('library.monitored')}</span>
+              <span className="hint muted">{t('show.monitoredHint')}</span>
             </div>
           </div>
           {missing > 0 && (
@@ -238,13 +245,13 @@ export function Show() {
               onClick={() => add.mutate([`series:${data.id}`])}
             >
               <Icon name="plus" size={14} />
-              Add {missing} missing to the queue
+              {t('show.addMissing', { n: missing })}
             </button>
           )}
         </div>
       </section>
 
-      <section className="card rows" aria-label="Seasons" style={{ overflow: 'hidden' }}>
+      <section className="card rows" aria-label={t('show.seasons')} style={{ overflow: 'hidden' }}>
         {data.seasons.map((season) => (
           <SeasonBlock
             key={seasonKey(season)}
@@ -260,10 +267,10 @@ export function Show() {
       </section>
 
       {picked.size > 0 && (
-        <div className="bulk" role="region" aria-label="Selection">
-          <strong>{plural(picked.size, 'episode')} selected</strong>
+        <div className="bulk" role="region" aria-label={t('common.selection')}>
+          <strong>{t('show.selected', { n: picked.size })}</strong>
           <button type="button" className="btn small" onClick={() => setPicked(new Set())}>
-            Clear
+            {t('common.clear')}
           </button>
           <button
             type="button"
@@ -271,7 +278,7 @@ export function Show() {
             disabled={add.isPending}
             onClick={() => add.mutate([...picked], { onSuccess: () => setPicked(new Set()) })}
           >
-            Add to the queue
+            {t('common.addToQueue')}
           </button>
         </div>
       )}

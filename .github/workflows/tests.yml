@@ -75,4 +75,4 @@ jobs:
           uv sync --frozen --extra web
           uv run --no-sync playwright install --with-deps chromium
       - name: Browser tests
-        run: uv run --no-sync pytest -q -m e2e tests/e2e/test_spa.py
+        run: uv run --no-sync pytest -q -m e2e tests/e2e

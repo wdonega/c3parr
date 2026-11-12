@@ -2,6 +2,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import type { AppConfig, TestRecord, TestResult } from '../../api/types'
+import { decimal, languageName, maybe, rich, said, t } from '../../i18n'
 import { cleanBase, withBase } from '../../lib/base'
 import { timeAgo } from '../../lib/format'
 import { Field, Segmented, SwitchRow } from '../../ui/controls'
@@ -21,6 +22,7 @@ import type { Form } from './SettingsPage'
 
 type Tab = { form: Form }
 type BoolKey = { [K in keyof AppConfig]: AppConfig[K] extends boolean ? K : never }[keyof AppConfig]
+type SubtitleFlag = Exclude<BoolKey, 'monitor_new'>
 
 function Section({ title, about, state, children }: { title: string; about?: ReactNode; state?: ReactNode; children: ReactNode }) {
   return (
@@ -84,12 +86,12 @@ function Secret({ form, name, label, hint, optional }: Tab & { name: string; lab
   const source = form.view.secrets[name]
   const removing = typed === null
   const placeholder = removing
-    ? 'Will be removed when you save'
+    ? t('secret.removing')
     : source === 'settings'
-      ? 'Saved. Type to replace it'
+      ? t('secret.saved')
       : source === 'environment'
-        ? 'From the environment (.env). Type to use another'
-        : 'Not set'
+        ? t('secret.environment')
+        : t('secret.notSet')
   return (
     <Field label={label} hint={hint} edited={typed !== undefined} optional={optional}>
       <span className="input-row">
@@ -103,11 +105,11 @@ function Secret({ form, name, label, hint, optional }: Tab & { name: string; lab
           onChange={(event) => form.setSecret(name, event.target.value)}
         />
         <button type="button" className="btn" onClick={() => setShown(!shown)}>
-          {shown ? 'Hide' : 'Show'}
+          {shown ? t('secret.hide') : t('secret.show')}
         </button>
         {source === 'settings' && (
           <button type="button" className="btn" onClick={() => form.setSecret(name, removing ? '' : null)}>
-            {removing ? 'Keep' : 'Remove'}
+            {removing ? t('secret.keep') : t('secret.remove')}
           </button>
         )}
       </span>
@@ -134,28 +136,28 @@ function TestRow({ form, target, extra }: Tab & { target: string; extra?: ReactN
   const kept: TestRecord | undefined = form.view.tests[target]
   const busy = form.testing === target
   const dirty = Object.keys(form.draft.changes).length + Object.keys(form.draft.secrets).length > 0
-  let result: ReactNode = <span className="muted">Not tested yet</span>
+  let result: ReactNode = <span className="muted">{t('test.notYet')}</span>
   if (now) {
     result = (
       <span className={now.ok ? 'ok' : 'bad'} role="status">
-        {now.message}
-        {now.ok && now.ms !== null ? ` Answered in ${(now.ms / 1000).toFixed(1)} s.` : ''}
+        {said(now)}
+        {now.ok && now.ms !== null ? t('test.answered', { seconds: decimal(now.ms / 1000) }) : ''}
       </span>
     )
   } else if (kept && !dirty) {
     result = (
       <span className={kept.ok ? 'ok' : 'bad'}>
-        {kept.message} <span className="muted">Tested {timeAgo(kept.at)}.</span>
+        {said(kept)} <span className="muted">{t('test.tested', { when: timeAgo(kept.at) })}</span>
       </span>
     )
   } else if (dirty) {
-    result = <span className="muted">Not tested with what is on screen</span>
+    result = <span className="muted">{t('test.stale')}</span>
   }
   return (
     <div className="test-row">
       <button type="button" className="btn" disabled={busy} onClick={() => form.test(target)}>
         {busy && <Icon name="spinner" size={14} className="spin" />}
-        Test connection
+        {t('test.button')}
       </button>
       {result}
       {extra}
@@ -212,7 +214,6 @@ function Tags({ label, value, onChange, edited, hint }: { label: string; value: 
 
 export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
   const name = kind === 'radarr' ? 'Radarr' : 'Sonarr'
-  const items = kind === 'radarr' ? 'movies' : 'series'
   const edited = (field: string) => form.edited(`${kind}.${field}`)
   const mappings = form.arr(kind, 'path_mappings')
   const setMappings = (next: [string, string][]) => form.setArr(kind, 'path_mappings', next)
@@ -222,7 +223,7 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
 
   return (
     <>
-      <nav className="chips" aria-label="Radarr or Sonarr">
+      <nav className="chips" aria-label={t('lib.which')}>
         {(['radarr', 'sonarr'] as const).map((which) => (
           <NavLink key={which} to={`/settings/library/${which}`} className="chip" aria-pressed={which === kind}>
             <span className={`dot ${enabled(which) ? 'ok' : 'muted'}`} />
@@ -232,28 +233,32 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
       </nav>
 
       <Section
-        title={`Connect ${name}`}
-        about={`c3parr reads its ${items} from ${name}, like Bazarr does: ${name} keeps the metadata and the file names in order. It syncs every ${humanMinutes(form.value('sync_interval_minutes'))} and right after you save.`}
+        title={t('lib.connect', { name })}
+        about={t(`lib.about.${kind}`, { name, interval: humanMinutes(form.value('sync_interval_minutes')) })}
         state={
-          enabled(kind) ? <StateLine tone="ok">In use</StateLine> : <StateLine tone="muted">Not in use</StateLine>
+          enabled(kind) ? (
+            <StateLine tone="ok">{t('lib.inUse')}</StateLine>
+          ) : (
+            <StateLine tone="muted">{t('lib.notInUse')}</StateLine>
+          )
         }
       >
         <SwitchRow
-          name={`Use ${name}`}
+          name={t('lib.use', { name })}
           checked={form.arr(kind, 'enabled')}
           onChange={(checked) => form.setArr(kind, 'enabled', checked)}
         />
         <Text
-          label="Address"
+          label={t('lib.address')}
           value={form.arr(kind, 'host')}
           edited={edited('host')}
           code
-          hint={`Hostname or IP (${kind}, 192.168.1.10), or the full URL (https://${kind}.example.com)`}
+          hint={t('lib.addressHint', { kind })}
           onChange={(value) => form.setArr(kind, 'host', value)}
         />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
           <Text
-            label="Port"
+            label={t('lib.port')}
             type="number"
             min={1}
             short
@@ -262,14 +267,14 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
             onChange={(value) => form.setArr(kind, 'port', value === '' ? null : Number(value))}
           />
           <Text
-            label="Base URL"
+            label={t('lib.baseUrl')}
             optional
             code
             value={form.arr(kind, 'base_url')}
             edited={edited('base_url')}
             onChange={(value) => form.setArr(kind, 'base_url', value)}
           />
-          <Field label="HTTP timeout" edited={edited('timeout_s')}>
+          <Field label={t('lib.timeout')} edited={edited('timeout_s')}>
             <select
               className="input short"
               value={form.arr(kind, 'timeout_s')}
@@ -283,35 +288,35 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
             </select>
           </Field>
         </div>
-        <Secret form={form} name={key} label="API key" hint={`In ${name}: Settings → General → API Key`} />
+        <Secret form={form} name={key} label={t('lib.apiKey')} hint={t('lib.apiKeyHint', { name })} />
         <SwitchRow
-          name="Use HTTPS"
-          help="Ignored when the address is a full URL."
+          name={t('lib.https')}
+          help={t('lib.httpsHint')}
           checked={form.arr(kind, 'ssl')}
           onChange={(checked) => form.setArr(kind, 'ssl', checked)}
         />
         <TestRow form={form} target={kind} />
       </Section>
 
-      <Section title="What comes in" about={`Filters on what c3parr takes from ${name}.`}>
+      <Section title={t('lib.comesIn')} about={t('lib.comesInAbout', { name })}>
         <SwitchRow
-          name={`Only monitored ${kind === 'radarr' ? 'movies' : 'series and episodes'}`}
-          help={`What is not monitored in ${name} stays out of c3parr.`}
+          name={t(`lib.onlyMonitored.${kind}`)}
+          help={t('lib.onlyMonitoredHint', { name })}
           checked={form.arr(kind, 'only_monitored')}
           onChange={(checked) => form.setArr(kind, 'only_monitored', checked)}
         />
         <Tags
           key={kind}
-          label="Excluded tags"
+          label={t('lib.excludedTags')}
           value={form.arr(kind, 'excluded_tags')}
           edited={edited('excluded_tags')}
-          hint={`Comma separated, as written in ${name} (case sensitive). What has one of them stays out.`}
+          hint={t('lib.excludedTagsHint', { name })}
           onChange={(value) => form.setArr(kind, 'excluded_tags', value)}
         />
         {kind === 'sonarr' && (
           <>
             <div className="field">
-              <span className="label">Excluded series types</span>
+              <span className="label">{t('lib.excludedTypes')}</span>
               <div className="chips">
                 {form.view.options.series_types.map((type) => (
                   <button
@@ -333,8 +338,8 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
               </div>
             </div>
             <SwitchRow
-              name="Leave season zero out"
-              help="Specials and extras."
+              name={t('lib.seasonZero')}
+              help={t('lib.seasonZeroHint')}
               checked={form.arr('sonarr', 'exclude_season_zero')}
               onChange={(checked) => form.setArr('sonarr', 'exclude_season_zero', checked)}
             />
@@ -343,30 +348,30 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
       </Section>
 
       <Section
-        title="Path mappings"
-        about={`Only when ${name} and c3parr see the same files under different paths (other host, other container volume): the start of the ${name} path is replaced by the c3parr one. If both see the same paths, leave it empty.`}
+        title={t('lib.mappings')}
+        about={t('lib.mappingsAbout', { name })}
       >
         {mappings.map(([remote, local], index) => (
           <div key={index} className="map-row">
             <input
               className="input code"
-              aria-label={`${name} path ${index + 1}`}
-              placeholder={`${name} path`}
+              aria-label={t('lib.remotePathN', { name, n: index + 1 })}
+              placeholder={t('lib.remotePath', { name })}
               value={remote}
               onChange={(event) => setMappings(mappings.map((pair, i) => (i === index ? [event.target.value, pair[1]] : pair)))}
             />
             <Icon name="right" className="muted" />
             <input
               className="input code"
-              aria-label={`c3parr path ${index + 1}`}
-              placeholder="c3parr path"
+              aria-label={t('lib.localPathN', { n: index + 1 })}
+              placeholder={t('lib.localPath')}
               value={local}
               onChange={(event) => setMappings(mappings.map((pair, i) => (i === index ? [pair[0], event.target.value] : pair)))}
             />
             <button
               type="button"
               className="icon-btn outlined"
-              aria-label={`Remove mapping ${index + 1}`}
+              aria-label={t('lib.removeMapping', { n: index + 1 })}
               onClick={() => setMappings(mappings.filter((_, i) => i !== index))}
             >
               <Icon name="trash" size={14} />
@@ -376,19 +381,14 @@ export function LibraryTab({ form, kind }: Tab & { kind: ArrKind }) {
         <div>
           <button type="button" className="btn" onClick={() => setMappings([...mappings, ['', '']])}>
             <Icon name="plus" size={14} />
-            Add a mapping
+            {t('lib.addMapping')}
           </button>
         </div>
       </Section>
 
-      <Section title="Radarr and Sonarr" about="These two are shared by both.">
-        <Flag
-          form={form}
-          name="monitor_new"
-          label="Monitor new movies and shows"
-          help="What shows up in Radarr or Sonarr gets its missing subtitles in the routine."
-        />
-        <Minutes form={form} name="sync_interval_minutes" label="Sync every (minutes)" min={5} />
+      <Section title={t('lib.both')} about={t('lib.bothAbout')}>
+        <Flag form={form} name="monitor_new" label={t('lib.monitorNew')} help={t('lib.monitorNewHint')} />
+        <Minutes form={form} name="sync_interval_minutes" label={t('lib.syncEvery')} min={5} />
       </Section>
     </>
   )
@@ -409,23 +409,23 @@ export function IntegrationsTab({ form }: Tab) {
   return (
     <>
       <Section
-        title="Translation model"
-        about="Translates the subtitles and builds the bible: characters, gender, formality. A cloud provider receives the subtitle text."
+        title={t('int.llm')}
+        about={t('int.llmAbout')}
         state={
           llmReady ? (
-            <StateLine tone="ok">Configured</StateLine>
+            <StateLine tone="ok">{t('int.configured')}</StateLine>
           ) : (
-            <StateLine tone="warn">{custom ? 'Needs the server URL and a model' : 'Needs an API key'}</StateLine>
+            <StateLine tone="warn">{custom ? t('int.needsUrl') : t('int.needsKey')}</StateLine>
           )
         }
       >
         <Field
-          label="Provider"
+          label={t('int.provider')}
           edited={form.edited('llm_provider')}
           hint={
             provider.site && (
               <a href={provider.site} target="_blank" rel="noopener">
-                {custom ? 'No server yet? Ollama runs one locally' : `Get an API key at ${new URL(provider.site).host}`}
+                {custom ? t('int.noServer') : t('int.getKey', { host: new URL(provider.site).host })}
               </a>
             )
           }
@@ -437,64 +437,73 @@ export function IntegrationsTab({ form }: Tab) {
           >
             {view.options.llm_providers.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.label}
+                {maybe(`llm.${option.id}`, option.label)}
               </option>
             ))}
           </select>
         </Field>
         {custom && (
           <Text
-            label="Server URL"
+            label={t('int.serverUrl')}
             type="url"
             code
             value={llmUrlShown(draft, view)}
             edited={form.edited('llm_base_url')}
-            hint={`OpenAI-compatible, ends in /v1${view.shown.llm_url_from_env && !form.edited('llm_base_url') ? '. This one comes from the environment (.env)' : ''}`}
+            hint={
+              t('int.urlHint') +
+              (view.shown.llm_url_from_env && !form.edited('llm_base_url') ? `. ${t('int.fromEnv')}` : '')
+            }
             onChange={(value) => form.update((d) => setLlmUrl(d, view, value))}
           />
         )}
         <Text
-          label="Model"
+          label={t('int.model')}
           code
           value={llmModelShown(draft, view)}
           edited={form.edited('llm_model')}
           hint={
             form.value('llm_model')
-              ? `The provider default is ${provider.default_model || 'not set'}`
+              ? t('int.modelDefaultIs', { model: provider.default_model || t('int.notSet') })
               : custom && view.shown.llm_model_from_env
-                ? 'This one comes from the environment (.env)'
-                : 'The provider default. It follows the default if a new version changes it'
+                ? t('int.fromEnv')
+                : t('int.modelDefault')
           }
           onChange={(value) => form.update((d) => setLlmModel(d, view, value))}
         />
         {provider.effort && (
-          <Field label="Reasoning effort" edited={form.edited('llm_effort')} hint="Low costs less and translated the same in our test.">
+          <Field label={t('int.effort')} edited={form.edited('llm_effort')} hint={t('int.effortHint')}>
             <Segmented
-              label="Reasoning effort"
+              label={t('int.effort')}
               options={[
-                { value: 'low', label: 'Low' },
-                { value: 'medium', label: 'Medium' },
+                { value: 'low', label: t('int.effort.low') },
+                { value: 'medium', label: t('int.effort.medium') },
               ]}
               value={form.value('llm_effort')}
               onChange={(value) => form.set('llm_effort', value)}
             />
           </Field>
         )}
-        <Secret form={form} name={provider.key} label="API key" optional={custom} />
+        <Secret form={form} name={provider.key} label={t('lib.apiKey')} optional={custom} />
         <TestRow form={form} target="llm" />
       </Section>
 
       <Section
-        title="Transcription"
-        about="Turns the audio into text when there is no usable subtitle. It can run here or on a separate server: another container, a machine with a GPU."
-        state={remote ? <StateLine tone="ok">On a separate server</StateLine> : <StateLine tone="muted">On this machine</StateLine>}
+        title={t('int.asr')}
+        about={t('int.asrAbout')}
+        state={
+          remote ? (
+            <StateLine tone="ok">{t('int.asrRemote')}</StateLine>
+          ) : (
+            <StateLine tone="muted">{t('int.asrLocal')}</StateLine>
+          )
+        }
       >
-        <Field label="Where it runs" edited={form.edited('asr_mode')}>
+        <Field label={t('int.where')} edited={form.edited('asr_mode')}>
           <Segmented
-            label="Where it runs"
+            label={t('int.where')}
             options={[
-              { value: 'local', label: 'This machine' },
-              { value: 'openai', label: 'OpenAI-compatible server' },
+              { value: 'local', label: t('int.mode.local') },
+              { value: 'openai', label: t('int.mode.openai') },
               { value: 'asr-webservice', label: 'whisper-asr-webservice' },
             ]}
             value={mode}
@@ -502,21 +511,15 @@ export function IntegrationsTab({ form }: Tab) {
           />
         </Field>
         <p className="hint muted">
-          {mode === 'local' && (
-            <>
-              Uses the engine picked in <Link to="/settings/engines">Engines</Link>. On the CPU it takes about 10 min or
-              more per hour of video; with a GPU build of whisper.cpp, 1 to 2 min.
-            </>
-          )}
-          {mode === 'openai' &&
-            'Any server with /v1/audio/transcriptions: whisper.cpp (whisper-server), speaches or LocalAI. The URL ends in /v1.'}
-          {mode === 'asr-webservice' &&
-            'The onerahmet/openai-whisper-asr-webservice image. If Bazarr already uses one, point to the same server. The URL is the server root, like http://whisper:9000.'}
+          {mode === 'local' &&
+            rich('int.localHint', { engines: (text) => <Link to="/settings/engines">{text}</Link> })}
+          {mode === 'openai' && t('int.openaiHint')}
+          {mode === 'asr-webservice' && t('int.webserviceHint')}
         </p>
         {remote && (
           <>
             <Text
-              label="Server URL"
+              label={t('int.serverUrl')}
               type="url"
               code
               value={form.value('asr_url')}
@@ -525,7 +528,7 @@ export function IntegrationsTab({ form }: Tab) {
             />
             {mode === 'openai' && (
               <Text
-                label="Model"
+                label={t('int.model')}
                 code
                 optional
                 placeholder="whisper-1"
@@ -534,7 +537,7 @@ export function IntegrationsTab({ form }: Tab) {
                 onChange={(value) => form.set('asr_model', value)}
               />
             )}
-            <Secret form={form} name="C3PARR_ASR_API_KEY" label="API key" optional />
+            <Secret form={form} name="C3PARR_ASR_API_KEY" label={t('lib.apiKey')} optional />
           </>
         )}
         <TestRow form={form} target="asr" />
@@ -542,23 +545,23 @@ export function IntegrationsTab({ form }: Tab) {
 
       <Section
         title="TMDb"
-        about="Used in the first step of every item: the original language, the cast (right names in the translation) and season and episode numbers."
+        about={t('int.tmdbAbout')}
         state={
           tmdbSource !== '' ? (
-            <StateLine tone="ok">Using your token</StateLine>
+            <StateLine tone="ok">{t('int.tmdbYours')}</StateLine>
           ) : view.options.tmdb_builtin ? (
-            <StateLine tone="ok">Using the key that ships with c3parr</StateLine>
+            <StateLine tone="ok">{t('int.tmdbBuiltin')}</StateLine>
           ) : (
-            <StateLine tone="warn">Needs a read access token</StateLine>
+            <StateLine tone="warn">{t('int.tmdbNeeds')}</StateLine>
           )
         }
       >
         <Secret
           form={form}
           name="TMDB_READ_ACCESS_TOKEN"
-          label="Read access token"
+          label={t('int.tmdbToken')}
           optional={view.options.tmdb_builtin}
-          hint="Yours comes from themoviedb.org, under Settings → API."
+          hint={t('int.tmdbHint')}
         />
         <TestRow form={form} target="tmdb" />
         <p className="hint muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -574,7 +577,7 @@ export function IntegrationsTab({ form }: Tab) {
 
 function LanguageList({ form, name, label }: Tab & { name: 'target_languages' | 'fallback_languages'; label: string }) {
   const chosen = form.value(name)
-  const names = new Map(form.view.options.languages.map((l) => [l.code, l.name]))
+  const names = new Map(form.view.options.languages.map((l) => [l.code, languageName(l.code, l.name)]))
   const free = form.view.options.languages.filter((l) => !chosen.includes(l.code))
   const move = (code: string) => form.set(name, [code, ...chosen.filter((c) => c !== code)])
   return (
@@ -582,35 +585,35 @@ function LanguageList({ form, name, label }: Tab & { name: 'target_languages' | 
       <div className="chips" role="list" aria-label={label}>
         {chosen.map((code, index) => (
           <span key={code} className="lang-chip" role="listitem" data-code={code}>
-            {index === 0 && <span className="edited">first</span>}
+            {index === 0 && <span className="edited">{t('lang.first')}</span>}
             {names.get(code) ?? code} <span className="mono muted">{code}</span>
             {index > 0 && (
-              <button type="button" className="icon-btn" aria-label={`Make ${code} the first`} onClick={() => move(code)}>
+              <button type="button" className="icon-btn" aria-label={t('lang.makeFirst', { code })} onClick={() => move(code)}>
                 <Icon name="up" size={13} />
               </button>
             )}
             <button
               type="button"
               className="icon-btn"
-              aria-label={`Remove ${code}`}
+              aria-label={t('lang.remove', { code })}
               onClick={() => form.set(name, chosen.filter((c) => c !== code))}
             >
               <Icon name="close" size={13} />
             </button>
           </span>
         ))}
-        {chosen.length === 0 && <span className="muted">None chosen.</span>}
+        {chosen.length === 0 && <span className="muted">{t('lang.none')}</span>}
       </div>
-      <Field label="Add a language" edited={form.edited(name)}>
+      <Field label={t('lang.add')} edited={form.edited(name)}>
         <select
           className="input"
           value=""
           onChange={(event) => event.target.value && form.set(name, [...chosen, event.target.value])}
         >
-          <option value="">Pick one to add…</option>
+          <option value="">{t('lang.pick')}</option>
           {free.map((language) => (
             <option key={language.code} value={language.code}>
-              {language.name} ({language.code})
+              {languageName(language.code, language.name)} ({language.code})
             </option>
           ))}
         </select>
@@ -623,17 +626,19 @@ export function LanguagesTab({ form }: Tab) {
   return (
     <>
       <Section
-        title="Target languages"
-        about="Every monitored item should end up with a subtitle in each of these. The first one is the main language."
-        state={form.value('target_languages').length === 0 && <StateLine tone="warn">Pick at least one</StateLine>}
+        title={t('lang.targets')}
+        about={t('lang.targetsAbout')}
+        state={
+          form.value('target_languages').length === 0 && <StateLine tone="warn">{t('lang.pickOne')}</StateLine>
+        }
       >
-        <LanguageList form={form} name="target_languages" label="Target languages" />
+        <LanguageList form={form} name="target_languages" label={t('lang.targets')} />
       </Section>
       <Section
-        title="Fallback languages"
-        about="When there is no subtitle in the original language, the main subtitle comes from the first of these that exists, inside the video or next to it."
+        title={t('lang.fallbacks')}
+        about={t('lang.fallbacksAbout')}
       >
-        <LanguageList form={form} name="fallback_languages" label="Fallback languages" />
+        <LanguageList form={form} name="fallback_languages" label={t('lang.fallbacks')} />
       </Section>
     </>
   )
@@ -644,19 +649,17 @@ export function LanguagesTab({ form }: Tab) {
 export function EnginesTab({ form }: Tab) {
   const chosen = form.value('components')
   return (
-    <Section
-      title="Engines"
-      about="What runs inside c3parr for each job. Transcription on a separate server is picked in Integrations."
-    >
+    <Section title={t('eng.title')} about={t('eng.about')}>
       {form.view.options.engines.map((engine) => {
         const selected = chosen[engine.id] ?? engine.selected
         const known = engine.providers.some((p) => p.id === selected)
+        const picked = engine.providers.find((p) => p.id === selected)
         return (
           <Field
             key={engine.id}
-            label={engine.label}
+            label={maybe(`engine.${engine.id}`, engine.label)}
             edited={form.edited('components')}
-            hint={engine.providers.find((p) => p.id === selected)?.description}
+            hint={picked && maybe(`provider.${picked.id}`, picked.description)}
           >
             <select
               className="input"
@@ -682,55 +685,66 @@ export function EnginesTab({ form }: Tab) {
 export function SubtitlesTab({ form }: Tab) {
   const syncs = form.value('sync_new_external')
   const transcribes = form.value('asr_enabled')
+  // `off` vem para as opções que dependem de outra: ficam recuadas e apagadas quando ela está desligada
+  const flag = (name: SubtitleFlag, off?: boolean) => (
+    <Flag
+      form={form}
+      name={name}
+      label={t(`subs.${name}`)}
+      help={t(`subs.${name}.help`)}
+      child={off !== undefined}
+      off={off}
+    />
+  )
   return (
     <>
-      <Section title="Sources" about="Which subtitles count, and which ones settle a language so c3parr makes none for it.">
-        <Flag form={form} name="use_embedded" label="Use embedded subtitles" help="Text subtitles inside the video can become the main one. Image subtitles (PGS, VobSub) need OCR and are skipped." />
-        <Flag form={form} name="embedded_resolves" label="An embedded subtitle covers its language" help="No subtitle of ours is made for a language the video already has." />
-        <Flag form={form} name="external_resolves" label="A subtitle from another source covers its language" help="Subtitles next to the video (Bazarr, human) count. Ours is named <video>.<lang>.c3parr.srt." />
-        <Flag form={form} name="forced_resolves" label="Forced subtitles cover their language" help="Forced subtitles only have signs and foreign lines. Off by default." />
+      <Section title={t('subs.sources')} about={t('subs.sourcesAbout')}>
+        {flag('use_embedded')}
+        {flag('embedded_resolves')}
+        {flag('external_resolves')}
+        {flag('forced_resolves')}
       </Section>
 
-      <Section title="When a new subtitle shows up" about="What to do when Bazarr, or you, put a subtitle next to a video.">
-        <Flag form={form} name="sync_new_external" label="Sync it" help="Fixes its timing against the audio, or the main subtitle." />
-        <Flag form={form} name="fix_external_in_place" label="Write the fixed timing into the file itself" help="Keeps a copy as <file>.orig.c3parr." child off={!syncs} />
-        <Flag form={form} name="delete_ours_on_human" label="Delete ours in the same language" help="Off: both tracks stay." />
-        <Flag form={form} name="new_external_becomes_main" label="It becomes the main subtitle when it is a better source" help="Human or embedded is better than generated from the audio." />
-        <Field label="When the main subtitle changes" edited={form.edited('derived_on_main_change')}>
+      <Section title={t('subs.new')} about={t('subs.newAbout')}>
+        {flag('sync_new_external')}
+        {flag('fix_external_in_place', !syncs)}
+        {flag('delete_ours_on_human')}
+        {flag('new_external_becomes_main')}
+        <Field label={t('subs.mainChange')} edited={form.edited('derived_on_main_change')}>
           <select
             className="input"
             value={form.value('derived_on_main_change')}
             onChange={(event) => form.set('derived_on_main_change', event.target.value as AppConfig['derived_on_main_change'])}
           >
-            <option value="regenerate">Make the translations again</option>
-            <option value="mark">Mark them as outdated</option>
-            <option value="keep">Keep them</option>
+            <option value="regenerate">{t('subs.mainChange.regenerate')}</option>
+            <option value="mark">{t('subs.mainChange.mark')}</option>
+            <option value="keep">{t('subs.mainChange.keep')}</option>
           </select>
         </Field>
       </Section>
 
-      <Section title="Transcription and translation">
-        <Flag form={form} name="asr_enabled" label="Transcribe the audio when there is no subtitle" help="Without this, items with no usable subtitle are left alone." />
-        <Flag form={form} name="asr_always" label="Transcribe even when a subtitle exists" help="More context for the translation, and much slower." child off={!transcribes} />
-        <Field label="Mark lines in another language" edited={form.edited('foreign_tag')} hint="Like [in Arabic], when a character switches language.">
+      <Section title={t('subs.asr')}>
+        {flag('asr_enabled')}
+        {flag('asr_always', !transcribes)}
+        <Field label={t('subs.foreign')} edited={form.edited('foreign_tag')} hint={t('subs.foreignHint')}>
           <select
             className="input"
             value={form.value('foreign_tag')}
             onChange={(event) => form.set('foreign_tag', event.target.value as AppConfig['foreign_tag'])}
           >
-            <option value="first">On the first line of each stretch</option>
-            <option value="every">On every line</option>
-            <option value="off">Never</option>
+            <option value="first">{t('subs.foreign.first')}</option>
+            <option value="every">{t('subs.foreign.every')}</option>
+            <option value="off">{t('subs.foreign.off')}</option>
           </select>
         </Field>
       </Section>
 
       <Section
-        title="Automation"
-        about="A monitored file waits before the routine works on it, so a download or copy can finish first. Radarr and Sonarr imports and your own requests skip the wait and go ahead of the routine."
+        title={t('subs.automation')}
+        about={t('subs.automationAbout')}
       >
-        <Minutes form={form} name="wait_minutes" label="Wait time (minutes)" min={0} />
-        <Minutes form={form} name="search_interval_minutes" label="Process the library every (minutes)" min={5} />
+        <Minutes form={form} name="wait_minutes" label={t('subs.wait')} min={0} />
+        <Minutes form={form} name="search_interval_minutes" label={t('subs.searchEvery')} min={5} />
       </Section>
     </>
   )
@@ -745,50 +759,44 @@ export function GeneralTab({ form }: Tab) {
   const where = `${window.location.origin}${base}/`
   return (
     <Section
-      title="Host"
-      about="How c3parr is reached. This is what lets it sit behind a reverse proxy, at the root of a name or under a path."
+      title={t('gen.host')}
+      about={t('gen.about')}
       state={
         <StateLine tone="muted">
-          Listening on {listening.address}:{listening.port}
+          {t('gen.listening', { address: `${listening.address}:${listening.port}` })}
         </StateLine>
       }
     >
-      <Field
-        label="Bind address and port"
-        hint="Set by C3PARR_HOST and C3PARR_PORT when c3parr starts. In Docker, the compose file decides the port the network sees."
-      >
+      <Field label={t('gen.bind')} hint={t('gen.bindHint')}>
         <input className="input code short" value={`${listening.address}:${listening.port}`} readOnly />
       </Field>
       <Text
-        label="URL base"
+        label={t('gen.urlBase')}
         optional
         code
         placeholder="/c3parr"
         value={typed}
         edited={form.edited('url_base')}
-        hint={
-          <>
-            For a reverse proxy that serves c3parr under a path. Empty serves it at the root. It takes effect when you
-            save, with no restart, and c3parr keeps answering without it too. With this, the address is{' '}
-            <span className="mono">{where}</span>
-            {!typed && listening.url_base_from_env ? ' (from C3PARR_URL_BASE)' : ''}.
-          </>
-        }
+        hint={rich(
+          'gen.urlBaseHint',
+          { mono: (text) => <span className="mono">{text}</span> },
+          {
+            where,
+            from: !typed && listening.url_base_from_env ? t('gen.fromEnv', { name: 'C3PARR_URL_BASE' }) : '',
+          },
+        )}
         onChange={(value) => form.set('url_base', value)}
       />
       <Tags
-        label="Allowed hosts"
+        label={t('gen.allowed')}
         value={form.value('allowed_hosts')}
         edited={form.edited('allowed_hosts')}
         hint={
           <>
-            Comma separated names and addresses c3parr answers to, like c3parr.example.com, 192.168.0.100. Behind a
-            reverse proxy, use the name the proxy sends in the Host header. Leave empty to allow all. If a wrong name
-            locks you out, open c3parr through localhost and fix it here: localhost always works.
+            {t('gen.allowedHint')}
             {locksOut(form.value('allowed_hosts'), window.location.hostname) && (
               <span className="warn" role="alert" style={{ display: 'block', marginTop: 6 }}>
-                You are using {window.location.hostname} now, and it is not in this list. Saving like this stops c3parr
-                from answering at this address.
+                {t('gen.lockout', { host: window.location.hostname })}
               </span>
             )}
           </>
@@ -796,10 +804,10 @@ export function GeneralTab({ form }: Tab) {
         onChange={(value) => form.set('allowed_hosts', value)}
       />
       <Text
-        label="Instance name"
+        label={t('gen.name')}
         value={form.value('instance_name')}
         edited={form.edited('instance_name')}
-        hint="Shown in the browser tab and as the name of the installed app."
+        hint={t('gen.nameHint')}
         onChange={(value) => form.set('instance_name', value)}
       />
     </Section>

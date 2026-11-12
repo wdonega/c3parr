@@ -50,20 +50,29 @@ class In(BaseModel):
 # --- comuns ---
 
 
-class ActionResult(Out):
+class Coded(Out):
+    """Um texto que o servidor escreve em inglês e a interface reescreve no idioma dela."""
+
+    code: str = ""
+    """Qual frase é (`queue.cancelled`). Vazio: o texto veio de fora e fica como está."""
+    params: dict[str, str | int | float] = {}
+    """Os valores que entram na frase. `x_key` diz que `x` é um nome que a interface traduz."""
+
+
+class ActionResult(Coded):
     """Resultado de uma ação, com a frase para mostrar ao usuário."""
 
     ok: bool
     message: str
 
 
-class SetupItem(Out):
+class SetupItem(Coded):
     title: str
     detail: str
     href: str
 
 
-class Notice(Out):
+class Notice(Coded):
     level: Literal["warn", "info"]
     title: str
     detail: str
@@ -78,6 +87,8 @@ class JobRef(Out):
     """A tarefa ativa de um item da biblioteca."""
 
     id: int
+    action: str | None = None
+    """Qual passo é (`traduzir`, `asr`…): a interface escreve o nome dele no idioma dela."""
     label: str
     language: str | None = None
     """O idioma que a tarefa está fazendo; `None` quando o passo não é de um idioma."""
@@ -125,9 +136,16 @@ class JobRow(Out):
 
 
 class Step(Out):
+    name: str = ""
+    """Qual etapa é (`traducao`, `sincronizacao`…)."""
     label: str
     state: StepState
     text: str
+    """O estado em inglês, com quanto levou, o motor e o motivo: é o que `seconds`, `provider`
+    e `reason` dizem em separado."""
+    seconds: float | None = None
+    provider: str | None = None
+    reason: str | None = None
 
 
 class Degraded(Out):
@@ -161,6 +179,8 @@ PIPELINE_STATE: dict[str, Literal["done", "not_found", "failed"]] = {
 class JobDetail(JobRow):
     stage: str | None
     """O que a tarefa está fazendo agora (Translation, Sync…), enquanto roda."""
+    stage_name: str | None = None
+    """A mesma etapa pelo nome (`traducao`), para a interface traduzir."""
     steps: list[Step]
     pipeline: list[PipelineStep]
     warnings: list[Degraded]
@@ -409,7 +429,7 @@ class SettingsShown(Out):
     llm_url_from_env: bool
 
 
-class TestRecord(Out):
+class TestRecord(Coded):
     """O último teste de conexão de um alvo, enquanto o que ele testou não mudar."""
 
     ok: bool
@@ -487,11 +507,13 @@ class LogRow(Out):
 
 
 class Fact(Out):
+    id: str
     label: str
     value: str
 
 
 class ProviderStatus(Out):
+    id: str
     label: str
     provider: str
     ok: bool
@@ -500,8 +522,8 @@ class ProviderStatus(Out):
 
 class SecretSource(Out):
     name: str
-    source: str
-    """`Settings`, `.env / environment` ou vazio (não há)."""
+    source: Literal["settings", "environment", ""]
+    """De onde a chave vem: digitada em Settings, do ambiente (.env), ou vazio (não há)."""
 
 
 class Status(Out):

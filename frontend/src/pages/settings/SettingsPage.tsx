@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useBlocker, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { AppConfig, ArrConfig, SettingsView, TestResult } from '../../api/types'
+import { t, useLocale } from '../../i18n'
 import { BASE, cleanBase } from '../../lib/base'
-import { plural } from '../../lib/format'
 import { NotFound, PageHead } from '../../shell/Shell'
 import { Loading } from '../../ui/controls'
 import { useFeedback } from '../../ui/feedback'
@@ -25,14 +25,7 @@ import {
 } from './form'
 import { EnginesTab, GeneralTab, IntegrationsTab, LanguagesTab, LibraryTab, SubtitlesTab } from './tabs'
 
-const PAGES = [
-  ['library', 'Library'],
-  ['integrations', 'Integrations'],
-  ['languages', 'Languages'],
-  ['engines', 'Engines'],
-  ['subtitles', 'Subtitles'],
-  ['general', 'General'],
-] as const
+const PAGES = ['library', 'integrations', 'languages', 'engines', 'subtitles', 'general'] as const
 
 /** O que cada aba recebe para ler e mexer no rascunho. */
 export type Form = {
@@ -53,6 +46,7 @@ export type Form = {
 }
 
 export function SettingsPage() {
+  useLocale()
   const params = useParams()
   const page = params.tab ? 'library' : (params.page ?? 'library')
   const client = useQueryClient()
@@ -103,12 +97,12 @@ export function SettingsPage() {
     onError: (error) => toast(error.message, true),
   })
 
-  if (!PAGES.some(([slug]) => slug === page)) return <NotFound />
+  if (!PAGES.some((slug) => slug === page)) return <NotFound />
   const view = settings.data
   if (!view) {
     return (
       <>
-        <PageHead title="Settings" />
+        <PageHead title={t('settings.title')} />
         <Loading error={settings.error} />
       </>
     )
@@ -141,11 +135,11 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHead title="Settings" />
-      <nav className="tabs" aria-label="Settings pages">
-        {PAGES.map(([slug, label]) => (
+      <PageHead title={t('settings.title')} />
+      <nav className="tabs" aria-label={t('settings.pages')}>
+        {PAGES.map((slug) => (
           <NavLink key={slug} to={`/settings/${slug}`}>
-            {label}
+            {t(`settings.tab.${slug}`)}
           </NavLink>
         ))}
       </nav>
@@ -158,25 +152,23 @@ export function SettingsPage() {
       {page === 'general' && <GeneralTab form={form} />}
 
       {dirty && (
-        <div className="save-bar" role="region" aria-label="Unsaved changes">
-          <strong>
-            {plural(fields.length, 'unsaved change')}
-          </strong>
+        <div className="save-bar" role="region" aria-label={t('settings.unsaved')}>
+          <strong>{t('settings.unsavedCount', { n: fields.length })}</strong>
           <button type="button" className="btn" onClick={() => update(() => EMPTY)}>
-            Discard
+            {t('settings.discard')}
           </button>
           <button type="button" className="btn primary" disabled={save.isPending} onClick={() => save.mutate()}>
-            Save {plural(fields.length, 'change')}
+            {t('settings.save', { n: fields.length })}
           </button>
         </div>
       )}
 
       <dialog ref={leave} onCancel={() => blocker.reset?.()} aria-labelledby="leave-title">
-        <h2 id="leave-title">Unsaved changes</h2>
-        <p>You have {plural(fields.length, 'change')} in Settings. Leave without saving?</p>
+        <h2 id="leave-title">{t('settings.unsaved')}</h2>
+        <p>{t('settings.leave', { n: fields.length })}</p>
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={() => blocker.reset?.()}>
-            Stay
+            {t('settings.stay')}
           </button>
           <button
             type="button"
@@ -186,10 +178,10 @@ export function SettingsPage() {
               blocker.proceed?.()
             }}
           >
-            Discard
+            {t('settings.discard')}
           </button>
           <button type="button" className="btn primary" disabled={save.isPending} onClick={saveAndLeave}>
-            Save and leave
+            {t('settings.saveAndLeave')}
           </button>
         </div>
       </dialog>

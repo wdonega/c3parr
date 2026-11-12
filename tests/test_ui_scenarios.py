@@ -498,10 +498,14 @@ def test_task_details_tell_each_state_apart(seeded: Ui) -> None:
     assert done is not None and done["status"] == "done"
     assert done["has_subtitle"] and done["has_report"]
     assert done["steps"] == [
-        {"label": "Audio", "state": "done", "text": "done · 3 s"},
-        {"label": "Transcription", "state": "skipped", "text": "skipped · já há legenda"},
-        {"label": "Translation", "state": "cached", "text": "from cache · llm"},
-    ]
+        {"name": "audio", "label": "Audio", "state": "done", "text": "done · 3 s",
+         "seconds": 3.0, "provider": None, "reason": None},
+        {"name": "transcricao", "label": "Transcription", "state": "skipped",
+         "text": "skipped · já há legenda", "seconds": None, "provider": None,
+         "reason": "já há legenda"},
+        {"name": "traducao", "label": "Translation", "state": "cached",
+         "text": "from cache · llm", "seconds": None, "provider": "llm", "reason": None},
+    ]  # fmt: skip
     warned = do.job(ids["warned"])
     assert warned is not None and warned["status"] == "done_with_warnings"
     assert warned["warnings"] == [{"stage": "metadados", "reason": "TMDb não achou",
@@ -514,8 +518,9 @@ def test_task_details_tell_each_state_apart(seeded: Ui) -> None:
     assert running is not None
     states = [s["state"] for s in running["steps"]]
     current = states.index("running")
-    assert running["steps"][current] == {"label": "Translation", "state": "running",
-                                         "text": "block 44 of 94"}  # fmt: skip
+    assert running["steps"][current] == {
+        "name": "traducao", "label": "Translation", "state": "running", "text": "block 44 of 94",
+        "seconds": None, "provider": None, "reason": "block 44 of 94"}  # fmt: skip
     assert set(states[:current]) == {"done"} and set(states[current + 1 :]) == {"pending"}
     queued = do.job(ids["queued"])
     assert queued is not None and {s["state"] for s in queued["steps"]} == {"pending"}

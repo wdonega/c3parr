@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, LIVE, reportUrl, subtitleUrl } from '../api/client'
-import type { JobDetail, JobRow } from '../api/types'
-import { clock, dayTime, doneLabel, duration, jobName, percent, plural } from '../lib/format'
+import type { JobDetail, JobRow, Step } from '../api/types'
+import { maybe, rich, t, useLocale } from '../i18n'
+import { clock, dayTime, doneLabel, duration, jobName, percent, progressText, stepLabel } from '../lib/format'
 import { PageHead, useShell } from '../shell/Shell'
 import { Bar, Chips, Empty, Loading, Pager, SearchBox, type ChipOption } from '../ui/controls'
 import { useFeedback } from '../ui/feedback'
@@ -13,14 +14,6 @@ import { Icon, type IconName } from '../ui/Icon'
 
 type Filter = '' | 'running' | 'queued' | 'done' | 'failed' | 'cancelled'
 
-const STATUS_LABEL: Record<JobRow['status'], string> = {
-  queued: 'Queued',
-  running: 'Processing',
-  done: 'Done',
-  done_with_warnings: 'Done with warnings',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-}
 const STATUS_ICON: Record<JobRow['status'], { name: IconName; tone: string }> = {
   queued: { name: 'more', tone: 'muted' },
   running: { name: 'spinner', tone: 'accent spin' },
@@ -28,11 +21,6 @@ const STATUS_ICON: Record<JobRow['status'], { name: IconName; tone: string }> = 
   done_with_warnings: { name: 'alert', tone: 'warn' },
   failed: { name: 'alert', tone: 'bad' },
   cancelled: { name: 'close', tone: 'muted' },
-}
-const ORIGIN: Record<string, string> = {
-  manual: 'By you, ahead of the routine',
-  webhook: 'By Radarr/Sonarr',
-  rotina: 'By the routine',
 }
 
 function useIsSmall(): boolean {
@@ -77,13 +65,28 @@ function useQueueActions() {
   }
 }
 
+const stepOf = (job: JobRow) => stepLabel(job.action, job.language, job.step)
+
 function summary(job: JobRow): string {
-  if (job.status === 'running') return [job.step, job.message].filter(Boolean).join(' · ')
-  if (job.status === 'failed') return `${job.step} failed: ${job.error ?? 'unknown error'}`
-  if (job.status === 'queued') return job.step
-  if (job.status === 'cancelled') return `${job.step} · cancelled`
+  const step = stepOf(job)
+  if (job.status === 'running') return [step, progressText(job.message)].filter(Boolean).join(' · ')
+  if (job.status === 'failed') {
+    return t('queue.failedWith', { step, error: job.error ?? t('queue.unknownError') })
+  }
+  if (job.status === 'queued') return step
+  if (job.status === 'cancelled') return t('queue.cancelledStep', { step })
   const took = duration(job.started_at, job.finished_at)
-  return [doneLabel(job.action, job.language, job.step), took].filter(Boolean).join(' · ')
+  return [doneLabel(job.action, job.language, step), took].filter(Boolean).join(' · ')
+}
+
+/** O que uma etapa fez, em palavras: `done · 3 s · llm`, ou o andamento da que roda agora. */
+function stepText(step: Step): string {
+  if (step.state === 'running') return progressText(step.reason) || t('stepState.running')
+  const parts = [t(`stepState.${step.state}`)]
+  if (step.seconds) parts.push(`${Math.round(step.seconds)} s`)
+  if (step.provider) parts.push(step.provider)
+  if (step.reason) parts.push(step.reason)
+  return parts.join(' · ')
 }
 
 function JobLine({
@@ -165,9 +168,9 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
     const sure =
       !running ||
       (await confirm({
-        title: 'Cancel this task?',
-        body: 'It is running now and stops between two steps. What it already did stays in the cache.',
-        confirm: 'Cancel the task',
+        title: t('queue.cancel.title'),
+        body: t('queue.cancel.body'),
+        confirm: t('queue.cancel.confirm'),
         danger: true,
       }))
     if (sure) actions.cancel.mutate(job.id)
@@ -175,9 +178,9 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(job.video)
-      toast('Path copied.')
+      toast(t('queue.pathCopied'))
     } catch {
-      toast('Could not copy: select the path and copy it by hand.', true)
+      toast(t('queue.copyFailed'), true)
     }
   }
 
@@ -186,28 +189,28 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <span className={`status ${job.status}`}>
           {job.status === 'running' && <span className="dot" />}
-          {STATUS_LABEL[job.status]}
+          {t(`status.${job.status}`)}
         </span>
         <span className="spacer" />
         {job.status === 'queued' && (
           <button type="button" className="btn small" onClick={() => actions.top.mutate(job.id)}>
             <Icon name="up" size={14} />
-            Move to the top
+            {t('queue.moveTop')}
           </button>
         )}
         {job.can_cancel && (
           <button type="button" className="btn danger small" onClick={cancel}>
-            Cancel task
+            {t('queue.cancelTask')}
           </button>
         )}
         {job.can_retry && (
           <button type="button" className="btn small" onClick={() => actions.retry.mutate(job.id)}>
             <Icon name="refresh" size={14} />
-            Run again
+            {t('queue.runAgain')}
           </button>
         )}
         {onClose && (
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={onClose}>
             <Icon name="close" />
           </button>
         )}
@@ -222,20 +225,22 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
 
       <div className="path">
         <span className="mono">{job.video}</span>
-        <button type="button" className="icon-btn" aria-label="Copy path" onClick={copy}>
+        <button type="button" className="icon-btn" aria-label={t('queue.copyPath')} onClick={copy}>
           <Icon name="copy" size={14} />
         </button>
       </div>
 
       {job.status === 'running' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Bar value={job.progress} thick label={job.step} />
+          <Bar value={job.progress} thick label={stepOf(job)} />
           <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
             <span className="num" style={{ flex: 1, fontWeight: 600 }}>
               {percent(job.progress)}
             </span>
             <span style={{ color: 'var(--text-2)' }}>
-              {[job.stage, job.message].filter(Boolean).join(' · ')}
+              {[job.stage && maybe(`step.${job.stage_name}`, job.stage), progressText(job.message)]
+                .filter(Boolean)
+                .join(' · ')}
             </span>
           </div>
         </div>
@@ -245,7 +250,7 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
         <div className="notice bad" role="alert">
           <Icon name="alert" size={18} className="bad" />
           <div className="grow">
-            <strong>This task failed</strong>
+            <strong>{t('queue.failed')}</strong>
             <span>{job.error}</span>
           </div>
         </div>
@@ -254,7 +259,7 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
         <div key={warning.stage} className="notice warn">
           <Icon name="info" size={18} className="warn" />
           <div className="grow">
-            <strong>{warning.label}</strong>
+            <strong>{maybe(`step.${warning.stage}`, warning.label)}</strong>
             <span>{[warning.reason, warning.effect].filter(Boolean).join('. ')}</span>
           </div>
         </div>
@@ -262,37 +267,37 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
 
       <dl className="facts">
         <div>
-          <dt>Step</dt>
-          <dd>{job.step}</dd>
+          <dt>{t('queue.fact.step')}</dt>
+          <dd>{stepOf(job)}</dd>
         </div>
         <div>
-          <dt>Requested</dt>
-          <dd>{ORIGIN[job.origin ?? ''] ?? 'Before steps existed'}</dd>
+          <dt>{t('queue.fact.requested')}</dt>
+          <dd>{maybe(`queue.origin.${job.origin}`, t('queue.origin.none'))}</dd>
         </div>
         <div>
-          <dt>Added</dt>
+          <dt>{t('queue.fact.added')}</dt>
           <dd>{dayTime(job.created_at)}</dd>
         </div>
         {job.started_at && (
           <div>
-            <dt>{finished ? 'Took' : 'Running for'}</dt>
+            <dt>{finished ? t('queue.fact.took') : t('queue.fact.runningFor')}</dt>
             <dd>{duration(job.started_at, job.finished_at)}</dd>
           </div>
         )}
       </dl>
 
       {job.pipeline.length > 0 && (
-        <Steps title="Pipeline of this video">
+        <Steps title={t('queue.pipeline')}>
           {job.pipeline.map((step) => (
             <div key={`${step.action}-${step.language}`} className={`step ${step.state}`}>
               <span className="mark" />
               <span className="label">
-                {step.label}
+                {maybe(`action.${step.action}`, step.label)}
                 {step.language && <span className="mono muted"> {step.language}</span>}
               </span>
               <span className="text">
-                {step.state === 'failed' ? step.detail : step.state === 'not_found' ? 'nothing found' : ''}
-                {step.attempts > 1 ? ` · ${step.attempts} tries` : ''} · {dayTime(step.updated_at)}
+                {step.state === 'failed' ? step.detail : step.state === 'not_found' ? t('queue.nothingFound') : ''}
+                {step.attempts > 1 ? t('queue.tries', { n: step.attempts }) : ''} · {dayTime(step.updated_at)}
               </span>
             </div>
           ))}
@@ -300,12 +305,14 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
       )}
 
       {finished && job.steps.length > 0 && (
-        <Steps title="What this task did">
+        <Steps title={t('queue.did')}>
           {job.steps.map((step) => (
             <div key={step.label} className={`step ${step.state}`}>
               <span className="mark" />
-              <span className="label">{step.label}</span>
-              <span className="text">{step.text}</span>
+              <span className="label">
+                {maybe(`step.${step.name}`, maybe(`action.${step.name}`, step.label))}
+              </span>
+              <span className="text">{stepText(step)}</span>
             </div>
           ))}
         </Steps>
@@ -316,12 +323,12 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
           {job.has_subtitle && (
             <a className="btn" href={subtitleUrl(job.id)}>
               <Icon name="download" size={14} />
-              Download subtitle
+              {t('queue.download')}
             </a>
           )}
           {job.has_report && (
             <a className="btn" href={reportUrl(job.id)} target="_blank" rel="noopener">
-              Report
+              {t('queue.report')}
             </a>
           )}
         </div>
@@ -331,6 +338,7 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
 }
 
 export function Queue() {
+  useLocale()
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? '') as Filter
@@ -380,19 +388,19 @@ export function Queue() {
 
   const counts = list.data?.counts ?? {}
   const filters: ChipOption<Filter>[] = [
-    { value: '', label: 'All', count: counts.all },
-    { value: 'running', label: 'Running', count: counts.running },
-    { value: 'queued', label: 'Queued', count: counts.queued },
-    { value: 'done', label: 'Done', count: counts.done },
-    { value: 'failed', label: 'Failed', count: counts.failed, tone: 'bad' },
-    { value: 'cancelled', label: 'Cancelled', count: counts.cancelled },
+    { value: '', label: t('common.all'), count: counts.all },
+    { value: 'running', label: t('queue.filter.running'), count: counts.running },
+    { value: 'queued', label: t('queue.filter.queued'), count: counts.queued },
+    { value: 'done', label: t('queue.filter.done'), count: counts.done },
+    { value: 'failed', label: t('queue.filter.failed'), count: counts.failed, tone: 'bad' },
+    { value: 'cancelled', label: t('queue.filter.cancelled'), count: counts.cancelled },
   ]
   const running = shell.data?.running ?? null
   const cancelQueued = async () => {
     const sure = await confirm({
-      title: `Cancel ${plural(counts.queued ?? 0, 'queued task')}?`,
-      body: 'Everything waiting leaves the queue. The task running now keeps going, and the routine queues again what is still missing.',
-      confirm: 'Cancel them',
+      title: t('queue.cancelAll.title', { n: counts.queued ?? 0 }),
+      body: t('queue.cancelAll.body'),
+      confirm: t('queue.cancelAll.confirm'),
       danger: true,
     })
     if (sure) actions.cancelQueued.mutate()
@@ -408,7 +416,7 @@ export function Queue() {
         <button
           type="button"
           className="icon-btn"
-          aria-label={`Move ${jobName(job).title} to the top`}
+          aria-label={t('queue.moveItemTop', { title: jobName(job).title })}
           onClick={() => actions.top.mutate(job.id)}
         >
           <Icon name="up" size={14} />
@@ -417,7 +425,7 @@ export function Queue() {
       <button
         type="button"
         className="icon-btn"
-        aria-label={`Cancel ${jobName(job).title}`}
+        aria-label={t('queue.cancelItem', { title: jobName(job).title })}
         onClick={() => actions.cancel.mutate(job.id)}
       >
         <Icon name="close" size={14} />
@@ -428,52 +436,58 @@ export function Queue() {
   return (
     <>
       <PageHead
-        title="Queue"
+        title={t('queue.title')}
         sub={
           list.data
-            ? `${counts.running ?? 0} running · ${counts.queued ?? 0} queued · ${counts.failed ?? 0} failed`
+            ? t('queue.counts', {
+                running: counts.running ?? 0,
+                queued: counts.queued ?? 0,
+                failed: counts.failed ?? 0,
+              })
             : undefined
         }
       >
-        <SearchBox value={q} onChange={(value) => set({ q: value })} placeholder="Search the queue" hotkey="/" />
+        <SearchBox value={q} onChange={(value) => set({ q: value })} placeholder={t('queue.search')} hotkey="/" />
         {(counts.failed ?? 0) > 0 && (
           <button type="button" className="btn" disabled={actions.retryFailed.isPending} onClick={() => actions.retryFailed.mutate()}>
-            Retry {counts.failed} failed
+            {t('queue.retryFailed', { n: counts.failed ?? 0 })}
           </button>
         )}
         {(counts.queued ?? 0) > 0 && (
           <button type="button" className="btn" disabled={actions.cancelQueued.isPending} onClick={cancelQueued}>
-            Cancel {counts.queued} queued
+            {t('queue.cancelQueued', { n: counts.queued ?? 0 })}
           </button>
         )}
       </PageHead>
 
-      <Chips label="Filter" options={filters} value={status} onChange={(value) => set({ status: value })} />
+      <Chips label={t('common.filter')} options={filters} value={status} onChange={(value) => set({ status: value })} />
 
       <div className="queue-layout">
-        <section className="card queue-list" aria-label="Tasks">
+        <section className="card queue-list" aria-label={t('queue.tasks')}>
           {!list.data ? (
             <Loading error={list.error} />
           ) : flat ? (
             list.data.rows.length === 0 ? (
-              <Empty icon="search" title="No task matches these filters">
+              <Empty icon="search" title={t('queue.noMatch')}>
                 <button type="button" className="btn" onClick={() => set({ q: '', status: '' })}>
-                  Clear the filters
+                  {t('common.clearFilters')}
                 </button>
               </Empty>
             ) : (
               <div className="rows">{list.data.rows.map((job) => line(job))}</div>
             )
           ) : (counts.all ?? 0) === 0 ? (
-            <Empty icon="queue" title="The queue is empty">
+            <Empty icon="queue" title={t('queue.empty')}>
               <p>
-                Add movies or episodes from <Link to="/movies">Movies</Link> or <Link to="/tv">TV Shows</Link>,
-                or wait for the routine.
+                {rich('queue.emptyBody', {
+                  movies: (text) => <Link to="/movies">{text}</Link>,
+                  shows: (text) => <Link to="/tv">{text}</Link>,
+                })}
               </p>
             </Empty>
           ) : (
             <>
-              <h2 className="section-label live">Running now</h2>
+              <h2 className="section-label live">{t('common.runningNow')}</h2>
               {running ? (
                 <button
                   type="button"
@@ -491,25 +505,25 @@ export function Queue() {
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ flex: 1 }}>
-                        <Bar value={running.progress} raised label={running.step} />
+                        <Bar value={running.progress} raised label={stepOf(running)} />
                       </span>
                       <span className="mono">{percent(running.progress)}</span>
                     </span>
                     <span className="sub truncate" style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                      {summary(running)} · {duration(running.started_at, null)} elapsed
+                      {summary(running)} · {t('common.elapsed', { time: duration(running.started_at, null) })}
                     </span>
                   </span>
                 </button>
               ) : (
                 <p className="muted" style={{ padding: '0 18px 12px' }}>
-                  Nothing is running.
+                  {t('queue.nothingRunning')}
                 </p>
               )}
 
               {!!upcoming.data?.length && (
                 <>
                   <h2 className="section-label" style={{ borderTop: '1px solid var(--line)' }}>
-                    Up next · {counts.queued ?? upcoming.data.length}
+                    {t('queue.upNext', { n: counts.queued ?? upcoming.data.length })}
                   </h2>
                   <div className="rows">
                     {upcoming.data.map((job, index) =>
@@ -529,12 +543,12 @@ export function Queue() {
               {!!recent.data?.length && (
                 <>
                   <h2 className="section-label" style={{ borderTop: '1px solid var(--line)' }}>
-                    Finished
+                    {t('queue.finished')}
                   </h2>
                   <div className="rows">{recent.data.map((job) => line(job))}</div>
                   <div className="row" style={{ borderTop: '1px solid var(--line-soft)' }}>
                     <button type="button" className="btn small" onClick={() => set({ status: 'done' })}>
-                      Show everything that finished
+                      {t('queue.showFinished')}
                     </button>
                   </div>
                 </>
@@ -548,18 +562,18 @@ export function Queue() {
           )}
         </section>
 
-        <section className="card queue-detail" aria-label="Task details">
+        <section className="card queue-detail" aria-label={t('queue.details')}>
           {selected && !small ? (
             <JobPanel id={selected} />
           ) : (
-            <Empty icon="queue" title="Select a task">
-              <p>Its progress, what it did and the pipeline of the video show up here.</p>
+            <Empty icon="queue" title={t('queue.selectTask')}>
+              <p>{t('queue.selectBody')}</p>
             </Empty>
           )}
         </section>
       </div>
 
-      <dialog ref={sheet} className="sheet" onClose={() => select(null)} aria-label="Task details">
+      <dialog ref={sheet} className="sheet" onClose={() => select(null)} aria-label={t('queue.details')}>
         {selected && small && (
           <div className="card queue-detail" style={{ display: 'flex', position: 'static', border: 0, minHeight: '100%' }}>
             <JobPanel id={selected} onClose={() => select(null)} />

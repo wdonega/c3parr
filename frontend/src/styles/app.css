@@ -247,8 +247,9 @@ button {
 
 .side-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 0 10px;
   font-size: 12px;
   color: var(--muted);
@@ -256,6 +257,46 @@ button {
 
 .side-foot a {
   color: var(--muted);
+}
+
+/* Seletor de idioma: compacto no rodapé do menu, linha inteira na página More. */
+.language select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.language.compact {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.language.compact select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin-left: -2px;
+  padding: 0 2px;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.language.compact select:hover,
+.language.compact select:focus-visible {
+  border-color: var(--line);
+  color: var(--text);
 }
 
 .main {

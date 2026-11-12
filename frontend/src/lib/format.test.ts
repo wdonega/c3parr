@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { setLocale } from '../i18n'
 import {
   dayTime,
   doneLabel,
@@ -7,9 +8,10 @@ import {
   jobName,
   percent,
   place,
-  plural,
   posterHue,
+  progressText,
   span,
+  stepLabel,
   timeAgo,
   timeUntil,
 } from './format'
@@ -58,8 +60,6 @@ describe('nomes e rótulos', () => {
       'next', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd',
     ])
     expect(percent(0.468)).toBe('47%')
-    expect(plural(1, 'task')).toBe('1 task')
-    expect(plural(2, 'task')).toBe('2 tasks')
   })
 
   it('dá nome à tarefa pelo filme ou pelo episódio', () => {
@@ -89,5 +89,49 @@ describe('nomes e rótulos', () => {
     expect(posterHue('Incendies')).toBe(posterHue('Incendies'))
     expect(posterHue('Incendies')).not.toBe(posterHue('Oldboy'))
     expect(posterHue('')).toBe(0)
+  })
+})
+
+describe('em outro idioma', () => {
+  afterEach(() => setLocale('en-US'))
+
+  it('escreve datas e tempos no idioma da interface', () => {
+    setLocale('pt-BR')
+    expect(timeAgo(at(20, 29), now)).toBe('há 1 min')
+    expect(timeAgo(null, now)).toBe('nunca')
+    expect(timeUntil(at(23, 30), now)).toBe('em 3 h')
+    expect(dayTime(at(20, 28), now)).toBe('Hoje, 20:28')
+    expect(dayTime(at(8, 0, 2), now)).toBe('2 de nov., 08:00')
+    expect(place(1)).toBe('a próxima')
+    expect(place(3)).toBe('3ª')
+    setLocale('es-MX')
+    expect(timeAgo(at(17, 30), now)).toBe('hace 3 h')
+    expect(dayTime(at(8, 0, 10), now)).toBe('Ayer, 08:00')
+    expect(dayTime(at(8, 0, 2), now)).toBe('2 nov, 08:00')
+  })
+
+  it('dá nome ao passo pelo identificador, e ao que não conhece pelo que o servidor mandou', () => {
+    expect(stepLabel('traduzir', 'pt-BR', 'x')).toBe('Translate → pt-BR')
+    expect(stepLabel('metadados', null, 'x')).toBe('Metadata')
+    expect(stepLabel('novo_passo', 'pt-BR', 'New step → pt-BR')).toBe('New step → pt-BR')
+    expect(stepLabel(null, null, 'Subtitle pt-BR')).toBe('Subtitle pt-BR')
+    setLocale('pt-BR')
+    expect(stepLabel('traduzir', 'pt-BR', 'x')).toBe('Traduzir → pt-BR')
+    expect(doneLabel('traduzir', 'pt-BR', 'x')).toBe('Traduzida para pt-BR')
+    expect(doneLabel('novo_passo', 'pt-BR', 'New step')).toBe('New step')
+  })
+
+  it('reescreve o andamento que reconhece e deixa o resto como veio', () => {
+    expect(progressText('block 3 of 12')).toBe('block 3 of 12')
+    expect(progressText(null)).toBe('')
+    setLocale('pt-BR')
+    expect(progressText('block 3 of 12')).toBe('bloco 3 de 12')
+    expect(progressText('preparing the model')).toBe('preparando o modelo')
+    expect(progressText('transcribing (Metal)')).toBe('transcrevendo (Metal)')
+    expect(progressText('412 lines in en (CPU)')).toBe('412 falas em en (CPU)')
+    expect(progressText('412 lines in en')).toBe('412 falas em en')
+    expect(progressText('something an engine made up')).toBe('something an engine made up')
+    setLocale('es-MX')
+    expect(progressText('checking spans in another language')).toBe('revisando tramos en otro idioma')
   })
 })

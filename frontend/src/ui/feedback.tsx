@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { said, t, useLocale } from '../i18n'
 import { Icon } from './Icon'
 
 type Toast = { id: number; message: string; error: boolean }
@@ -21,7 +22,7 @@ type Question = {
 type Feedback = {
   toast: (message: string, error?: boolean) => void
   /** Mostra o resultado de uma ação da API. Devolve se deu certo. */
-  report: (result: { ok: boolean; message: string }) => boolean
+  report: (result: { ok: boolean; message: string; code: string; params: Record<string, string | number> }) => boolean
   confirm: (question: Question) => Promise<boolean>
 }
 
@@ -35,6 +36,7 @@ export function useFeedback(): Feedback {
 }
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
+  useLocale()
   const [toasts, setToasts] = useState<Toast[]>([])
   const [question, setQuestion] = useState<Question | null>(null)
   const answer = useRef<(value: boolean) => void>(() => {})
@@ -42,7 +44,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const nextId = useRef(1)
 
   const dismiss = useCallback((id: number) => {
-    setToasts((list) => list.filter((t) => t.id !== id))
+    setToasts((list) => list.filter((item) => item.id !== id))
   }, [])
 
   const toast = useCallback(
@@ -59,7 +61,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     () => ({
       toast,
       report: (result) => {
-        toast(result.message, !result.ok)
+        toast(said(result), !result.ok)
         return result.ok
       },
       confirm: (asked) =>
@@ -85,14 +87,14 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     <Context.Provider value={feedback}>
       {children}
       <div className="toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.error ? 'bad' : ''}`} role={t.error ? 'alert' : 'status'}>
-            <p>{t.message}</p>
+        {toasts.map((item) => (
+          <div key={item.id} className={`toast ${item.error ? 'bad' : ''}`} role={item.error ? 'alert' : 'status'}>
+            <p>{item.message}</p>
             <button
               type="button"
               className="icon-btn"
-              aria-label="Dismiss"
-              onClick={() => dismiss(t.id)}
+              aria-label={t('common.dismiss')}
+              onClick={() => dismiss(item.id)}
             >
               <Icon name="close" size={14} />
             </button>
@@ -105,7 +107,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           <p>{question.body}</p>
           <div className="dialog-actions">
             <button type="button" className="btn" onClick={() => close(false)}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"

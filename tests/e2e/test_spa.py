@@ -3,14 +3,12 @@ aviso ao sair, campos que seguem uma escolha, chips, seleção, detalhe da fila,
 Precisa do build do frontend: `npm run build` em `frontend/`.
 """
 
-import dataclasses
 import re
 from collections.abc import Iterator
 
 import pytest
-from conftest import Served, serve
+from conftest import Served, open_page
 from playwright.sync_api import Browser, Page, expect
-from uikit import seed_world
 
 from c3parr.web.app import DIST
 
@@ -21,21 +19,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
-def spa(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Served]:
-    world = seed_world(tmp_path_factory.mktemp("spa"))
-    service = world.app.state.service  # sem internet: nenhum pôster vem, fica o bloco de cor
-    service.clients = dataclasses.replace(service.clients, fetch_poster=lambda kind, url: None)
-    yield from serve(world)
-
-
-def _open(browser: Browser, served: Served, path: str, width: int = 1280) -> Page:
-    context = browser.new_context(viewport={"width": width, "height": 844})
-    page = context.new_page()
-    page.set_default_timeout(8000)
-    page.goto(served.url + path)
-    page.get_by_role("heading", level=1).first.wait_for()
-    return page
+_open = open_page
 
 
 @pytest.fixture
@@ -299,7 +283,7 @@ def test_selection_sends_every_ticked_item_to_the_queue(desktop: Page, spa: Serv
     before = len(catalog.alerts(include_resolved=False))
     bulk.get_by_role("button", name="Add to the queue").click()
     # os arquivos do exemplo não são vídeos de fato: cada item marcado vira um alerta de leitura
-    said(desktop, "2 item(s) could not be read")
+    said(desktop, "2 items could not be read")
     assert len(catalog.alerts(include_resolved=False)) == before + 2
 
 
@@ -361,7 +345,7 @@ def test_cancelling_everything_waiting_asks_first(desktop: Page, spa: Served) ->
 
     desktop.get_by_role("button", name="Cancel 1 queued").click()
     question.get_by_role("button", name="Cancel them").click()
-    said(desktop, "1 task(s) cancelled.")
+    said(desktop, "1 task cancelled.")
     assert world.queue.get(world.ids["queued"]).status == "cancelada"
     assert world.queue.get(world.ids["running"]).status == "processando"
 

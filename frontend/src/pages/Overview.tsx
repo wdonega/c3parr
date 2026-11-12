@@ -4,17 +4,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, LIVE } from '../api/client'
 import type { Dashboard, JobRow, LanguageRow, TaskRow } from '../api/types'
-import { clock, doneLabel, duration, jobName, percent, plural, timeUntil } from '../lib/format'
+import { languageName, maybe, t, titled, useLocale } from '../i18n'
+import { clock, doneLabel, duration, jobName, percent, progressText, stepLabel, timeUntil } from '../lib/format'
 import { PageHead, useShell } from '../shell/Shell'
 import { Bar, Chips, Empty, Loading } from '../ui/controls'
 import { useFeedback } from '../ui/feedback'
 import { Icon } from '../ui/Icon'
-
-const ORIGIN: Record<string, string> = {
-  manual: 'requested by you',
-  webhook: 'asked by Radarr/Sonarr',
-  rotina: 'from the routine',
-}
 
 function Coverage({ data }: { data: Dashboard }) {
   const targets = data.languages.filter((row) => row.target)
@@ -24,11 +19,11 @@ function Coverage({ data }: { data: Dashboard }) {
 
   if (!row) {
     return (
-      <section className="card wide" aria-label="Subtitle coverage">
-        <Empty icon="movies" title="Nothing synced yet">
-          <p>Movies and shows show up here after c3parr syncs with Radarr or Sonarr.</p>
+      <section className="card wide" aria-label={t('overview.coverage')}>
+        <Empty icon="movies" title={t('overview.empty.title')}>
+          <p>{t('overview.empty.body')}</p>
           <Link to="/settings/library" className="btn">
-            Connect Radarr or Sonarr
+            {t('overview.empty.action')}
           </Link>
         </Empty>
       </section>
@@ -38,12 +33,12 @@ function Coverage({ data }: { data: Dashboard }) {
   const have = row.embedded + row.external + row.ours
   const total = have + row.missing
   const parts = [
-    { key: 'embedded', label: 'Inside the video', n: row.embedded, color: '#6a5f82' },
-    { key: 'external', label: 'Other source', n: row.external, color: 'var(--other)' },
-    { key: 'ours', label: 'Made by c3parr', n: row.ours, color: 'var(--ours)' },
-    { key: 'missing', label: 'Missing', n: row.missing, color: 'var(--warn)' },
+    { key: 'embedded', label: t('overview.part.embedded'), n: row.embedded, color: '#6a5f82' },
+    { key: 'external', label: t('overview.part.external'), n: row.external, color: 'var(--other)' },
+    { key: 'ours', label: t('overview.part.ours'), n: row.ours, color: 'var(--ours)' },
+    { key: 'missing', label: t('overview.part.missing'), n: row.missing, color: 'var(--warn)' },
   ].filter((part) => part.n > 0)
-  const tile = (to: string, label: string, note: string, count: { total: number; done: number }) => (
+  const tile = (to: string, label: string, all: string, note: string, count: { total: number; done: number }) => (
     <Link to={to} className="card pad" style={{ gap: 8, background: 'var(--surface-2)', color: 'var(--text)' }}>
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span style={{ flex: 1, fontWeight: 500 }}>
@@ -54,24 +49,24 @@ function Coverage({ data }: { data: Dashboard }) {
           <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> / {count.total}</span>
         </span>
       </span>
-      <Bar value={count.total ? count.done / count.total : 0} raised label={`${label} with every subtitle`} />
+      <Bar value={count.total ? count.done / count.total : 0} raised label={all} />
       {count.total - count.done > 0 ? (
         <span className="warn" style={{ fontSize: 12 }}>
-          {count.total - count.done} missing a subtitle
+          {t('overview.missing', { n: count.total - count.done })}
         </span>
       ) : (
-        <span className="ok" style={{ fontSize: 12 }}>Every subtitle in place</span>
+        <span className="ok" style={{ fontSize: 12 }}>{t('overview.allInPlace')}</span>
       )}
     </Link>
   )
 
   return (
-    <section className="card pad wide" aria-label="Subtitle coverage" style={{ gap: 18 }}>
+    <section className="card pad wide" aria-label={t('overview.coverage')} style={{ gap: 18 }}>
       <div className="card-head">
-        <h2>Subtitle coverage</h2>
+        <h2>{t('overview.coverage')}</h2>
         {targets.length > 1 ? (
           <Chips
-            label="Target language"
+            label={t('overview.targetLanguage')}
             options={targets.map((t) => ({ value: t.lang, label: t.lang }))}
             value={row.lang}
             onChange={setChosen}
@@ -85,14 +80,14 @@ function Coverage({ data }: { data: Dashboard }) {
           {total ? Math.round((have / total) * 100) : 0}%
         </span>
         <span style={{ fontSize: 15, color: 'var(--text-2)' }}>
-          {have} of {total} movies and episodes have a {row.name} subtitle
+          {t('overview.have', { have, total, language: languageName(row.lang, row.name) })}
         </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div
           className="stack-bar"
           role="img"
-          aria-label={parts.map((part) => `${part.n} ${part.label.toLowerCase()}`).join(', ')}
+          aria-label={parts.map((part) => `${part.n} ${part.label.toLocaleLowerCase()}`).join(', ')}
         >
           {parts.map((part) => (
             <span key={part.key} style={{ flex: `${part.n} 1 0`, background: part.color }} />
@@ -116,12 +111,18 @@ function Coverage({ data }: { data: Dashboard }) {
           borderTop: '1px solid var(--line)',
         }}
       >
-        {tile('/movies', 'Movies', '', data.movies)}
-        {tile('/tv', 'Episodes', `· ${plural(data.episodes.shows, 'show')}`, data.episodes)}
+        {tile('/movies', t('overview.movies'), t('overview.moviesAll'), '', data.movies)}
+        {tile(
+          '/tv',
+          t('overview.episodes'),
+          t('overview.episodesAll'),
+          t('overview.showsNote', { n: data.episodes.shows }),
+          data.episodes,
+        )}
       </div>
       {others.length > 0 && (
         <div className="legend muted" style={{ alignItems: 'center' }}>
-          <span>Also in the library</span>
+          <span>{t('overview.also')}</span>
           {others.map((other) => (
             <span key={other.lang}>
               <span className="pill external">{other.lang}</span>
@@ -142,17 +143,18 @@ function RunningNow({ running, pending }: { running: JobRow | null; pending: num
   })
   const waiting = running ? pending - 1 : pending
   const name = running && jobName(running)
+  const step = running ? stepLabel(running.action, running.language, running.step) : ''
   return (
-    <section className="card pad narrow" aria-label="Running now">
+    <section className="card pad narrow" aria-label={t('common.runningNow')}>
       {running && name ? (
         <>
           <div className="card-head">
             <h2 className="eyebrow live" style={{ color: 'var(--accent)' }}>
               <span className="dot" />
-              Running now
+              {t('common.runningNow')}
             </h2>
             <span className="muted" style={{ fontSize: 12 }}>
-              {duration(running.started_at, null)} elapsed
+              {t('common.elapsed', { time: duration(running.started_at, null) })}
             </span>
           </div>
           <div>
@@ -167,30 +169,30 @@ function RunningNow({ running, pending }: { running: JobRow | null; pending: num
             </p>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <span className="status running">{running.step}</span>
+            <span className="status running">{step}</span>
             <span className="muted" style={{ fontSize: 12 }}>
-              {ORIGIN[running.origin ?? ''] ?? ''}
+              {maybe(`overview.origin.${running.origin}`, '')}
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Bar value={running.progress} thick label={running.step} />
+            <Bar value={running.progress} thick label={step} />
             <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
               <span className="num" style={{ flex: 1, fontWeight: 600 }}>
                 {percent(running.progress)}
               </span>
-              <span style={{ color: 'var(--text-2)' }}>{running.message}</span>
+              <span style={{ color: 'var(--text-2)' }}>{progressText(running.message)}</span>
             </div>
           </div>
         </>
       ) : (
-        <Empty icon="queue" title="Nothing is running">
-          <p>{waiting > 0 ? `${plural(waiting, 'task')} waiting to start.` : 'The queue is empty.'}</p>
+        <Empty icon="queue" title={t('overview.nothingRunning')}>
+          <p>{waiting > 0 ? t('overview.waiting', { n: waiting }) : t('overview.queueEmpty')}</p>
         </Empty>
       )}
       {!!upcoming.data?.length && (
         <div style={{ paddingTop: 14, borderTop: '1px solid var(--line)' }}>
           <p className="eyebrow" style={{ paddingBottom: 6 }}>
-            Up next · {waiting} queued
+            {t('overview.upNext', { n: waiting })}
           </p>
           {upcoming.data.map((job) => (
             <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 30, fontSize: 13 }}>
@@ -198,14 +200,14 @@ function RunningNow({ running, pending }: { running: JobRow | null; pending: num
                 {jobName(job).title}
               </span>
               <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                {job.step}
+                {stepLabel(job.action, job.language, job.step)}
               </span>
             </div>
           ))}
         </div>
       )}
       <Link to="/queue" className="btn block" style={{ marginTop: 'auto' }}>
-        Open the queue
+        {t('overview.openQueue')}
       </Link>
     </section>
   )
@@ -223,24 +225,29 @@ function Tasks() {
     },
   })
   const next = (task: TaskRow) =>
-    task.running ? 'running…' : task.requested ? 'starting soon' : `next ${timeUntil(task.next_run)}`
+    task.running
+      ? t('task.running')
+      : task.requested
+        ? t('task.startingSoon')
+        : t('overview.next', { when: timeUntil(task.next_run) })
+  const label = (task: TaskRow) => maybe(`routine.${task.name}`, task.label)
   return (
-    <section className="card pad" aria-label="Scheduled tasks" style={{ gap: 10 }}>
-      <h2>Scheduled tasks</h2>
+    <section className="card pad" aria-label={t('overview.tasks')} style={{ gap: 10 }}>
+      <h2>{t('overview.tasks')}</h2>
       <div className="rows">
         {tasks.data?.map((task) => (
           <div key={task.name} className="row tight">
             <div className="grow">
               <div className="truncate" style={{ fontWeight: 500 }}>
-                {task.label}
+                {label(task)}
               </div>
-              <div className="sub truncate">{task.result ?? `every ${task.interval}`}</div>
+              <div className="sub truncate">{task.result ?? t('overview.every', { interval: task.interval })}</div>
             </div>
             <span style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{next(task)}</span>
             <button
               type="button"
               className="icon-btn outlined"
-              aria-label={`Run ${task.label} now`}
+              aria-label={t('overview.runNow', { task: label(task) })}
               disabled={task.running || task.requested}
               onClick={() => run.mutate(task.name)}
             >
@@ -260,12 +267,13 @@ function Recent() {
     refetchInterval: LIVE.normal,
   })
   return (
-    <section className="card pad" aria-label="Recently finished" style={{ gap: 10 }}>
-      <h2>Recently finished</h2>
-      {recent.data?.length === 0 && <p className="muted">Nothing finished yet.</p>}
+    <section className="card pad" aria-label={t('overview.recent')} style={{ gap: 10 }}>
+      <h2>{t('overview.recent')}</h2>
+      {recent.data?.length === 0 && <p className="muted">{t('overview.noneFinished')}</p>}
       <div className="rows">
         {recent.data?.map((job) => {
           const failed = job.status === 'failed'
+          const step = stepLabel(job.action, job.language, job.step)
           return (
             <Link key={job.id} to={`/queue?job=${job.id}`} className="row tight" style={{ color: 'var(--text)' }}>
               <Icon name={failed ? 'alert' : 'check'} className={failed ? 'bad' : 'ok'} />
@@ -273,8 +281,8 @@ function Recent() {
                 <div className="truncate">{jobName(job).title}</div>
                 <div className="sub truncate">
                   {failed
-                    ? `${job.step} failed`
-                    : `${doneLabel(job.action, job.language, job.step)} · ${duration(job.started_at, job.finished_at)}`}
+                    ? t('job.stepFailed', { step })
+                    : `${doneLabel(job.action, job.language, step)} · ${duration(job.started_at, job.finished_at)}`}
                 </div>
               </div>
               <span className="muted num" style={{ fontSize: 12 }}>
@@ -289,6 +297,7 @@ function Recent() {
 }
 
 export function Overview() {
+  useLocale()
   const shell = useShell()
   const dashboard = useQuery({
     queryKey: ['dashboard'],
@@ -299,60 +308,64 @@ export function Overview() {
   if (!data) {
     return (
       <>
-        <PageHead title="Overview" />
+        <PageHead title={t('overview.title')} />
         <Loading error={dashboard.error} />
       </>
     )
   }
   const targets = data.languages.filter((row) => row.target).map((row) => row.lang)
   const activity = [
-    { n: data.activity.translations, label: 'Translations' },
-    { n: data.activity.transcriptions, label: 'Transcriptions from audio' },
-    { n: data.activity.extracted, label: 'Embedded subtitles extracted' },
-    { n: data.activity.synced, label: 'Subtitles re-synced' },
+    { n: data.activity.translations, label: t('overview.translations') },
+    { n: data.activity.transcriptions, label: t('overview.transcriptions') },
+    { n: data.activity.extracted, label: t('overview.extracted') },
+    { n: data.activity.synced, label: t('overview.synced') },
   ]
   return (
     <>
       <PageHead
-        title="Overview"
-        sub={targets.length ? `Target ${targets.length > 1 ? 'languages' : 'language'} ${targets.join(', ')}` : undefined}
+        title={t('overview.title')}
+        sub={targets.length ? t('overview.target', { n: targets.length, langs: targets.join(', ') }) : undefined}
       />
 
-      {shell.data?.setup.map((item) => (
-        <div key={item.title} className="notice warn" role="status">
-          <Icon name="settings" size={20} className="warn" />
-          <div className="grow">
-            <strong>{item.title}</strong>
-            <span>{item.detail}</span>
+      {shell.data?.setup.map((item) => {
+        const text = titled('setup', item)
+        return (
+          <div key={item.title} className="notice warn" role="status">
+            <Icon name="settings" size={20} className="warn" />
+            <div className="grow">
+              <strong>{text.title}</strong>
+              <span>{text.detail}</span>
+            </div>
+            <Link to={item.href} className="btn">
+              {t('common.configure')}
+            </Link>
           </div>
-          <Link to={item.href} className="btn">
-            Configure
-          </Link>
-        </div>
-      ))}
+        )
+      })}
       {data.alerts_open > 0 && (
         <div className="notice bad" role="status">
           <Icon name="alert" size={20} className="bad" />
           <div className="grow">
-            <strong>
-              {data.alerts_open === 1 ? '1 problem needs' : `${data.alerts_open} problems need`} a look
-            </strong>
-            <span>Failed steps wait for the next library run, or you can retry them now.</span>
+            <strong>{t('overview.problems', { n: data.alerts_open })}</strong>
+            <span>{t('overview.problemsBody')}</span>
           </div>
           <Link to="/system/alerts" className="btn danger">
-            View alerts
+            {t('overview.viewAlerts')}
           </Link>
         </div>
       )}
-      {data.warnings.map((warning) => (
-        <div key={warning.title} className="notice warn" role="status">
-          <Icon name="info" size={20} className="warn" />
-          <div className="grow">
-            <strong>{warning.title}</strong>
-            <span>{warning.detail}</span>
+      {data.warnings.map((warning) => {
+        const text = titled('notice', warning)
+        return (
+          <div key={warning.title} className="notice warn" role="status">
+            <Icon name="info" size={20} className="warn" />
+            <div className="grow">
+              <strong>{text.title}</strong>
+              <span>{text.detail}</span>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       <div className="split">
         <Coverage data={data} />
@@ -360,8 +373,8 @@ export function Overview() {
       </div>
 
       <div className="grid cols-3">
-        <section className="card pad" aria-label="What c3parr did">
-          <h2>What c3parr did</h2>
+        <section className="card pad" aria-label={t('overview.did')}>
+          <h2>{t('overview.did')}</h2>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px 18px' }}>
             {activity.map((item) => (
               <div key={item.label}>
@@ -379,8 +392,8 @@ export function Overview() {
             style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--line)', fontSize: 13 }}
           >
             {data.activity.failed
-              ? `${plural(data.activity.failed, 'step')} waiting after a failure`
-              : 'No step waiting after a failure'}
+              ? t('overview.failedSteps', { n: data.activity.failed })
+              : t('overview.noFailed')}
           </p>
         </section>
         <Tasks />

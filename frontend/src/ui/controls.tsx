@@ -1,5 +1,6 @@
 // Controles pequenos e repetidos: barra de progresso, chips de filtro, liga/desliga, campo.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { t } from '../i18n'
 import { Icon, type IconName } from './Icon'
 
 export function Bar({
@@ -19,7 +20,7 @@ export function Bar({
     <div
       className={classes}
       role="progressbar"
-      aria-label={label ?? 'Progress'}
+      aria-label={label ?? t('common.progress')}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(percent)}
@@ -166,8 +167,8 @@ export function Field({
       <label>
         <span className="label">
           {label}
-          {optional && <span className="muted">· optional</span>}
-          {edited && <span className="edited">edited</span>}
+          {optional && <span className="muted">{t('common.optional')}</span>}
+          {edited && <span className="edited">{t('common.edited')}</span>}
         </span>
         {children}
       </label>
@@ -247,23 +248,23 @@ export function Pager({
 }) {
   if (pages <= 1) return null
   return (
-    <nav className="toolbar" aria-label="Pages" style={{ justifyContent: 'center' }}>
+    <nav className="toolbar" aria-label={t('common.pages')} style={{ justifyContent: 'center' }}>
       <button
         type="button"
         className="icon-btn outlined"
-        aria-label="Previous page"
+        aria-label={t('common.previousPage')}
         disabled={page <= 1}
         onClick={() => onPage(page - 1)}
       >
         <Icon name="left" />
       </button>
       <span className="muted num">
-        Page {page} of {pages}
+        {t('common.pageOf', { page, pages })}
       </span>
       <button
         type="button"
         className="icon-btn outlined"
-        aria-label="Next page"
+        aria-label={t('common.nextPage')}
         disabled={page >= pages}
         onClick={() => onPage(page + 1)}
       >
@@ -295,15 +296,15 @@ export function Empty({
 export function Loading({ error }: { error?: unknown }) {
   if (error) {
     return (
-      <Empty icon="alert" title="Could not load this page">
-        <p>{error instanceof Error ? error.message : 'The server did not answer.'}</p>
+      <Empty icon="alert" title={t('common.loadFailed')}>
+        <p>{error instanceof Error ? error.message : t('common.noAnswer')}</p>
       </Empty>
     )
   }
   return (
     <div className="empty" role="status">
       <Icon name="spinner" size={24} className="spin" />
-      <span className="sr-only">Loading</span>
+      <span className="sr-only">{t('common.loading')}</span>
     </div>
   )
 }

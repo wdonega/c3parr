@@ -63,8 +63,9 @@ def job_ref(job: Job | None, positions: dict[int, int]) -> s.JobRef | None:
     if job is None:
         return None
     status = "running" if job.status == "processando" else "queued"
-    return s.JobRef(id=job.id, label=job.step_label, language=job.idioma, status=status,
-                    progress=job.progresso, position=positions.get(job.id))  # fmt: skip
+    return s.JobRef(id=job.id, action=job.acao, label=job.step_label, language=job.idioma,
+                    status=status, progress=job.progresso,
+                    position=positions.get(job.id))  # fmt: skip
 
 
 def subs(row: dict[str, Any]) -> list[s.Sub]:
@@ -76,7 +77,8 @@ def poster(kind: str, item: Any) -> str | None:
 
 
 def result(outcome: Outcome) -> JSONResponse:
-    body = s.ActionResult(ok=not outcome.error, message=outcome.message)
+    body = s.ActionResult(ok=not outcome.error, message=outcome.message, code=outcome.code,
+                          params=dict(outcome.params))  # fmt: skip
     return JSONResponse(body.model_dump(), status_code=outcome.status)
 
 
@@ -91,8 +93,7 @@ def build_api(svc: Service) -> APIRouter:
     def job_detail(detail: dict[str, Any]) -> s.JobDetail:
         job: Job = detail["job"]
         extra = svc.job_extra(job)
-        steps = [s.Step(label=st["label"], state=s.STEP_STATE[st["state"]], text=st["text"])
-                 for st in detail["steps"]]  # fmt: skip
+        steps = [s.Step(**{**st, "state": s.STEP_STATE[st["state"]]}) for st in detail["steps"]]
         pipeline = [s.PipelineStep(**{**p, "state": s.PIPELINE_STATE[p["state"]]})
                     for p in extra["pipeline"]]  # fmt: skip
         warnings = [s.Degraded(stage=d.get("stage", ""), reason=d.get("reason", ""),
@@ -102,6 +103,7 @@ def build_api(svc: Service) -> APIRouter:
         return s.JobDetail(
             **job_rows([job])[0].model_dump(),
             stage=extra["stage"],
+            stage_name=extra["stage_name"],
             steps=steps,
             pipeline=pipeline,
             warnings=warnings,
@@ -335,7 +337,8 @@ def build_api(svc: Service) -> APIRouter:
         screen = body or s.SettingsPatch()
         outcome = svc.test_screen(target, screen.changes, screen.secrets)
         record = svc.last_tests().get(target, {})
-        tested = s.TestResult(ok=not outcome.error, message=outcome.message, ms=record.get("ms"))
+        tested = s.TestResult(ok=not outcome.error, message=outcome.message, code=outcome.code,
+                              params=dict(outcome.params), ms=record.get("ms"))  # fmt: skip
         return JSONResponse(tested.model_dump(), status_code=outcome.status)
 
     # --- system ---
@@ -379,7 +382,7 @@ def build_api(svc: Service) -> APIRouter:
     def status() -> s.Status:
         data = svc.status_view()
         return s.Status(
-            about=[s.Fact(label=label, value=value) for label, value in data["about"]],
+            about=[s.Fact(id=key, label=label, value=value) for key, label, value in data["about"]],
             providers=[s.ProviderStatus(**p) for p in data["providers"]],
             secrets=[s.SecretSource(name=name, source=source) for name, source in data["secrets"]],
             warnings=[s.Notice(**w) for w in data["warnings"]],

@@ -1,12 +1,9 @@
 // Como a interface escreve datas, durações, episódios e o nome de uma tarefa.
+// As palavras saem do idioma da interface (../i18n); unidades (s, min, h) são as mesmas em todos.
 import type { JobItem } from '../api/types'
+import { maybe, shortDate, t } from '../i18n'
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const two = (n: number) => String(n).padStart(2, '0')
-
-export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`
-}
 
 /** `20:28`, na hora local. */
 export function clock(iso: string): string {
@@ -19,8 +16,10 @@ export function dayTime(iso: string | null, now = new Date()): string {
   if (!iso) return ''
   const d = new Date(iso)
   const days = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000)
-  const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${MONTHS[d.getMonth()]} ${d.getDate()}`
-  return `${day}, ${clock(iso)}`
+  const time = clock(iso)
+  if (days === 0) return t('time.today', { time })
+  if (days === 1) return t('time.yesterday', { time })
+  return t('time.date', { date: shortDate(d), time })
 }
 
 function startOfDay(d: Date): number {
@@ -29,11 +28,11 @@ function startOfDay(d: Date): number {
 
 /** Quanto tempo faz: `just now`, `3 min ago`, `2 h ago`; depois disso, a data. */
 export function timeAgo(iso: string | null, now = new Date()): string {
-  if (!iso) return 'never'
+  if (!iso) return t('time.never')
   const seconds = Math.round((now.getTime() - new Date(iso).getTime()) / 1000)
-  if (seconds < 45) return 'just now'
-  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min ago`
-  if (seconds < 86_400) return `${Math.round(seconds / 3600)} h ago`
+  if (seconds < 45) return t('time.justNow')
+  if (seconds < 3600) return t('time.minAgo', { n: Math.max(1, Math.round(seconds / 60)) })
+  if (seconds < 86_400) return t('time.hAgo', { n: Math.round(seconds / 3600) })
   return dayTime(iso, now)
 }
 
@@ -41,9 +40,9 @@ export function timeAgo(iso: string | null, now = new Date()): string {
 export function timeUntil(iso: string | null, now = new Date()): string {
   if (!iso) return ''
   const seconds = Math.round((new Date(iso).getTime() - now.getTime()) / 1000)
-  if (seconds < 45) return 'soon'
-  if (seconds < 3600) return `in ${Math.round(seconds / 60)} min`
-  if (seconds < 86_400) return `in ${Math.round(seconds / 3600)} h`
+  if (seconds < 45) return t('time.soon')
+  if (seconds < 3600) return t('time.inMin', { n: Math.round(seconds / 60) })
+  if (seconds < 86_400) return t('time.inH', { n: Math.round(seconds / 3600) })
   return dayTime(iso, now)
 }
 
@@ -70,10 +69,7 @@ export function episodeCode(season: number | null, episode: number | null): stri
 
 /** Lugar na fila em palavras: `next`, `2nd`, `3rd`, `11th`. */
 export function place(position: number): string {
-  if (position === 1) return 'next'
-  const tens = position % 100
-  const suffix = tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][position % 10] ?? 'th')
-  return `${position}${suffix}`
+  return position === 1 ? t('place.next') : t('place.nth', { n: position })
 }
 
 /** Nome de uma tarefa: o título do filme ou do episódio, e de onde ele é. */
@@ -96,16 +92,35 @@ export function posterHue(title: string): number {
 
 /** O que foi feito, em palavras: `Translated to pt-BR`, `Extracted en from the video`. */
 export function doneLabel(action: string | null, language: string | null, step: string): string {
-  const lang = language ?? ''
-  const done: Record<string, string> = {
-    traduzir: `Translated to ${lang}`,
-    extrair: `Extracted ${lang} from the video`,
-    asr: 'Transcribed the audio',
-    sincronizar: 'Synced the subtitle',
-    gerar: `Subtitle made from the audio`,
-    publicar: `Published ${lang}`,
-    metadados: 'Read the metadata',
-    remover: `Removed our ${lang} subtitle`,
+  return action ? maybe(`done.${action}`, step, { lang: language ?? '' }) : step
+}
+
+/** Nome de um passo: `Translate → pt-BR`. O servidor diz qual é; as palavras são do idioma. */
+export function stepLabel(action: string | null, language: string | null, fallback: string): string {
+  const label = action ? maybe(`action.${action}`, '') : ''
+  if (!label) return fallback
+  return language ? `${label} → ${language}` : label
+}
+
+const PROGRESS: [RegExp, (found: string[]) => string][] = [
+  [/^block (\d+) of (\d+)$/, ([n, total]) => t('progress.block', { n, total })],
+  [/^preparing the audio$/, () => t('progress.preparingAudio')],
+  [/^transcribing on the server$/, () => t('progress.onServer')],
+  [/^preparing the model$/, () => t('progress.preparingModel')],
+  [/^detecting the language at several points$/, () => t('progress.detecting')],
+  [/^checking spans in another language$/, () => t('progress.checking')],
+  [/^transcribing \((.+)\)$/, ([backend]) => t('progress.transcribing', { backend })],
+  [/^(\d+) lines in (\S+) \((.+)\)$/, ([n, lang, where]) => t('progress.linesWhere', { n, lang, where })],
+  [/^(\d+) lines in (\S+)$/, ([n, lang]) => t('progress.lines', { n, lang })],
+]
+
+/** O andamento que o motor escreveu (`block 3 of 12`), no idioma da interface. O que a
+    interface não reconhece fica como veio. */
+export function progressText(message: string | null): string {
+  if (!message) return ''
+  for (const [pattern, write] of PROGRESS) {
+    const found = pattern.exec(message)
+    if (found) return write(found.slice(1))
   }
-  return (action && done[action]) || step
+  return message
 }

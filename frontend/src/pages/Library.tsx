@@ -4,7 +4,8 @@ import { useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, LIVE, type ItemKind, type ListParams } from '../api/client'
 import type { MovieRow, ShowRow } from '../api/types'
-import { plural, timeAgo } from '../lib/format'
+import { t, useLocale } from '../i18n'
+import { timeAgo } from '../lib/format'
 import { PageHead } from '../shell/Shell'
 import { Bar, Chips, Empty, Loading, Pager, SearchBox, type ChipOption } from '../ui/controls'
 import { useFeedback } from '../ui/feedback'
@@ -96,8 +97,11 @@ export function MonitorButton({
       type="button"
       className="icon-btn"
       aria-pressed={monitored}
-      aria-label={`${monitored ? 'Monitored' : 'Not monitored'}: ${title}`}
-      title={monitored ? 'Monitored: missing subtitles are made in the routine' : 'Not monitored'}
+      aria-label={t('library.monitoredItem', {
+        state: monitored ? t('library.monitored') : t('library.notMonitored'),
+        title,
+      })}
+      title={monitored ? t('library.monitoredHint') : t('library.notMonitored')}
       onClick={onToggle}
     >
       <Icon name="bookmark" size={14} filled={monitored} />
@@ -107,8 +111,6 @@ export function MonitorButton({
 
 type Common = {
   kind: ItemKind
-  heading: string
-  noun: string
   arr: 'radarr' | 'sonarr'
   counts?: Record<string, number>
   total: number
@@ -130,10 +132,10 @@ function ListPage(props: Common) {
   const { add, sync } = useLibraryActions()
   const counts = props.counts ?? {}
   const filters: ChipOption<Filter>[] = [
-    { value: '', label: 'All', count: counts.all },
-    { value: 'missing', label: 'Missing subtitles', count: counts.missing, tone: 'warn' },
-    { value: 'complete', label: 'Complete', count: counts.complete },
-    { value: 'queued', label: 'In the queue', count: counts.queued },
+    { value: '', label: t('common.all'), count: counts.all },
+    { value: 'missing', label: t('library.filter.missing'), count: counts.missing, tone: 'warn' },
+    { value: 'complete', label: t('common.complete'), count: counts.complete },
+    { value: 'queued', label: t('common.inQueue'), count: counts.queued },
   ]
   const selection: Selection = {
     on: selecting,
@@ -151,47 +153,45 @@ function ListPage(props: Common) {
   }
   const filtered = list.q !== '' || list.show !== ''
   const arrName = props.arr === 'radarr' ? 'Radarr' : 'Sonarr'
+  const what = props.kind === 'movie' ? 'movies' : 'shows'
+  const count = t(`library.count.${what}`, { n: counts.all ?? 0, done: counts.complete ?? 0 })
 
   return (
     <>
       <PageHead
-        title={props.heading}
-        sub={
-          props.counts
-            ? `${plural(counts.all ?? 0, props.noun)} · ${counts.complete ?? 0} complete${list.q ? ` · matching “${list.q}”` : ''}`
-            : undefined
-        }
+        title={t(`nav.${what}`)}
+        sub={props.counts ? count + (list.q ? t('library.matching', { q: list.q }) : '') : undefined}
       >
         <SearchBox
           value={list.q}
           onChange={(q) => list.set({ q })}
-          placeholder={`Search ${props.heading.toLowerCase()}`}
+          placeholder={t(`library.search.${what}`)}
           hotkey="/"
         />
         <button type="button" className="btn" disabled={sync.isPending} onClick={() => sync.mutate(props.arr)}>
           <Icon name="refresh" size={15} />
-          Sync with {arrName}
+          {t('library.sync', { arr: arrName })}
         </button>
       </PageHead>
 
       <div className="toolbar">
-        <Chips label="Filter" options={filters} value={list.show as Filter} onChange={(show) => list.set({ show })} />
+        <Chips label={t('common.filter')} options={filters} value={list.show as Filter} onChange={(show) => list.set({ show })} />
         <span className="spacer" />
         <select
           className="select"
-          aria-label="Sort by"
+          aria-label={t('library.sortBy')}
           value={list.sort}
           onChange={(event) => list.set({ sort: event.target.value })}
         >
-          <option value="title">Title</option>
-          <option value="added">Recently added</option>
-          <option value="missing">Missing first</option>
+          <option value="title">{t('library.sort.title')}</option>
+          <option value="added">{t('library.sort.added')}</option>
+          <option value="missing">{t('library.sort.missing')}</option>
         </select>
-        <div className="toggle-group" role="group" aria-label="View">
-          <button type="button" aria-label="Posters" aria-pressed={view === 'posters'} onClick={() => setView('posters')}>
+        <div className="toggle-group" role="group" aria-label={t('library.view')}>
+          <button type="button" aria-label={t('library.posters')} aria-pressed={view === 'posters'} onClick={() => setView('posters')}>
             <Icon name="grid" size={15} />
           </button>
-          <button type="button" aria-label="Table" aria-pressed={view === 'table'} onClick={() => setView('table')}>
+          <button type="button" aria-label={t('library.table')} aria-pressed={view === 'table'} onClick={() => setView('table')}>
             <Icon name="list" size={15} />
           </button>
         </div>
@@ -201,7 +201,7 @@ function ListPage(props: Common) {
           aria-pressed={selecting}
           onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
         >
-          {selecting ? 'Done selecting' : 'Select'}
+          {selecting ? t('library.doneSelecting') : t('library.select')}
         </button>
       </div>
 
@@ -212,19 +212,16 @@ function ListPage(props: Common) {
       ) : props.total === 0 ? (
         <section className="card">
           {filtered ? (
-            <Empty icon="search" title="Nothing matches these filters">
+            <Empty icon="search" title={t('library.noMatch')}>
               <button type="button" className="btn" onClick={() => list.set({ q: '', show: '' })}>
-                Clear the filters
+                {t('common.clearFilters')}
               </button>
             </Empty>
           ) : (
-            <Empty icon="movies" title={`No ${props.heading.toLowerCase()} yet`}>
-              <p>
-                They show up here after c3parr syncs with {arrName}, which keeps the library and its
-                metadata.
-              </p>
+            <Empty icon="movies" title={t(`library.empty.${what}`)}>
+              <p>{t('library.emptyBody', { arr: arrName })}</p>
               <Link to={`/settings/library/${props.arr}`} className="btn">
-                Connect {arrName}
+                {t('library.connect', { arr: arrName })}
               </Link>
             </Empty>
           )}
@@ -238,13 +235,13 @@ function ListPage(props: Common) {
       <Pager page={props.page} pages={props.pages} onPage={(page) => list.set({ page })} />
 
       {selecting && (
-        <div className="bulk" role="region" aria-label="Selection">
-          <strong>{picked.size ? `${picked.size} selected` : 'Pick the items to add to the queue'}</strong>
+        <div className="bulk" role="region" aria-label={t('common.selection')}>
+          <strong>{picked.size ? t('library.selected', { n: picked.size }) : t('library.pick')}</strong>
           <button type="button" className="btn small" onClick={() => setPicked(new Set(props.keys))}>
-            Select this page
+            {t('library.selectPage')}
           </button>
           <button type="button" className="btn small" disabled={!picked.size} onClick={() => setPicked(new Set())}>
-            Clear
+            {t('common.clear')}
           </button>
           <button
             type="button"
@@ -252,7 +249,7 @@ function ListPage(props: Common) {
             disabled={!picked.size || add.isPending}
             onClick={() => add.mutate([...picked], { onSuccess: stopSelecting })}
           >
-            Add to the queue
+            {t('common.addToQueue')}
           </button>
         </div>
       )}
@@ -266,7 +263,7 @@ function SelectBox({ selection, itemKey, title }: { selection: Selection; itemKe
     <input
       type="checkbox"
       className="check"
-      aria-label={`Select ${title}`}
+      aria-label={t('common.selectItem', { title })}
       checked={selection.has(itemKey)}
       onChange={() => selection.toggle(itemKey)}
     />
@@ -281,12 +278,13 @@ function MovieAction({ movie, onAdd, busy }: { movie: MovieRow; onAdd: () => voi
   return (
     <button type="button" className="btn primary small" disabled={busy} onClick={onAdd}>
       <Icon name="plus" size={13} />
-      Make {movie.missing.join(', ')}
+      {t('library.make', { langs: movie.missing.join(', ') })}
     </button>
   )
 }
 
 export function Movies() {
+  useLocale()
   const list = useListParams()
   const { add, monitor } = useLibraryActions()
   const page = useQuery({
@@ -303,8 +301,6 @@ export function Movies() {
   return (
     <ListPage
       kind="movie"
-      heading="Movies"
-      noun="movie"
       arr="radarr"
       counts={page.data?.counts}
       total={page.data?.total ?? 0}
@@ -346,7 +342,7 @@ export function Movies() {
                 <div className="truncate" style={{ fontWeight: 500 }}>
                   {movie.title} <span className="muted num">{movie.year}</span>
                 </div>
-                <div className="sub">added {timeAgo(movie.added_at)}</div>
+                <div className="sub">{t('library.added', { when: timeAgo(movie.added_at) })}</div>
               </div>
               <Tracks subs={movie.subs} missing={movie.missing} job={movie.job} />
               <span className="ep-state">
@@ -367,16 +363,16 @@ function ShowState({ show, onAdd, busy }: { show: ShowRow; onAdd: () => void; bu
     return (
       <button type="button" className="btn primary small" disabled={busy} onClick={onAdd}>
         <Icon name="plus" size={13} />
-        Add {show.missing} missing
+        {t('library.addMissing', { n: show.missing })}
       </button>
     )
   }
-  if (show.queued) return <span className="accent">In the queue</span>
+  if (show.queued) return <span className="accent">{t('common.inQueue')}</span>
   if (show.total > 0 && show.done === show.total) {
     return (
       <span className="ok" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <Icon name="check" size={14} />
-        Complete
+        {t('common.complete')}
       </span>
     )
   }
@@ -384,6 +380,7 @@ function ShowState({ show, onAdd, busy }: { show: ShowRow; onAdd: () => void; bu
 }
 
 export function Shows() {
+  useLocale()
   const list = useListParams()
   const { add, monitor } = useLibraryActions()
   const page = useQuery({
@@ -399,10 +396,10 @@ export function Shows() {
   const progress = (show: ShowRow) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ flex: 1 }}>
-        <Bar value={show.total ? show.done / show.total : 0} label="Episodes with every subtitle" />
+        <Bar value={show.total ? show.done / show.total : 0} label={t('overview.episodesAll')} />
       </span>
       <span className="muted num" style={{ fontSize: 12 }}>
-        {show.done} of {show.total}
+        {t('library.doneOf', { done: show.done, total: show.total })}
       </span>
     </div>
   )
@@ -410,8 +407,6 @@ export function Shows() {
   return (
     <ListPage
       kind="series"
-      heading="TV Shows"
-      noun="show"
       arr="sonarr"
       counts={page.data?.counts}
       total={page.data?.total ?? 0}
