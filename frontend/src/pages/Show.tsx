@@ -115,7 +115,7 @@ function SeasonBlock({
               <span className="grow truncate" title={episode.name}>
                 {episode.title ?? episode.name}
               </span>
-              <Tracks subs={episode.subs} missing={episode.missing} job={episode.job} />
+              <Tracks subs={episode.subs} others={episode.others} missing={episode.missing} job={episode.job} wide />
               <span className="ep-state">
                 {episode.job ? (
                   <ItemJob job={episode.job} bar />

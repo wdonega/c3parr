@@ -324,7 +324,7 @@ export function Movies() {
                 <span title={movie.title}>{movie.title}</span>
                 <span className="year num">{movie.year}</span>
               </div>
-              <Tracks subs={movie.subs} missing={movie.missing} job={movie.job} />
+              <Tracks subs={movie.subs} others={movie.others} missing={movie.missing} job={movie.job} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                 <MovieAction movie={movie} busy={add.isPending} onAdd={() => add.mutate([key(movie)])} />
               </div>
@@ -344,7 +344,7 @@ export function Movies() {
                 </div>
                 <div className="sub">{t('library.added', { when: timeAgo(movie.added_at) })}</div>
               </div>
-              <Tracks subs={movie.subs} missing={movie.missing} job={movie.job} />
+              <Tracks subs={movie.subs} others={movie.others} missing={movie.missing} job={movie.job} wide />
               <span className="ep-state">
                 <MovieAction movie={movie} busy={add.isPending} onAdd={() => add.mutate([key(movie)])} />
               </span>

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from uikit import ApiDriver, World, empty_world, seed_world
 
 from c3parr.asr.remote import REMOTE_IDS
+from c3parr.audio.ffmpeg import AudioStream, MediaInfo
 from c3parr.core.config import Settings
 from c3parr.jobs.queue import CANCEL_REQUESTED
 from c3parr.library.arr import ArrConfig
@@ -363,12 +364,18 @@ def test_an_old_radarr_is_a_standing_warning_until_updated(seeded: Ui) -> None:
 def test_library_shows_each_subtitle_by_source_and_what_is_missing(seeded: Ui) -> None:
     movies = _by_title(seeded.do.movies()["rows"])
     assert list(movies) == ["Incendies", "Oldboy", "Parasite", "Roma"]
-    incendies = movies["Incendies"]  # a forced em francês não conta
-    assert incendies["subs"] == [["en", "embedded"], ["es", "external"], ["pt-BR", "external"]]
+    # só as dos idiomas alvo (pt-BR e es) e a do original: o filme é francês, a faixa em inglês
+    # fica de fora, e a forced em francês não conta
+    incendies = movies["Incendies"]
+    assert incendies["subs"] == [["es", "external"], ["pt-BR", "external"]]
+    assert incendies["others"] == 1  # as que ficam de fora são só contadas
     assert incendies["missing"] == [] and incendies["job"] is None
-    # pt (Portugal) não cobre pt-BR: são alvos distintos
-    assert movies["Parasite"]["subs"] == [["pt", "external"], ["pt-BR", "ours"]]
+    # pt (Portugal) não cobre pt-BR nem aparece: são idiomas distintos
+    assert movies["Parasite"]["subs"] == [["pt-BR", "ours"]]
     assert movies["Parasite"]["missing"] == ["es"]
+    assert movies["Roma"]["subs"] == []  # só tem inglês, e não se sabe o idioma original
+    assert (movies["Roma"]["others"], movies["Parasite"]["others"]) == (1, 1)
+    assert movies["Oldboy"]["others"] == 0
     assert movies["Oldboy"]["missing"] == ["pt-BR", "es"]
     assert movies["Oldboy"]["job"] == {"label": "Translate → pt-BR", "status": "running"}
     assert not movies["Roma"]["monitored"] and movies["Incendies"]["monitored"]
@@ -378,6 +385,38 @@ def test_library_shows_each_subtitle_by_source_and_what_is_missing(seeded: Ui) -
     assert (spn["total"], spn["done"], spn["queued"]) == (4, 1, True)
     assert spn["missing"] == 2  # sem legenda e sem tarefa na fila: o S02E01 já está nela
     assert (shows["Dark"]["total"], shows["Dark"]["done"], shows["Dark"]["missing"]) == (1, 1, 0)
+
+
+def test_the_subtitle_of_the_original_language_comes_first(seeded: Ui) -> None:
+    world, do = seeded.world, seeded.do
+    show = do.show(world.ids["Supernatural"])
+    assert show is not None
+    episodes = {e["name"]: e for season in show["seasons"] for e in season["episodes"]}
+    # a série é em inglês: a legenda em inglês aparece, antes das dos alvos
+    assert episodes[PILOT]["subs"] == [
+        ["en", "embedded"], ["es", "ours"], ["pt-BR", "external"]]  # fmt: skip
+    assert episodes[WENDIGO]["subs"] == [["en", "embedded"]]
+    assert episodes[PILOT]["others"] == 0
+
+    # sem metadados, vale o idioma da primeira faixa de áudio; `pt` e `pt-BR` são o mesmo idioma
+    roma = next(m for m in world.catalog.all_media() if m.video.endswith("Roma.mkv"))
+    assert _by_title(do.movies()["rows"])["Roma"]["subs"] == []
+    audio = AudioStream(index=1, lang="en")
+    world.catalog.set_probe(roma.id, MediaInfo(duration=60.0, audio=(audio,)))
+    assert _by_title(do.movies()["rows"])["Roma"]["subs"] == [["en", "embedded"]]
+    world.catalog.set_original_language(roma.id, "pt")  # os metadados ganham da faixa de áudio
+    assert _by_title(do.movies()["rows"])["Roma"]["subs"] == []
+    parasite = next(m for m in world.catalog.all_media() if m.video.endswith("Parasite.mkv"))
+    world.catalog.set_original_language(parasite.id, "pt")
+    assert _by_title(do.movies()["rows"])["Parasite"]["subs"] == [
+        ["pt", "external"], ["pt-BR", "ours"]]  # fmt: skip
+
+
+def test_the_overview_counts_only_the_target_languages(seeded: Ui) -> None:
+    rows = seeded.do.dashboard()["languages"]
+    assert [r["lang"] for r in rows] == ["pt-BR", "es"]  # a ordem das configurações
+    pt_br = rows[0]
+    assert (pt_br["embedded"], pt_br["external"], pt_br["ours"], pt_br["missing"]) == (0, 3, 2, 4)
 
 
 def test_library_search_filters_and_pages(seeded: Ui) -> None:

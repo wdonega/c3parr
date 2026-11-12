@@ -133,6 +133,7 @@ export interface EpisodeRow {
   name: string
   video: string
   subs: Sub[]
+  others: number
   missing: string[]
   job: JobRef | null
 }
@@ -240,7 +241,6 @@ export interface LanguageRow {
   external: number
   ours: number
   missing: number
-  target: boolean
 }
 
 export interface LibraryCount {
@@ -296,6 +296,7 @@ export interface MovieRow {
   monitored: boolean
   added_at: string
   subs: Sub[]
+  others: number
   missing: string[]
   job: JobRef | null
   poster: string | null

@@ -139,7 +139,7 @@ def build_api(svc: Service) -> APIRouter:
         languages = [
             s.LanguageRow(lang=r["lang"], name=LANGUAGE_NAMES.get(r["lang"], r["lang"]),
                           embedded=r["embedded"], external=r["human"], ours=r["ours"],
-                          missing=r["missing"], target=r["target"])
+                          missing=r["missing"])
             for r in data["languages"]
         ]  # fmt: skip
         return s.Dashboard(
@@ -173,7 +173,7 @@ def build_api(svc: Service) -> APIRouter:
             s.MovieRow(id=r["item"].id, title=r["item"].title, year=r["item"].year,
                        folder=r["item"].folder, video=r["item"].video,
                        monitored=r["item"].monitored, added_at=r["item"].added_at,
-                       subs=subs(r), missing=r["missing"],
+                       subs=subs(r), others=r["others"], missing=r["missing"],
                        job=job_ref(refs.get(r["item"].video), positions),
                        poster=poster("movie", r["item"]))
             for r in data["rows"]
@@ -205,7 +205,8 @@ def build_api(svc: Service) -> APIRouter:
             s.Season(season=season, episodes=[
                 s.EpisodeRow(id=r["item"].id, season=r["item"].season,
                              episode=r["item"].episode, title=r["item"].title, name=r["name"],
-                             video=r["item"].video, subs=subs(r), missing=r["missing"],
+                             video=r["item"].video, subs=subs(r), others=r["others"],
+                             missing=r["missing"],
                              job=job_ref(refs.get(r["item"].video), positions))
                 for r in rows])
             for season, rows in data["seasons"]

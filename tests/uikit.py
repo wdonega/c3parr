@@ -96,6 +96,15 @@ def empty_world(root: Path) -> World:
     return World(root, app, library, queue, app.state.catalog, {})
 
 
+ORIGINALS = {
+    "Incendies": "fr",
+    "Parasite": "ko",
+    "Oldboy": "ko",
+    "Supernatural - S01E01 - Pilot.mkv": "en",
+    "Supernatural - S01E02 - Wendigo.mkv": "en",
+}
+
+
 def _video(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"x")
@@ -166,6 +175,9 @@ def seed_world(root: Path) -> World:
             lib.set_subtitle_files(video, [_sub(video, *s) for s in subs])
 
     media = {name: catalog.ensure_media(video)[0].id for name, video in videos.items()}
+    # o idioma original de cada um: a legenda dele aparece na biblioteca, junto das dos alvos
+    for name, lang in ORIGINALS.items():
+        catalog.set_original_language(media[name], lang)
     pilot, wendigo = "Supernatural - S01E01 - Pilot.mkv", "Supernatural - S01E02 - Wendigo.mkv"
     dying = "Supernatural - S02E01 - In My Time of Dying.mkv"
 
@@ -297,7 +309,10 @@ class ApiDriver:
     def _item_row(row: Mapping[str, Any]) -> dict[str, Any]:
         job = row["job"] and {"label": row["job"]["label"], "status": row["job"]["status"]}
         return {"subs": [[sub["lang"], sub["kind"]] for sub in row["subs"]],
-                "missing": row["missing"], "job": job}  # fmt: skip
+                "others": row["others"], "missing": row["missing"], "job": job}  # fmt: skip
+
+    def dashboard(self) -> dict[str, Any]:
+        return dict(self._get("/dashboard"))
 
     def movies(self, q: str = "", show: str = "", page: int = 0) -> dict[str, Any]:
         data = self._get("/movies", q=q, show=show, page=page)

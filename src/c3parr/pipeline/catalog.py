@@ -169,6 +169,16 @@ class Catalog:
             rows = db.execute("SELECT * FROM media ORDER BY id").fetchall()
         return [m for r in rows if (m := self._media(r)) is not None]
 
+    def original_languages(self) -> dict[str, str]:
+        """vídeo → idioma original: o dos metadados; sem ele, o da primeira faixa de áudio
+        (a mesma ordem que a pipeline usa para decidir de onde traduzir)."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT video, COALESCE(NULLIF(original_language, ''), "
+                "json_extract(probe_json, '$.audio[0].lang')) AS lang FROM media"
+            ).fetchall()
+        return {r["video"]: r["lang"] for r in rows if r["lang"]}
+
     def ensure_media(self, video: str) -> tuple[Media, bool]:
         """Registra o vídeo (ou o encontra). Devolve também se o arquivo mudou desde a última
         vez (tamanho/mtime): aí o trabalho anterior não vale e o item começa de novo."""

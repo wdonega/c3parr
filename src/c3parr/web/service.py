@@ -41,7 +41,7 @@ from c3parr.llm.client import LLM_KEY_ENV, LLM_PRESETS, LLMConfig, llm_defaults
 from c3parr.metadata import tmdb as tmdb_meta
 from c3parr.metadata.tmdb import TMDbConfig
 from c3parr.pipeline.catalog import Catalog
-from c3parr.pipeline.naming import norm_lang, same_lang
+from c3parr.pipeline.naming import norm_lang, same_base, same_lang
 from c3parr.pipeline.reconcile import PipelineContext, reconcile
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 
@@ -569,21 +569,23 @@ class Service:
         made: dict[str, int] = {}
         for (lang, _), n in self.catalog.output_counts().items():
             made[lang] = made.get(lang, 0) + n
+        targets = cfg.target_languages
         by_lang: dict[str, dict[str, Any]] = {}
+
+        def row(lang: str) -> dict[str, Any]:
+            return by_lang.setdefault(
+                lang, {"lang": lang, "embedded": 0, "human": 0, "ours": 0, "missing": 0}
+            )
+
         for r in movies + episodes:
             for lang, kind in r["subs"]:
-                row = by_lang.setdefault(lang, {"lang": lang, "embedded": 0, "human": 0, "ours": 0,
-                                                "missing": 0, "target": False})  # fmt: skip
-                row[kind] += 1
+                target = next((t for t in targets if same_lang(t, lang)), None)
+                if target:
+                    row(target)[kind] += 1
             for lang in r["missing"]:
-                row = by_lang.setdefault(lang, {"lang": lang, "embedded": 0, "human": 0, "ours": 0,
-                                                "missing": 0, "target": True})  # fmt: skip
-                row["missing"] += 1
-        for lang in cfg.target_languages:
-            if lang in by_lang:
-                by_lang[lang]["target"] = True
-        languages = sorted(by_lang.values(), key=lambda r: (not r["target"], -(
-            r["embedded"] + r["human"] + r["ours"]), r["lang"]))  # fmt: skip
+                row(lang)["missing"] += 1
+        # só os idiomas alvo, na ordem das configurações (o primeiro é o principal)
+        languages = [by_lang[t] for t in targets if t in by_lang]
         return {
             "movies": {"total": len(movies), "done": sum(1 for r in movies if not r["missing"])},
             "episodes": {"total": len(episodes), "shows": len(self.lib.series_list()),
@@ -700,13 +702,16 @@ class Service:
     # --- biblioteca ---
 
     def item_rows(self, items: list[Any]) -> list[dict[str, Any]]:
-        """Por item: legendas por idioma (embutida, de outra fonte, nossa) e os idiomas alvo que
-        faltam. Só lê o banco (o sync e a pipeline gravam o que acham no disco): com biblioteca
+        """Por item: as legendas que importam (a do idioma original e as dos idiomas alvo, cada
+        uma com a origem: embutida, de outra fonte, nossa) e os idiomas alvo que faltam. Um
+        vídeo traz dezenas de faixas em idiomas que ninguém pediu: essas ficam de fora.
+        Só lê o banco (o sync e a pipeline gravam o que acham no disco): com biblioteca
         grande, abrir a página não pode depender de listar pastas nem de acordar o NAS."""
         active = self.active_jobs()
         videos = [i.video for i in items]
         subs = self.lib.subtitle_files(None if len(videos) > 500 else videos)
         targets = self.lib.config().target_languages
+        originals = self.catalog.original_languages()
         out = []
         for item in items:
             present: dict[str, str] = {}
@@ -719,8 +724,13 @@ class Service:
                 elif f.kind == "human" or f.lang not in present:
                     present[f.lang] = f.kind
             missing = [t for t in targets if not any(same_lang(t, lang) for lang in present)]
+            original = originals.get(item.video)
+            shown = [(lang, kind, same_base(original, lang)) for lang, kind in present.items()]
+            shown = [s for s in shown if s[2] or any(same_lang(t, s[0]) for t in targets)]
+            shown.sort(key=lambda s: (not s[2], s[0]))  # a original primeiro
             out.append({"item": item, "name": Path(item.video).name,
-                        "subs": sorted(present.items()), "missing": missing,
+                        "subs": [(lang, kind) for lang, kind, _ in shown],
+                        "others": len(present) - len(shown), "missing": missing,
                         "job": active.get(item.video)})  # fmt: skip
         return out
 

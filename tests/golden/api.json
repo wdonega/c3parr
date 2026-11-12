@@ -21,8 +21,7 @@
     "lang": "pt-BR",
     "missing": 4,
     "name": "Portuguese (Brazil)",
-    "ours": 2,
-    "target": true
+    "ours": 2
    },
    {
     "embedded": 0,
@@ -30,26 +29,7 @@
     "lang": "es",
     "missing": 6,
     "name": "Spanish",
-    "ours": 1,
-    "target": true
-   },
-   {
-    "embedded": 4,
-    "external": 0,
-    "lang": "en",
-    "missing": 0,
-    "name": "English",
-    "ours": 0,
-    "target": false
-   },
-   {
-    "embedded": 0,
-    "external": 1,
-    "lang": "pt",
-    "missing": 0,
-    "name": "Portuguese (Portugal)",
-    "ours": 0,
-    "target": false
+    "ours": 1
    }
   ],
   "made": [
@@ -896,12 +876,9 @@
     "job": null,
     "missing": [],
     "monitored": true,
+    "others": 1,
     "poster": "/api/v1/poster/movie/1",
     "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     },
      {
       "kind": "external",
       "lang": "es"
@@ -933,6 +910,7 @@
      "es"
     ],
     "monitored": true,
+    "others": 0,
     "poster": null,
     "subs": [],
     "title": "Oldboy",
@@ -948,12 +926,9 @@
      "es"
     ],
     "monitored": true,
+    "others": 1,
     "poster": null,
     "subs": [
-     {
-      "kind": "external",
-      "lang": "pt"
-     },
      {
       "kind": "ours",
       "lang": "pt-BR"
@@ -973,13 +948,9 @@
      "es"
     ],
     "monitored": false,
+    "others": 1,
     "poster": null,
-    "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     }
-    ],
+    "subs": [],
     "title": "Roma",
     "video": "<root>/movies/Roma (2018)/Roma.mkv",
     "year": 2018
@@ -1015,6 +986,7 @@
      "es"
     ],
     "monitored": true,
+    "others": 0,
     "poster": null,
     "subs": [],
     "title": "Oldboy",
@@ -1030,12 +1002,9 @@
      "es"
     ],
     "monitored": true,
+    "others": 1,
     "poster": null,
     "subs": [
-     {
-      "kind": "external",
-      "lang": "pt"
-     },
      {
       "kind": "ours",
       "lang": "pt-BR"
@@ -1055,13 +1024,9 @@
      "es"
     ],
     "monitored": false,
+    "others": 1,
     "poster": null,
-    "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     }
-    ],
+    "subs": [],
     "title": "Roma",
     "video": "<root>/movies/Roma (2018)/Roma.mkv",
     "year": 2018
@@ -1073,12 +1038,9 @@
     "job": null,
     "missing": [],
     "monitored": true,
+    "others": 1,
     "poster": "/api/v1/poster/movie/1",
     "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     },
      {
       "kind": "external",
       "lang": "es"
@@ -1123,6 +1085,7 @@
      "es"
     ],
     "monitored": true,
+    "others": 0,
     "poster": null,
     "subs": [],
     "title": "Oldboy",
@@ -1138,12 +1101,9 @@
      "es"
     ],
     "monitored": true,
+    "others": 1,
     "poster": null,
     "subs": [
-     {
-      "kind": "external",
-      "lang": "pt"
-     },
      {
       "kind": "ours",
       "lang": "pt-BR"
@@ -1163,13 +1123,9 @@
      "es"
     ],
     "monitored": false,
+    "others": 1,
     "poster": null,
-    "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     }
-    ],
+    "subs": [],
     "title": "Roma",
     "video": "<root>/movies/Roma (2018)/Roma.mkv",
     "year": 2018
@@ -1194,12 +1150,9 @@
     "job": null,
     "missing": [],
     "monitored": true,
+    "others": 1,
     "poster": "/api/v1/poster/movie/1",
     "subs": [
-     {
-      "kind": "embedded",
-      "lang": "en"
-     },
      {
       "kind": "external",
       "lang": "es"
@@ -2090,6 +2043,7 @@
       "job": null,
       "missing": [],
       "name": "Supernatural - S01E01 - Pilot.mkv",
+      "others": 0,
       "season": 1,
       "subs": [
        {
@@ -2117,6 +2071,7 @@
        "es"
       ],
       "name": "Supernatural - S01E02 - Wendigo.mkv",
+      "others": 0,
       "season": 1,
       "subs": [
        {
@@ -2149,6 +2104,7 @@
        "es"
       ],
       "name": "Supernatural - S02E01 - In My Time of Dying.mkv",
+      "others": 0,
       "season": 2,
       "subs": [],
       "title": "In My Time of Dying",
@@ -2167,6 +2123,7 @@
        "es"
       ],
       "name": "Supernatural - Extra.mkv",
+      "others": 0,
       "season": null,
       "subs": [
        {

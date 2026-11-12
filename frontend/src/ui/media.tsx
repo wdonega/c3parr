@@ -32,12 +32,32 @@ export function Poster({
   )
 }
 
-/** Legendas do item por origem; as que faltam tracejadas. A que a tarefa do item está
-    fazendo aparece em andamento (tarefa sem idioma, como ler metadados, vale para todas). */
-export function Tracks({ subs, missing, job }: { subs: Sub[]; missing: string[]; job?: JobRef | null }) {
+/** Legendas do item por origem (a do idioma original e as dos alvos); as que faltam
+    tracejadas. A que a tarefa do item está fazendo aparece em andamento (tarefa sem idioma,
+    como ler metadados, vale para todas). As dos outros idiomas só são contadas: `+31` no
+    cartão, `31 more subtitles` por extenso na tabela (`wide`). */
+export function Tracks({
+  subs,
+  others,
+  missing,
+  job,
+  wide,
+}: {
+  subs: Sub[]
+  others: number
+  missing: string[]
+  job?: JobRef | null
+  wide?: boolean
+}) {
   const making = (lang: string) => !!job && (job.language === null || job.language === lang)
+  const more = others > 0 ? t('sub.more', { n: others }) : ''
   return (
     <span className="pills">
+      {more && (
+        <span className="more" title={wide ? undefined : more} aria-label={wide ? undefined : more}>
+          {wide ? more : `+${others}`}
+        </span>
+      )}
       {subs.map((sub) => (
         <span
           key={`${sub.lang}-${sub.kind}`}
@@ -60,25 +80,16 @@ export function Tracks({ subs, missing, job }: { subs: Sub[]; missing: string[];
   )
 }
 
+/** O que cada cor de legenda quer dizer: uma amostra sem texto, para não parecer um item. */
 export function TrackLegend() {
   return (
-    <div className="legend" aria-label={t('sub.legend')} style={{ fontSize: 12 }}>
-      <span>
-        <span className="pill embedded">en</span>
-        {t('sub.embedded')}
-      </span>
-      <span>
-        <span className="pill external">en</span>
-        {t('sub.external')}
-      </span>
-      <span>
-        <span className="pill ours">en</span>
-        {t('sub.ours')}
-      </span>
-      <span>
-        <span className="pill missing">en</span>
-        {t('sub.missing')}
-      </span>
+    <div className="legend track-legend" role="group" aria-label={t('sub.legend')}>
+      {(['embedded', 'external', 'ours', 'missing'] as const).map((kind) => (
+        <span key={kind}>
+          <span className={`pill ${kind}`} aria-hidden="true" />
+          {t(`sub.${kind}`)}
+        </span>
+      ))}
     </div>
   )
 }

@@ -12,8 +12,7 @@ import { useFeedback } from '../ui/feedback'
 import { Icon } from '../ui/Icon'
 
 function Coverage({ data }: { data: Dashboard }) {
-  const targets = data.languages.filter((row) => row.target)
-  const others = data.languages.filter((row) => !row.target)
+  const targets = data.languages
   const [chosen, setChosen] = useState<string | null>(null)
   const row: LanguageRow | undefined = targets.find((t) => t.lang === chosen) ?? targets[0]
 
@@ -120,17 +119,6 @@ function Coverage({ data }: { data: Dashboard }) {
           data.episodes,
         )}
       </div>
-      {others.length > 0 && (
-        <div className="legend muted" style={{ alignItems: 'center' }}>
-          <span>{t('overview.also')}</span>
-          {others.map((other) => (
-            <span key={other.lang}>
-              <span className="pill external">{other.lang}</span>
-              {other.embedded + other.external + other.ours}
-            </span>
-          ))}
-        </div>
-      )}
     </section>
   )
 }
@@ -313,7 +301,7 @@ export function Overview() {
       </>
     )
   }
-  const targets = data.languages.filter((row) => row.target).map((row) => row.lang)
+  const targets = data.languages.map((row) => row.lang)
   const activity = [
     { n: data.activity.translations, label: t('overview.translations') },
     { n: data.activity.transcriptions, label: t('overview.transcriptions') },

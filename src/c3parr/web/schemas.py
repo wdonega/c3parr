@@ -247,13 +247,14 @@ class LanguageCount(Out):
 
 
 class LanguageRow(Out):
+    """Um idioma alvo: quantos itens têm a legenda dele (por origem) e quantos não têm."""
+
     lang: str
     name: str
     embedded: int
     external: int
     ours: int
     missing: int
-    target: bool
 
 
 class Dashboard(Out):
@@ -278,6 +279,9 @@ class MovieRow(Out):
     monitored: bool
     added_at: str
     subs: list[Sub]
+    """As legendas do idioma original e dos idiomas alvo."""
+    others: int
+    """Em quantos outros idiomas o item tem legenda (não entram em `subs`)."""
     missing: list[str]
     job: JobRef | None
     poster: str | None
@@ -325,6 +329,9 @@ class EpisodeRow(Out):
     name: str
     video: str
     subs: list[Sub]
+    """As legendas do idioma original e dos idiomas alvo."""
+    others: int
+    """Em quantos outros idiomas o item tem legenda (não entram em `subs`)."""
     missing: list[str]
     job: JobRef | None
 

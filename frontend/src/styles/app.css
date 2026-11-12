@@ -792,6 +792,26 @@ button {
   gap: 5px;
 }
 
+/* quantas legendas há em outros idiomas: no cartão vem depois (`+31`); na tabela vem antes,
+   para as legendas ficarem encostadas à direita, uma embaixo da outra */
+.pills .more {
+  order: 1;
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.row .pills {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.row .pills .more {
+  order: -1;
+  margin-right: 6px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -839,6 +859,21 @@ button {
   border-color: var(--accent-line);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* a legenda das cores: amostras pequenas e sem texto */
+.track-legend {
+  gap: 4px 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.track-legend .pill {
+  justify-content: center;
+  width: 18px;
+  height: 12px;
+  padding: 0;
+  border-radius: 4px;
 }
 
 .status {
