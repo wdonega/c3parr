@@ -115,6 +115,30 @@ def test_the_save_bar_counts_the_changes_and_shows_only_when_there_are_some(
     assert lib.config().forced_resolves and lib.config().wait_minutes == 60
 
 
+def test_concerts_are_turned_on_with_their_folders_and_the_options_follow(
+    desktop: Page, spa: Served
+) -> None:
+    desktop.goto(spa.url + "/settings/subtitles")
+    section = desktop.get_by_role("region", name="Concerts")
+    mode = section.get_by_label("Concert subtitles")
+    expect(mode).to_have_value("off")
+    lyrics = section.get_by_role("switch", name="Use the official lyrics from the internet")
+    expect(lyrics).to_be_disabled()  # desligado: as opções que dependem dele ficam apagadas
+
+    mode.select_option("manual")
+    expect(lyrics).to_be_enabled()
+    section.get_by_label("Concert folders").fill("/data/media/musicvideos/, /shows")
+    section.get_by_role("switch", name="Also publish in the language that is sung").click()
+    save_bar(desktop).get_by_role("button", name="Save 3 changes").click()
+    said(desktop, "Saved.")
+    got = spa.world.library.config()
+    assert (got.concert_mode, got.concert_publish_original) == ("manual", False)
+    assert got.concert_paths == ("/data/media/musicvideos", "/shows")
+
+    desktop.reload()
+    expect(desktop.get_by_label("Concert folders")).to_have_value("/data/media/musicvideos, /shows")
+
+
 def test_discard_goes_back_to_what_is_saved(desktop: Page, spa: Served) -> None:
     desktop.goto(spa.url + "/settings/subtitles")
     wait = desktop.get_by_label("Wait time (minutes)")
