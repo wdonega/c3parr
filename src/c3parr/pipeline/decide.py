@@ -225,7 +225,8 @@ def decide(s: ItemState, cfg: AppConfig, retry_failed: bool = False) -> Decision
     else:
         main = current
 
-    if cfg.asr_always and cfg.asr_enabled and s.asr_path is None:
+    # num show a transcrição comum não ajuda (ela erra o canto): fica só a legenda de show
+    if cfg.asr_always and cfg.asr_enabled and s.asr_path is None and s.concert == "no":
         if c.needs("asr"):
             actions.append(Action(kind="asr", reason="ASR always on (more context)"))
         return _done(actions, resolved=resolved, main=main, blocked=tuple(c.blocked),

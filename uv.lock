@@ -16,6 +16,9 @@ conflicts = [[
     { package = "c3parr", extra = "concert-cpu" },
 ]]
 
+[manifest]
+overrides = [{ name = "sphn", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'", specifier = ">=0.2.1" }]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -370,7 +373,7 @@ dependencies = [
     { name = "lameenc" },
     { name = "pyyaml" },
     { name = "safetensors" },
-    { name = "sphn" },
+    { name = "sphn", marker = "platform_machine != 'aarch64' or sys_platform != 'linux'" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-6-c3parr-concert') or (sys_platform == 'win32' and extra == 'extra-6-c3parr-concert') or (extra == 'extra-6-c3parr-concert' and extra == 'extra-6-c3parr-concert-cpu')" },
     { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-6-c3parr-concert-cpu') or (sys_platform == 'linux' and extra == 'extra-6-c3parr-concert' and extra == 'extra-6-c3parr-concert-cpu') or (sys_platform == 'win32' and extra == 'extra-6-c3parr-concert' and extra == 'extra-6-c3parr-concert-cpu')" },
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-6-c3parr-concert') or (sys_platform == 'linux' and extra == 'extra-6-c3parr-concert' and extra == 'extra-6-c3parr-concert-cpu') or (sys_platform == 'win32' and extra == 'extra-6-c3parr-concert' and extra == 'extra-6-c3parr-concert-cpu')" },

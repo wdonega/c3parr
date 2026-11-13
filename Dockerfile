@@ -3,6 +3,8 @@
 #   VARIANT=cuda    NVIDIA: RTX 20xx–50xx no x86; Jetson Orin, Thor e DGX Spark no ARM (padrão)
 #   VARIANT=vulkan  AMD, Intel e NVIDIA pelo Mesa no x86; Mali e afins no ARM
 # Sem GPU, as duas transcrevem na CPU (o whisper.cpp escolhe a melhor variante de CPU na hora).
+# A legenda de show (torch: Demucs e wav2vec2) usa CUDA só na variante cuda em x86; na vulkan e
+# no ARM ela roda no processador, com o torch sem CUDA (alguns GB a menos na imagem).
 ARG VARIANT=cuda
 ARG CUDA_VERSION=13.2.0
 ARG UBUNTU_VERSION=24.04
@@ -67,6 +69,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 mesa
 # ---------- c3parr ----------
 FROM base-${VARIANT}
 ARG VARIANT
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates ffmpeg libgomp1 python3 \
  && rm -rf /var/lib/apt/lists/*
@@ -76,10 +79,13 @@ WORKDIR /app
 ENV UV_PYTHON=python3 UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # dependências antes do código: mudar o código não reinstala tudo
 COPY pyproject.toml uv.lock LICENSE ./
-RUN uv sync --frozen --no-dev --extra web --no-install-project
+# o extra do show: `concert` traz o torch com CUDA (só existe para Linux x86); `concert-cpu`, sem
+RUN if [ "$VARIANT" = "cuda" ] && [ "$TARGETARCH" = "amd64" ]; then echo concert; \
+    else echo concert-cpu; fi > /app/.concert-extra
+RUN uv sync --frozen --no-dev --extra web --extra "$(cat /app/.concert-extra)" --no-install-project
 COPY src ./src
 COPY --from=frontend /app/src/c3parr/web/dist ./src/c3parr/web/dist
-RUN uv sync --frozen --no-dev --extra web --no-editable
+RUN uv sync --frozen --no-dev --extra web --extra "$(cat /app/.concert-extra)" --no-editable
 
 COPY --from=whisper /out /opt/whisper
 # no fim: mudar a versão a cada build não invalida o cache das camadas de cima

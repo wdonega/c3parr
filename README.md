@@ -34,6 +34,7 @@ The result is written as `<video>.<lang>.c3parr.srt`. When a better subtitle sho
 
 - **Library from Radarr and Sonarr.** "Sync with Radarr/Sonarr" tasks run every hour, with path mappings and filters (monitored only, tags, series type, season zero), like Bazarr. There are no folders to configure and no webhooks.
 - **Transcription (ASR) with whisper.cpp** on CUDA, Vulkan, Metal or the CPU, with VAD (it doesn't hallucinate over music). It can also run on a **separate server**, through an OpenAI-compatible API (whisper.cpp server, speaches, LocalAI) or a whisper-asr-webservice like Bazarr's.
+- **Concert subtitles.** For a concert, c3parr separates the voice from the band, finds which songs are played and places the official lyrics where each line is sung (♪), plus what is said between the songs. See [Concert subtitles](#concert-subtitles).
 - **LLM translation** with your own server (llama.cpp, Ollama, vLLM) or a cloud provider: **DeepSeek**, **Anthropic**, **Gemini** or **OpenAI**. The reasoning effort for Anthropic and Gemini is configurable.
 - **Web UI** in the *arr style:
   - Movies and TV Shows, each item with a Monitored flag;
@@ -41,7 +42,7 @@ The result is written as `<video>.<lang>.c3parr.srt`. When a better subtitle sho
   - System pages: Tasks, Alerts, Logs and Status;
   - Settings with a change counter on Save, plus a test-connection button for every service;
   - in English, Portuguese (Brazil) and Spanish (Mexico).
-- **CLI** for single files: `c3parr movie.mkv --dst pt-BR`.
+- **CLI** for single files: `c3parr movie.mkv --dst pt-BR`, or `c3parr "Band - Live.mkv" --show` for a concert.
 
 ## Hardware: do you need a GPU?
 
@@ -186,6 +187,38 @@ The queue shows what runs now, what comes next in the order it will run, and wha
 <img src="assets/screenshots/16-tasks.png" alt="System, Tasks" width="800">
 <img src="assets/screenshots/09-dashboard.png" alt="Overview" width="800">
 
+### Concert subtitles
+
+A concert is mostly singing, and Whisper gets singing wrong with full confidence. So for a concert c3parr does something else:
+
+1. It separates the voice from the band (Demucs).
+2. It finds the artist from the title and fetches the lyrics of what they had released by the year of the concert (MusicBrainz and LRCLIB).
+3. It finds which songs are played and where, and places each lyric line at the instant it is sung (`♪ … ♪`).
+4. It keeps a line only with proof: the sound matches it, the transcript heard it, or it sits where the studio recording has it. A chorus that comes back is heard again with the lyrics as a hint, and needs its own proof.
+5. It transcribes what is said between the songs, in the language of each stretch.
+
+**Settings → Subtitles → Concerts** turns it on. It is off by default, and then a concert is treated like any film.
+
+- **Concert subtitles**: off, only when you ask for the item, or automatic.
+- **Concert folders**: where your concerts are, as c3parr sees them (for example `/data/media/musicvideos`, a second root folder in Radarr). Left empty, c3parr guesses from TMDb and only treats an item as a concert when it is sure.
+- **Use the official lyrics from the internet**: only the artist name and the song titles leave your machine. Off, the subtitle has only what was heard in the isolated voice.
+- **Also publish in the language that is sung**: the lyrics as they are sung, next to the translation into your target languages.
+
+What to expect:
+
+- The lyric fitting works for **English** lyrics. In other languages the subtitle keeps what was heard, with the official text only where the transcript matched a lyric line.
+- Covers, and songs LRCLIB doesn't have, keep what was heard.
+- The transcription has to be whisper.cpp, in the c3parr container or on a [whisper.cpp server](#extra-transcription-on-another-machine): a concert needs two options the other servers don't take.
+- Only an **NVIDIA GPU with the `cuda` image on x86** speeds up the voice separation and the lyric fitting. The `vulkan` image and ARM run them on the CPU.
+- The model files (about 1.3 GB) download on the first concert. **System → Status** shows the speed measured on your machine.
+
+| Step (per hour of concert) | RTX 3060 (CUDA) | Apple M3 Pro (CPU) |
+|---|---|---|
+| Voice separation | 1.7 min | 17 min |
+| Lyric fitting | not measured | about 4 min per hour of music |
+
+From the command line: `c3parr "Band - Live.mkv" --show`. Add `--artist "Band"` when the file name doesn't say who plays, `--year 1995` for the year of the concert, and `--no-lyrics` to skip the lookup.
+
 ### Behind a reverse proxy
 
 **Settings → General → Host** has what a reverse proxy needs:
@@ -278,7 +311,7 @@ Only needed when c3parr runs on a small box: if its machine already has a good G
 ## Development
 
 ```bash
-uv sync --all-extras          # Python 3.12
+uv sync --extra web           # Python 3.12; add --extra concert for concert subtitles (PyTorch)
 uv run pytest                 # tests (no models, no network)
 uv run ruff check . && uv run mypy src
 uv run c3parr-web             # http://127.0.0.1:8484
@@ -306,6 +339,8 @@ The texts of the interface live in `frontend/src/i18n`: `en.ts` is the source, a
 The TypeScript types in `frontend/src/api/types.ts` come from the API contract. After changing `src/c3parr/web/schemas.py`, write them again with `C3PARR_UPDATE_GOLDEN=1 uv run pytest tests/test_frontend_types.py`.
 
 For local transcription install whisper.cpp (`brew install whisper.cpp` on a Mac, with Metal).
+
+The extras are optional: `asr` (faster-whisper), `embed` (sentence-transformers) and `concert` (PyTorch, Demucs and torchaudio, for concert subtitles; `concert-cpu` is the same without CUDA, and the two can't be installed together, so `--all-extras` doesn't work). Running from source needs Linux, Windows or a Mac with Apple Silicon.
 
 ## License
 
