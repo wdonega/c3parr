@@ -51,7 +51,7 @@ def _stable(name: str, data: Any) -> Any:
         data["version"], data["release_url"] = "<varies>", "<varies>"
     if name == "system_status":
         for fact in data["about"]:
-            if fact["label"] in ("Version", "Python"):
+            if fact["label"] in ("Version", "Python", "Concert models"):  # o extra instalado ou não
                 fact["value"] = "<varies>"
     if name == "system_logs":  # só o aviso do teste: o resto depende do que rodou antes
         data = [{**r, "time": "<time>"} for r in data if r["name"] == "c3parr.test"]

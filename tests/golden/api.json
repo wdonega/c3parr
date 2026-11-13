@@ -1635,6 +1635,10 @@
    "asr_model": "",
    "asr_url": "",
    "components": {},
+   "concert_lyrics": true,
+   "concert_mode": "off",
+   "concert_paths": [],
+   "concert_publish_original": true,
    "delete_ours_on_human": true,
    "derived_on_main_change": "regenerate",
    "embedded_resolves": true,
@@ -2266,6 +2270,11 @@
     "id": "cache",
     "label": "Cache",
     "value": "<root>/cache"
+   },
+   {
+    "id": "concert",
+    "label": "Concert models",
+    "value": "<varies>"
    },
    {
     "id": "tmdb",

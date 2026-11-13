@@ -4,7 +4,9 @@ Ordem (do pedido do usuário):
 1. metadados (TMDb) — não achou segue; falhou para.
 2. idiomas alvo resolvidos por legenda embutida/externa de outra fonte → se todos, acabou.
 3. legenda principal: embutida no idioma original → externa no original → embutida/externa
-   num idioma de apoio → baixada no original (sincronizada pelo ASR) → gerada pelo ASR.
+   num idioma de apoio → baixada no original (sincronizada pelo ASR) → gerada pelo ASR. Num show
+   (Settings → Subtitles → Concerts), no lugar do ASR entra a legenda de show: a letra oficial
+   encaixada no canto. Ela também é publicada no idioma em que se canta.
 4. principal num idioma alvo → publica a nossa naquele idioma.
 5. cada alvo que falta → traduz a principal.
 
@@ -20,9 +22,10 @@ from c3parr.core.models import Model
 from c3parr.library.store import AppConfig
 from c3parr.pipeline.naming import same_base, same_lang
 
-ActionKind = Literal["metadados", "extrair", "asr", "sincronizar", "gerar",
+ActionKind = Literal["metadados", "extrair", "asr", "sincronizar", "gerar", "show",
                      "traduzir", "publicar", "remover"]  # fmt: skip
-SourceKind = Literal["embedded", "external", "asr"]
+SourceKind = Literal["embedded", "external", "asr", "show"]
+ConcertState = Literal["no", "yes", "manual"]
 
 
 class EmbeddedTrack(Model):
@@ -70,6 +73,9 @@ class ItemState(Model):
     """idioma → arquivo `.main.<idioma>.c3parr` gerado do ASR."""
     steps: dict[str, str] = Field(default_factory=dict)
     """`acao` ou `acao:idioma` → ok | nao_encontrado | falhou (último resultado)."""
+    concert: ConcertState = "no"
+    """`yes`: é um show e a legenda dele pode ser feita agora; `manual`: é um show, mas a legenda
+    só é feita quando alguém pede o item (quem monta o estado sabe se este pedido é manual)."""
 
 
 class Action(Model):
@@ -134,8 +140,21 @@ def _done(actions: list[Action], **kw: object) -> Decision:
     return Decision.model_validate({"actions": tuple(unique), **kw})
 
 
+def _targets(s: ItemState, cfg: AppConfig) -> tuple[str, ...]:
+    """Os idiomas que o item deve ter: os alvos e, num show com a legenda de show já feita, o
+    idioma em que se canta."""
+    targets = list(cfg.target_languages)
+    sung = next(iter(s.generated), None)
+    if s.concert != "no" and cfg.concert_publish_original and sung:
+        human = s.main is not None and s.main.source in ("embedded", "external")
+        if not human and not any(same_lang(sung, t) for t in targets):
+            targets.append(sung)
+    return tuple(targets)
+
+
 def decide(s: ItemState, cfg: AppConfig, retry_failed: bool = False) -> Decision:
     c = _Ctx(s, retry_failed)
+    targets = _targets(s, cfg)
     actions: list[Action] = []
     notes = [f"embedded track {t.index} ({t.lang or 'und'}) is an image subtitle (needs OCR); "
              "ignored" for t in s.embedded if not t.text_based]  # fmt: skip
@@ -148,7 +167,7 @@ def decide(s: ItemState, cfg: AppConfig, retry_failed: bool = False) -> Decision
 
     # 2. alvos resolvidos por outras fontes
     resolved: dict[str, str] = {}
-    for lang in cfg.target_languages:
+    for lang in targets:
         if (
             cfg.embedded_resolves
             and cfg.use_embedded
@@ -185,7 +204,7 @@ def decide(s: ItemState, cfg: AppConfig, retry_failed: bool = False) -> Decision
                 )
             )
 
-    pending = [lang for lang in cfg.target_languages if lang not in resolved]
+    pending = [lang for lang in targets if lang not in resolved]
     if not pending:
         return _done(actions, resolved=resolved, blocked=tuple(c.blocked), notes=tuple(notes))
 
@@ -289,6 +308,17 @@ def _choose_main(s: ItemState, cfg: AppConfig, c: _Ctx,
                 c.blocked.append(skey)
                 return None, []
             return MainSub(path=ext.path, lang=ext.lang or lang, source="external"), []
+
+    # nada pronto num show: a legenda de show (letra oficial encaixada no canto) no lugar do ASR
+    if s.concert != "no":
+        sung = next(iter(s.generated), None)
+        if sung:
+            return MainSub(path=s.generated[sung], lang=sung, source="show"), []
+        if s.concert == "manual":
+            return None, ["concert: its subtitle is made when someone asks for this item"]
+        if c.needs("show"):
+            actions.append(Action(kind="show", reason="concert: lyrics fitted to the singing"))
+        return None, []
 
     # nada pronto: ASR e a legenda gerada dele (buscar legenda online fica com o Bazarr)
     if s.asr_path is None:

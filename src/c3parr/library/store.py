@@ -153,6 +153,19 @@ class AppConfig(Model):
     """Roda o ASR mesmo quando já há legenda principal (mais contexto, bem mais lento)."""
     foreign_tag: Literal["first", "every", "off"] = "first"
 
+    # --- shows ---
+    concert_mode: Literal["off", "manual", "auto"] = "off"
+    """Legenda de show (letra oficial encaixada no canto). `manual`: só quando alguém pede o item;
+    `auto`: como qualquer outro item. Desligado, um show é tratado como um filme comum."""
+    concert_paths: tuple[str, ...] = ()
+    """Pastas onde ficam os shows (como o c3parr as vê). Vazio = adivinha pelo TMDb, e só trata
+    como show quando há certeza."""
+    concert_lyrics: bool = True
+    """Busca a letra oficial (MusicBrainz e LRCLIB). Desligado, a legenda fica só com o que foi
+    ouvido na voz isolada."""
+    concert_publish_original: bool = True
+    """Publica também a legenda no idioma em que se canta, mesmo que não seja um idioma alvo."""
+
     @property
     def target_language(self) -> str:
         """O idioma alvo principal (o primeiro da lista)."""
@@ -474,6 +487,13 @@ class Library:
                     (video,),
                 ).fetchone()
         return (bool(row["monitored"]), str(row["added_at"])) if row else None
+
+    def title_of(self, video: str) -> tuple[str | None, int | None]:
+        """O nome e o ano que o Radarr dá ao filme deste vídeo (a legenda de show tira o artista
+        do nome); (None, None) para episódio ou vídeo fora da biblioteca."""
+        with self._db() as db:
+            row = db.execute("SELECT title, year FROM movie WHERE video = ?", (video,)).fetchone()
+        return (str(row["title"]), row["year"]) if row else (None, None)
 
     def videos(self) -> list[str]:
         with self._db() as db:

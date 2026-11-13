@@ -16,10 +16,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from c3parr.audio import ffmpeg
+from c3parr.concert.models import Assembled
 from c3parr.core.errors import InvalidInput, ProviderError, Unavailable
 from c3parr.core.job import JobParams
 from c3parr.core.models import Cue, Model, Segment, Subtitle, Transcript
-from c3parr.engine.engine import RunResult, StepReport
+from c3parr.engine.engine import Recipe, RunResult, StepReport
 from c3parr.interfaces.metadata import MetadataRequest, MetadataResult
 from c3parr.interfaces.subtitle_source import SubtitleRequest
 from c3parr.interfaces.sync import SyncRequest
@@ -28,7 +29,8 @@ from c3parr.library.store import AppConfig
 from c3parr.pipeline.catalog import Media, StepState, sha_of
 from c3parr.pipeline.naming import output_file, work_file
 from c3parr.pipeline.reconcile import PipelineContext, reconcile
-from c3parr.recipes.pipeline import asr_recipe, subtitle_recipe
+from c3parr.recipes import show as show_recipe
+from c3parr.recipes.pipeline import asr_recipe, metadata_step, subtitle_recipe
 from c3parr.recipes.transcribe import WrittenFile
 from c3parr.subtitle.format import cues_from_segments
 from c3parr.subtitle.srt import write_srt
@@ -183,6 +185,32 @@ def do_generate(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Pro
     return _ok(f"{len(cues)} lines from the ASR", dest)
 
 
+def do_show(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Progress,
+            cancelled: Callable[[], bool]) -> Outcome:  # fmt: skip
+    """A legenda de um show: a letra oficial encaixada no canto e a fala entre as músicas. Sai
+    como principal gerada, no idioma em que se canta."""
+    title, year = ctx.library.title_of(m.video)
+    params = JobParams(recipe="show", video=m.video, title=title, year=year,
+                       no_lyrics=not cfg.concert_lyrics)  # fmt: skip
+    steps = show_recipe.steps(ctx.format_rules, metadata_step())
+    result = ctx.make_engine().run(Recipe(name="show", steps=steps), params, p, cancelled)
+    if result.failed is not None:
+        raise _engine_failure(result)
+    sub, done = result.artifacts["formatacao"], result.artifacts["montagem"]
+    assert isinstance(sub, Subtitle) and isinstance(done, Assembled)
+    if not sub.cues:
+        return _not_found("nothing was heard in this video")
+    dest = work_file(Path(m.video), "main", sub.lang or "und")
+    tmp = dest.with_name(dest.name + ".part")
+    write_srt(sub, tmp)
+    os.replace(tmp, dest)
+    official = done.counts.get("lyric", 0) + done.counts.get("lyric-heard", 0)
+    warn = f"; {len(result.degradations)} warnings" if result.degradations else ""
+    detail = (f"{len(done.songs)} songs, {official} lyric lines, "
+              f"{done.counts.get('heard', 0)} heard only{warn}")  # fmt: skip
+    return _ok(detail, dest)
+
+
 def do_translate(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Progress,
                  cancelled: Callable[[], bool]) -> Outcome:  # fmt: skip
     if not m.main_path or not m.main_lang:
@@ -234,6 +262,7 @@ ACTIONS: dict[str, Callable[..., Outcome]] = {
     "asr": do_asr,
     "sincronizar": do_sync,
     "gerar": do_generate,
+    "show": do_show,
     "traduzir": do_translate,
     "publicar": do_publish,
     "remover": do_remove,

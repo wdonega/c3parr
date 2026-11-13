@@ -685,6 +685,7 @@ export function EnginesTab({ form }: Tab) {
 export function SubtitlesTab({ form }: Tab) {
   const syncs = form.value('sync_new_external')
   const transcribes = form.value('asr_enabled')
+  const concerts = form.value('concert_mode') !== 'off'
   // `off` vem para as opções que dependem de outra: ficam recuadas e apagadas quando ela está desligada
   const flag = (name: SubtitleFlag, off?: boolean) => (
     <Flag
@@ -737,6 +738,29 @@ export function SubtitlesTab({ form }: Tab) {
             <option value="off">{t('subs.foreign.off')}</option>
           </select>
         </Field>
+      </Section>
+
+      <Section title={t('subs.concerts')} about={t('subs.concertsAbout')}>
+        <Field label={t('subs.concertMode')} edited={form.edited('concert_mode')} hint={t('subs.concertModeHint')}>
+          <select
+            className="input"
+            value={form.value('concert_mode')}
+            onChange={(event) => form.set('concert_mode', event.target.value as AppConfig['concert_mode'])}
+          >
+            <option value="off">{t('subs.concertMode.off')}</option>
+            <option value="manual">{t('subs.concertMode.manual')}</option>
+            <option value="auto">{t('subs.concertMode.auto')}</option>
+          </select>
+        </Field>
+        <Tags
+          label={t('subs.concertPaths')}
+          value={form.value('concert_paths')}
+          edited={form.edited('concert_paths')}
+          hint={t('subs.concertPathsHint')}
+          onChange={(value) => form.set('concert_paths', value)}
+        />
+        {flag('concert_lyrics', !concerts)}
+        {flag('concert_publish_original', !concerts)}
       </Section>
 
       <Section

@@ -74,6 +74,10 @@ export interface AppConfig {
   asr_enabled: boolean
   asr_always: boolean
   foreign_tag: "first" | "every" | "off"
+  concert_mode: "off" | "manual" | "auto"
+  concert_paths: string[]
+  concert_lyrics: boolean
+  concert_publish_original: boolean
 }
 
 export interface ArrConfig {

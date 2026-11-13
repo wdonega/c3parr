@@ -70,6 +70,7 @@ ACTION_LABELS = {
     "asr": "Transcribe audio (ASR)",
     "sincronizar": "Sync subtitle",
     "gerar": "Subtitle from ASR",
+    "show": "Concert subtitle (lyrics)",
     "traduzir": "Translate",
     "publicar": "Publish subtitle",
     "remover": "Remove our subtitle",

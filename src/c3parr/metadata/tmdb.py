@@ -245,7 +245,8 @@ class TMDbProvider:
         if tmdb_id is not None:
             d = self._movie(tmdb_id)
             return MetadataResult(bible=self._movie_bible(d), tmdb_id=tmdb_id, chosen_reason=how,
-                                  original_language=d.get("original_language"))  # fmt: skip
+                                  original_language=d.get("original_language"),
+                                  genre_ids=_genre_ids(d), keywords=_keywords(d))  # fmt: skip
         if not hint.title:
             raise InvalidInput("no title to search on TMDb", provider=INFO.id)
         found = self._get("/search/movie", query=hint.title, year=hint.year,
@@ -265,6 +266,7 @@ class TMDbProvider:
         return MetadataResult(bible=self._movie_bible(chosen), tmdb_id=int(chosen["id"]),
                               candidates=tuple(candidates),
                               original_language=chosen.get("original_language"),
+                              genre_ids=_genre_ids(chosen), keywords=_keywords(chosen),
                               chosen_reason=f"search by {hint.source}: {reason}")  # fmt: skip
 
     def _identify_show(self, hint: MediaHint, request: MetadataRequest, tmdb_id: int | None,
@@ -325,7 +327,7 @@ class TMDbProvider:
 
     def _movie(self, movie_id: int) -> dict[str, Any]:
         data: dict[str, Any] = self._get(f"/movie/{movie_id}", language=self.config.language,
-                                         append_to_response="credits")  # fmt: skip
+                                         append_to_response="credits,keywords")  # fmt: skip
         return data
 
     def _show(self, show_id: int) -> dict[str, Any]:
@@ -418,6 +420,14 @@ class TMDbProvider:
             personagens=self._characters(cast),
             origem=("tmdb",),
         )
+
+
+def _genre_ids(d: dict[str, Any]) -> tuple[int, ...]:
+    return tuple(int(g["id"]) for g in d.get("genres", []) if "id" in g)
+
+
+def _keywords(d: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(k["name"] for k in (d.get("keywords") or {}).get("keywords", []) if k.get("name"))
 
 
 def register() -> None:

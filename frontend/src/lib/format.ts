@@ -112,6 +112,21 @@ const PROGRESS: [RegExp, (found: string[]) => string][] = [
   [/^transcribing \((.+)\)$/, ([backend]) => t('progress.transcribing', { backend })],
   [/^(\d+) lines in (\S+) \((.+)\)$/, ([n, lang, where]) => t('progress.linesWhere', { n, lang, where })],
   [/^(\d+) lines in (\S+)$/, ([n, lang]) => t('progress.lines', { n, lang })],
+  // legenda de show
+  [/^preparing the voice separation model$/, () => t('progress.voiceModel')],
+  [/^separating the voice \((.+)\)$/, ([where]) => t('progress.separating', { where })],
+  [/^finding where there is voice$/, () => t('progress.findingVoice')],
+  [/^voice separated \((.+)\)$/, ([where]) => t('progress.voiceDone', { where })],
+  [/^listening for the lyrics$/, () => t('progress.listening')],
+  [/^finding the artist$/, () => t('progress.artist')],
+  [/^no artist found: no official lyrics$/, () => t('progress.noArtist')],
+  [/^artist: (.+)$/, ([names]) => t('progress.artistFound', { names })],
+  [/^lyrics: (.+)$/, ([album]) => t('progress.album', { album })],
+  [/^(\d+) songs with lyrics$/, ([n]) => t('progress.songs', { n })],
+  [/^lyrics in (.+): not fitted$/, ([lang]) => t('progress.notFitted', { lang })],
+  [/^fitting the lyrics \((\d+) of (\d+)\)$/, ([n, total]) => t('progress.fitting', { n, total })],
+  [/^hearing again \((\d+) of (\d+)\)$/, ([n, total]) => t('progress.again', { n, total })],
+  [/^hearing the speech \((\d+) of (\d+)\)$/, ([n, total]) => t('progress.speech', { n, total })],
 ]
 
 /** O andamento que o motor escreveu (`block 3 of 12`), no idioma da interface. O que a

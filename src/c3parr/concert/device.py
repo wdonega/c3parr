@@ -38,15 +38,21 @@ def pick(prefer: str = "auto") -> str:
     return "cuda" if prefer == "auto" and torch.cuda.is_available() else "cpu"
 
 
-def describe() -> dict[str, Any]:
-    """Para a tela System: o extra está instalado, e em que dispositivo os modelos rodam."""
+def summary(model_dir: Path | None = None) -> str:
+    """Para a tela System: se os modelos do show estão instalados e a velocidade medida aqui.
+    Não carrega o torch (centenas de MB) só para responder: o dispositivo vem da última medição."""
     if not installed():
-        return {"installed": False, "device": None, "name": None}
-    import torch
-
-    device = pick()
-    name = torch.cuda.get_device_name(0) if device == "cuda" else None
-    return {"installed": True, "device": device, "name": name}
+        return "not installed (the image or the 'concert' extra brings them)"
+    speed = measured_speed(model_dir)
+    if not speed:
+        return "installed; they use the NVIDIA GPU when there is one, the CPU otherwise"
+    names = {"separation": "voice separation", "fit": "lyric fitting"}
+    return "; ".join(
+        f"{label} on {'the GPU (CUDA)' if speed[key]['device'] == 'cuda' else 'the CPU'}: "
+        f"{speed[key]['seconds_per_minute']:g} s per minute of concert"
+        for key, label in names.items()
+        if key in speed
+    )
 
 
 def use_model_dir(model_dir: Path) -> None:

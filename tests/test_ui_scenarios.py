@@ -622,3 +622,17 @@ def test_alerts_are_seen_when_opened_and_retried_on_request(seeded: Ui) -> None:
     assert do.retry_alert("probe:old").ok  # já resolvido: nada a fazer
     retried = do.retry_alert("traduzir:pt-BR:llm")  # o arquivo do exemplo não é um vídeo de fato
     assert not retried.ok and catalog.unseen_alerts() == 1
+
+
+def test_concert_options_are_saved_and_the_folders_are_tidied(fresh: Ui) -> None:
+    saved = fresh.do.save_subtitles(
+        concert_mode="manual", concert_lyrics=False, concert_publish_original=False,
+        concert_paths=[" /data/media/musicvideos/ ", "", "/data/media/musicvideos", "/shows"],
+    )  # fmt: skip
+    assert saved.ok
+    got = fresh.world.library.config()
+    assert (got.concert_mode, got.concert_lyrics, got.concert_publish_original) == (
+        "manual", False, False)  # fmt: skip
+    assert got.concert_paths == ("/data/media/musicvideos", "/shows")
+    assert not fresh.do.save_subtitles(concert_mode="sometimes").ok
+    assert fresh.world.library.config().concert_mode == "manual"

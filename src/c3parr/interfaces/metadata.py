@@ -40,6 +40,10 @@ class MetadataResult(Model):
     episode_title: str | None = None
     original_language: str | None = None
     """Idioma original da obra no TMDb (ex.: `fr`): palpite para o idioma principal do ASR."""
+    genre_ids: tuple[int, ...] = ()
+    """Os gêneros pelo número do TMDb (o nome muda com o idioma; o número não)."""
+    keywords: tuple[str, ...] = ()
+    """Palavras-chave do TMDb (sempre em inglês): com os gêneros, dizem se é um show."""
     candidates: tuple[Candidate, ...] = ()
     chosen_reason: str = ""
 

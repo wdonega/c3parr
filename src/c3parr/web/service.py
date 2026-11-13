@@ -28,6 +28,7 @@ from pydantic import ValidationError
 from c3parr import __version__
 from c3parr.asr.remote import REMOTE_IDS, RemoteASRConfig
 from c3parr.asr.whisper_cpp import measured_speed
+from c3parr.concert import device as concert_device
 from c3parr.core.config import LLM_ENV, SECRET_NAMES, Settings, load_env, load_secrets
 from c3parr.core.errors import ProviderError
 from c3parr.core.job import ComponentSpec
@@ -60,6 +61,15 @@ STEP_LABELS = {
     "escrita": "Write subtitle",
     "escrita_original": "Original transcript",
     "memoria": "Series memory",
+    # legenda de show
+    "voz": "Voice separation",
+    "letras": "Lyrics",
+    "musicas": "Songs played",
+    "encaixe": "Lyric fitting",
+    "segunda_escuta": "Second listen",
+    "repetidas": "Repeated lines",
+    "fala": "Speech between songs",
+    "montagem": "Assembly",
 }
 STEP_STATUS = {"ok": "done", "cache": "from cache", "pulado": "skipped", "falhou": "failed"}
 LANGUAGES = [
@@ -129,14 +139,15 @@ SUBTITLE_FLAGS = (
     "use_embedded", "embedded_resolves", "external_resolves", "forced_resolves",
     "sync_new_external", "fix_external_in_place", "delete_ours_on_human",
     "new_external_becomes_main", "asr_enabled", "asr_always",
+    "concert_lyrics", "concert_publish_original",
 )  # fmt: skip
-SUBTITLE_CHOICES = ("derived_on_main_change", "foreign_tag")
+SUBTITLE_CHOICES = ("derived_on_main_change", "foreign_tag", "concert_mode")
 # campos da AppConfig que a API grava como vieram (a validação é a do próprio modelo)
 PLAIN_SETTINGS = (*SUBTITLE_FLAGS, *SUBTITLE_CHOICES, "wait_minutes", "search_interval_minutes",
                   "monitor_new", "sync_interval_minutes", "theme")  # fmt: skip
 PATCHABLE = frozenset({
     *PLAIN_SETTINGS, "radarr", "sonarr", "target_languages", "fallback_languages", "components",
-    "url_base", "instance_name", "allowed_hosts",
+    "url_base", "instance_name", "allowed_hosts", "concert_paths",
     "llm_provider", "llm_model", "llm_base_url", "llm_effort", "asr_mode", "asr_url", "asr_model",
 })  # fmt: skip
 
@@ -1119,6 +1130,10 @@ class Service:
         if "allowed_hosts" in changes:
             hosts = (str(h).strip().lower() for h in changes["allowed_hosts"])
             out["allowed_hosts"] = list(dict.fromkeys(h for h in hosts if h))
+        if "concert_paths" in changes:
+            folders = (str(f).strip().rstrip("/") or "/" for f in changes["concert_paths"]
+                       if str(f).strip())  # fmt: skip
+            out["concert_paths"] = list(dict.fromkeys(folders))
         out.update({name: changes[name] for name in PLAIN_SETTINGS if name in changes})
         outcome = self._save({**arrs, **out}, {k: v or "" for k, v in secrets.items()})
         if not outcome.error:
@@ -1254,6 +1269,11 @@ class Service:
             ("database", "Database", str(self.lib.path)),
             ("queue", "Queue", str(self.jobs.path)),
             ("cache", "Cache", str(self.settings.cache_dir)),
+            (
+                "concert",
+                "Concert models",
+                concert_device.summary(self.settings.cache_dir / "models" / "torch"),
+            ),
         ]
         stored = self.lib.secrets()
         env = self.clients.env_secrets()

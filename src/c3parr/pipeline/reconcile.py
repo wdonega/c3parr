@@ -13,13 +13,16 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from c3parr.audio import ffmpeg
+from c3parr.concert import detect
 from c3parr.core.job import ComponentSpec
 from c3parr.engine.engine import Engine
+from c3parr.interfaces.metadata import MetadataResult
 from c3parr.jobs.queue import JobQueue
 from c3parr.library.sidecars import index_subtitles
-from c3parr.library.store import Library, SubtitleFile
+from c3parr.library.store import AppConfig, Library, SubtitleFile
 from c3parr.pipeline.catalog import Catalog, Media, sha_of
 from c3parr.pipeline.decide import (
+    ConcertState,
     Decision,
     EmbeddedTrack,
     ExternalSub,
@@ -62,7 +65,31 @@ def _work_files(video: Path, kind: str) -> dict[str, str]:
     return out
 
 
-def build_state(cat: Catalog, media: Media, subs: list[SubtitleFile]) -> ItemState:
+def is_concert(video: str, cfg: AppConfig) -> bool:
+    """O item é um show? Com pastas de show em Settings, vale só a pasta; sem elas, o palpite pelos
+    metadados do TMDb, que só diz sim quando há certeza."""
+    if cfg.concert_paths:
+        return detect.under(video, cfg.concert_paths)
+    path = Path(video)
+    try:
+        meta = MetadataResult.model_validate_json(
+            work_file(path, "meta").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return False
+    titles = f"{meta.bible.titulo.original} | {meta.bible.titulo.pt} | {path.parent.name}"
+    verdict = detect.from_metadata(meta.genre_ids, meta.keywords, titles, meta.bible.sinopse)
+    return verdict.answer == "yes"
+
+
+def concert_state(video: str, cfg: AppConfig, origem: str) -> ConcertState:
+    if cfg.concert_mode == "off" or not is_concert(video, cfg):
+        return "no"
+    return "manual" if cfg.concert_mode == "manual" and origem != "manual" else "yes"
+
+
+def build_state(cat: Catalog, media: Media, subs: list[SubtitleFile],
+                concert: ConcertState = "no") -> ItemState:  # fmt: skip
     """`subs`: as legendas do vídeo recém-lidas do disco (`index_subtitles`)."""
     video = Path(media.video)
     probe = media.probe
@@ -112,6 +139,7 @@ def build_state(cat: Catalog, media: Media, subs: list[SubtitleFile]) -> ItemSta
         asr_path=str(asr) if asr.exists() else None, asr_language=asr_language,
         generated=_work_files(video, "main"),
         steps=steps,
+        concert=concert,
     )  # fmt: skip
 
 
@@ -160,7 +188,8 @@ def reconcile(ctx: PipelineContext, video: str, origem: str = "rotina",
     subs = index_subtitles(ctx.library, video, media.probe)  # do disco, e atualiza as telas
     decision = Decision()
     for _ in range(4):  # trocar a principal muda o estado; decide de novo até estabilizar
-        decision = decide(build_state(ctx.catalog, media, subs), cfg, retry_failed)
+        concert = concert_state(video, cfg, origem)
+        decision = decide(build_state(ctx.catalog, media, subs, concert), cfg, retry_failed)
         m = decision.main
         if m is not None and (media.main_path, media.main_lang, media.main_source) != (
             m.path,
