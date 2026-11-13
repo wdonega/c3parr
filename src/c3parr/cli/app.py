@@ -10,11 +10,13 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn
 
+from c3parr.concert.models import Assembled
 from c3parr.core.config import Settings, load_secrets
 from c3parr.core.job import JobParams, RecipeName
 from c3parr.engine.engine import Engine, Recipe, RunResult
 from c3parr.providers.registry import build_factories
 from c3parr.recipes import full as full_recipe
+from c3parr.recipes import show as show_recipe
 from c3parr.recipes import sync as sync_recipe
 from c3parr.recipes import transcribe as transcribe_recipe
 from c3parr.recipes.transcribe import WrittenFile
@@ -84,6 +86,16 @@ def main(
         Path | None, typer.Option("--bible", help="Bible JSON (replaces TMDb and LLM)")
     ] = None,
     transcribe_only: Annotated[bool, typer.Option("--transcribe-only")] = False,
+    show: Annotated[
+        bool,
+        typer.Option("--show", help="A concert: official lyrics fitted to the singing, in --src"),
+    ] = False,
+    artist: Annotated[
+        str | None, typer.Option("--artist", help="With --show: who plays (otherwise the title)")
+    ] = None,
+    no_lyrics: Annotated[
+        bool, typer.Option("--no-lyrics", help="With --show: only what was heard, no lyrics lookup")
+    ] = False,
     sync_only: Annotated[bool, typer.Option("--sync-only")] = False,
     keep_transcript: Annotated[bool, typer.Option("--keep-transcript")] = False,
     out_dir: Annotated[Path | None, typer.Option("--out-dir", help="Output folder")] = None,
@@ -102,6 +114,8 @@ def main(
         recipe_name = "sincronizacao"
     elif transcribe_only:
         recipe_name = "transcricao"
+    elif show:
+        recipe_name = "show"
     else:
         recipe_name = "completa"
 
@@ -117,6 +131,8 @@ def main(
         year=year,
         tmdb_id=tmdb,
         no_tmdb=no_tmdb,
+        artist=artist,
+        no_lyrics=no_lyrics,
         bible=str(bible) if bible else None,
         out_dir=str(out_dir) if out_dir else None,
         keep_transcript=keep_transcript,
@@ -150,13 +166,39 @@ def _run_with_progress(engine: Engine, params: JobParams, settings: Settings) ->
             "transcricao": lambda: transcribe_recipe.recipe(settings.format),
             "sincronizacao": sync_recipe.recipe,
             "completa": lambda: full_recipe.recipe(settings.format),
+            "show": lambda: show_recipe.recipe(settings.format),
         }
         return engine.run(recipes[params.recipe](), params, on_progress)
+
+
+def _clock(seconds: float) -> str:
+    return f"{int(seconds) // 3600}:{int(seconds) % 3600 // 60:02d}:{int(seconds) % 60:02d}"
+
+
+def _finish_show(result: RunResult, output: str | None) -> int:
+    """O resumo de um show: as músicas achadas e quantas linhas da letra entraram em cada uma."""
+    for d in result.degradations:
+        console.print(f"[yellow]Degraded[/] {d.stage}: {d.reason}")
+    if result.failed:
+        console.print(f"[red]Failed at {result.failed.name}:[/] {result.failed.reason}")
+        return (
+            EXIT_NO_TRANSCRIPT if result.failed.name in ("voz", "transcricao") else EXIT_UNEXPECTED
+        )
+    done = result.artifacts.get("montagem")
+    if isinstance(done, Assembled):
+        for s in done.songs:
+            console.print(f"  {_clock(s.start)}  {s.title}: {s.accepted} of {s.lines} lyric lines")
+        official = done.counts.get("lyric", 0) + done.counts.get("lyric-heard", 0)
+        console.print(f"{official} official lyric lines, {done.counts.get('heard', 0)} heard only")
+    console.print(f"[green]Subtitle:[/] {output}")
+    return EXIT_OK
 
 
 def _finish(result: RunResult, params: JobParams) -> int:
     written = result.artifacts.get("escrita")
     output = written.path if isinstance(written, WrittenFile) else None
+    if params.recipe == "show":
+        return _finish_show(result, output)
     video = Path(params.video)
     folder = Path(params.out_dir) if params.out_dir else video.parent
     md = folder / f"{video.stem}.review.md"

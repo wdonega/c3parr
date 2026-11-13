@@ -99,10 +99,15 @@ _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?", re.UNICODE)
 def guess_text_lang(path: Path, max_chars: int = 20000) -> str | None:
     """Idioma provável de uma legenda pelo texto (para `Filme.hi.srt`, sem idioma no nome)."""
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")[:max_chars].lower()
+        text = path.read_text(encoding="utf-8", errors="replace")[:max_chars]
     except OSError:
         return None
-    words = _WORD.findall(text)
+    return guess_lang(text)
+
+
+def guess_lang(text: str) -> str | None:
+    """Idioma provável de um texto, pelas palavras muito comuns de cada idioma."""
+    words = _WORD.findall(text.lower())
     if len(words) < 30:
         return None
     scores = {lang: sum(w in sw for w in words) for lang, sw in _STOPWORDS.items()}

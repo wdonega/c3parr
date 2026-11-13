@@ -22,7 +22,7 @@ INFO = ProviderInfo(
     interface=transcription.INTERFACE,
     version="1",
     config_schema=FakeTranscriberConfig,
-    capabilities=frozenset({"word_timestamps"}),
+    capabilities=frozenset({"word_timestamps", "no_vad", "prompt"}),
     description="Roteiro fixo para testes",
 )
 

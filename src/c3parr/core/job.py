@@ -6,7 +6,7 @@ from pydantic import Field
 
 from c3parr.core.models import Model
 
-RecipeName = Literal["completa", "sincronizacao", "transcricao", "asr", "legenda"]
+RecipeName = Literal["completa", "sincronizacao", "transcricao", "asr", "legenda", "show"]
 
 
 class ComponentSpec(Model):
@@ -29,6 +29,10 @@ class JobParams(Model):
     tmdb_id: int | None = None
     bible: str | None = None
     no_tmdb: bool = False
+    artist: str | None = None
+    """Receita `show`: quem toca, quando o título não diz."""
+    no_lyrics: bool = False
+    """Receita `show`: não busca a letra oficial; a legenda fica só com o que foi ouvido."""
     out_dir: str | None = None
     keep_transcript: bool = False
     interactive: bool = False
