@@ -43,7 +43,7 @@ from c3parr.metadata import tmdb as tmdb_meta
 from c3parr.metadata.tmdb import TMDbConfig
 from c3parr.pipeline.catalog import Catalog
 from c3parr.pipeline.naming import norm_lang, same_base, same_lang
-from c3parr.pipeline.reconcile import PipelineContext, reconcile
+from c3parr.pipeline.reconcile import PipelineContext, is_concert, reconcile
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 
 STEP_LABELS = {
@@ -214,6 +214,10 @@ MESSAGES = {
     "library.unreadable": "{n} item(s) could not be read (see System → Alerts).",
     "library.covered": "Nothing to do: every target language is covered.",
     "library.queued": "{n} item(s) in the queue ({steps} new step(s)).",
+    "concerts.off": "Concert subtitles are off: turn them on and save first.",
+    "concerts.none": "No concert found in the library.",
+    "concerts.covered": "Nothing to do: the {n} concert(s) found already have their subtitles.",
+    "concerts.queued": "{n} concert(s) in the queue ({steps} new step(s)).",
     "test.arr_connected": "{name} {version}: connected.",
     "test.arr_outdated": "{name} {version}: connected. Update it: the latest is {latest}.",
     "test.arr_fields": "{name}: check the fields.",
@@ -905,6 +909,23 @@ class Service:
         if not items:
             return say("library.covered")
         return say("library.queued", n=items, steps=steps)
+
+    def queue_concerts(self) -> Outcome:
+        """Pedido manual para todo show da biblioteca (os das pastas de show ou, sem elas, os que
+        o TMDb diz com certeza): serve depois de ligar a opção ou de mudar as pastas, nos dois
+        modos, sem esperar a rotina."""
+        config = self.lib.config()
+        if config.concert_mode == "off":
+            return say("concerts.off", error=True)
+        videos = [video for video in self.lib.videos() if is_concert(video, config)]
+        if not videos:
+            return say("concerts.none")
+        steps, items, failed = self._process(videos)
+        if failed:
+            return say("library.unreadable", error=True, n=failed)
+        if not items:
+            return say("concerts.covered", n=len(videos))
+        return say("concerts.queued", n=items, steps=steps)
 
     # --- settings ---
 

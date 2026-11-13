@@ -504,6 +504,9 @@ export const en = {
   'subs.concert_publish_original': 'Also publish in the language that is sung',
   'subs.concert_publish_original.help':
     'Even when it is not one of your target languages: the lyrics as they are sung, next to the translation.',
+  'subs.concertQueue': 'Queue the concerts now',
+  'subs.concertQueueHint': 'Sends every concert in the library to the queue, ahead of the routine.',
+  'subs.concertQueueSave': 'Turn concert subtitles on and save first.',
   'subs.automation': 'Automation',
   'subs.automationAbout':
     'A monitored file waits before the routine works on it, so a download or copy can finish first. Radarr and Sonarr imports and your own requests skip the wait and go ahead of the routine.',
@@ -636,6 +639,16 @@ export const en = {
   'msg.library.queued': {
     one: '{n} item in the queue (new steps: {steps}).',
     other: '{n} items in the queue (new steps: {steps}).',
+  },
+  'msg.concerts.off': 'Concert subtitles are off: turn them on and save first.',
+  'msg.concerts.none': 'No concert found in the library.',
+  'msg.concerts.covered': {
+    one: 'Nothing to do: the concert found already has its subtitles.',
+    other: 'Nothing to do: the {n} concerts found already have their subtitles.',
+  },
+  'msg.concerts.queued': {
+    one: '{n} concert in the queue (new steps: {steps}).',
+    other: '{n} concerts in the queue (new steps: {steps}).',
   },
   'msg.test.arr_connected': '{name} {version}: connected.',
   'msg.test.arr_outdated': '{name} {version}: connected. Update it: the latest is {latest}.',

@@ -1,11 +1,14 @@
 // As cinco abas de Settings. Cada seção tem o que é e o estado à esquerda, os campos à direita.
+import { useMutation } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { api } from '../../api/client'
 import type { AppConfig, TestRecord, TestResult } from '../../api/types'
 import { decimal, languageName, maybe, rich, said, t } from '../../i18n'
 import { cleanBase, withBase } from '../../lib/base'
 import { timeAgo } from '../../lib/format'
 import { Field, Segmented, SwitchRow } from '../../ui/controls'
+import { useFeedback } from '../../ui/feedback'
 import { Icon } from '../../ui/Icon'
 import {
   humanMinutes,
@@ -682,6 +685,24 @@ export function EnginesTab({ form }: Tab) {
 
 // --- Subtitles ---
 
+/** Põe na fila todo show da biblioteca. Vale o que está salvo: com mudanças por salvar (ou com a
+ * legenda de show desligada) o botão fica apagado e a linha ao lado diz por quê. */
+function QueueConcerts({ form }: Tab) {
+  const { report } = useFeedback()
+  const queue = useMutation({ mutationFn: api.queueConcerts, onSuccess: report })
+  const dirty = Object.keys(form.draft.changes).length + Object.keys(form.draft.secrets).length > 0
+  const off = form.view.config.concert_mode === 'off'
+  return (
+    <div className="test-row">
+      <button type="button" className="btn" disabled={dirty || off || queue.isPending} onClick={() => queue.mutate()}>
+        {queue.isPending && <Icon name="spinner" size={14} className="spin" />}
+        {t('subs.concertQueue')}
+      </button>
+      <span className="muted">{dirty || off ? t('subs.concertQueueSave') : t('subs.concertQueueHint')}</span>
+    </div>
+  )
+}
+
 export function SubtitlesTab({ form }: Tab) {
   const syncs = form.value('sync_new_external')
   const transcribes = form.value('asr_enabled')
@@ -761,6 +782,7 @@ export function SubtitlesTab({ form }: Tab) {
         />
         {flag('concert_lyrics', !concerts)}
         {flag('concert_publish_original', !concerts)}
+        <QueueConcerts form={form} />
       </Section>
 
       <Section

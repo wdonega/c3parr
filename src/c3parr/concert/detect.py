@@ -3,6 +3,11 @@
 Três respostas: `yes`, `no` ou `maybe`. Só `yes` vira legenda de show: tratar um filme comum como
 show é o erro caro, então `yes` pede prova. Tirado de 63 títulos rotulados:
 - todo filme com enredo tem um gênero além de Música, Documentário e Filme para TV → `no`;
+- num filme o elenco faz personagens; num show cada um aparece como si mesmo ou pelo instrumento
+  ("Self", "Vocals"). Cinco ou mais personagens, e a maior parte do elenco → `no`. Nos 63
+  títulos isso não mudou nenhum veredito (o gênero já pegava todo filme): serve para o filme que
+  o TMDb traz sem gênero. Uma série nunca é show. Ter diretor não separa nada: filme de show
+  também tem;
 - show e documentário de música têm os mesmos gêneros: o que separa são as palavras-chave, o
   título e a sinopse;
 - há show sem nada disso no TMDb: fica `maybe`, e aí é a pasta (Settings) que resolve.
@@ -12,9 +17,11 @@ inglês. A sinopse vem no idioma configurado: fora do inglês, ela deixa de cont
 """
 
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 from typing import Literal
+
+from c3parr.concert.catalogue import plain
 
 MUSIC, DOCUMENTARY, TV_MOVIE = 10402, 99, 10770
 # "Filme para TV" diz o formato, não o enredo (um show foi descartado por ele na validação)
@@ -46,6 +53,34 @@ OVERVIEW_DOC = tuple(re.compile(p, re.IGNORECASE) for p in (
 ))  # fmt: skip
 
 
+ROLES, ROLES_SHARE = 5, 0.6
+"""Há enredo quando pelo menos tantos do elenco, e essa fração dele, fazem um personagem. A folga
+é para o show cujo elenco traz o instrumento com outro nome ("Guitarra", "Wired Strings - Violin":
+medido, 2 de 4 e 3 de 9 em dois shows)."""
+_SELF = (
+    "self", "himself", "herself", "themselves", "ele mesmo", "ela mesma", "eles mesmos",
+    "si mismo", "performer", "musician", "singer", "band", "host", "presenter", "narrator",
+    "interviewer", "interviewee", "conductor", "dancer", "dj", "orchestra", "choir", "vocals",
+    "vocal", "lead vocals", "backing vocals", "background vocals", "guitar", "guitars",
+    "lead guitar", "rhythm guitar", "bass guitar", "acoustic guitar", "electric guitar", "bass",
+    "drums", "percussion", "keyboards", "keyboard", "piano", "synthesizer", "synthesizers",
+    "violin", "cello", "saxophone", "trumpet", "harmonica", "turntables",
+)  # fmt: skip
+SELF = re.compile(rf"^({'|'.join(sorted(_SELF, key=len, reverse=True))})\b")
+
+
+def played_roles(cast: Iterable[tuple[str, str | None]]) -> int:
+    """Quantos do elenco (personagem, ator) fazem um personagem, e não a si mesmos nem um
+    instrumento."""
+    count = 0
+    for role, actor in cast:
+        name = plain(role)
+        own = bool(actor) and plain(actor or "") == name
+        if name and not own and not SELF.match(name) and "archive footage" not in name:
+            count += 1
+    return count
+
+
 @dataclass
 class Verdict:
     answer: Literal["yes", "no", "maybe"]
@@ -55,12 +90,19 @@ class Verdict:
 
 
 def from_metadata(genre_ids: Collection[int], keywords: Collection[str], titles: str,
-                  overview: str = "") -> Verdict:  # fmt: skip
-    """`genre_ids` e `keywords` são os do TMDb; `titles` junta os nomes conhecidos (TMDb, pasta)."""
+                  overview: str = "", roles: int = 0, cast: int = 0,
+                  series: bool = False) -> Verdict:  # fmt: skip
+    """`genre_ids` e `keywords` são os do TMDb; `titles` junta os nomes conhecidos (TMDb, pasta);
+    `roles`: quantos do elenco (`cast`) fazem um personagem (`played_roles`); `series`: é um
+    episódio de série."""
+    if series:
+        return Verdict("no", reasons=["a series"])
     genres = set(genre_ids)
     plot = sorted(genres - NOT_PLOT)
     if plot:
         return Verdict("no", reasons=[f"plot genre: {plot}"])
+    if roles >= ROLES and roles >= ROLES_SHARE * max(cast, roles):
+        return Verdict("no", reasons=[f"{roles} of the cast play characters"])
     if not genres:
         # sem gênero não dá para saber se há enredo ("Live Free or Die Hard" tem "live" no título)
         return Verdict("maybe", reasons=["no genre on TMDb"])

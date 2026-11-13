@@ -636,3 +636,26 @@ def test_concert_options_are_saved_and_the_folders_are_tidied(fresh: Ui) -> None
     assert got.concert_paths == ("/data/media/musicvideos", "/shows")
     assert not fresh.do.save_subtitles(concert_mode="sometimes").ok
     assert fresh.world.library.config().concert_mode == "manual"
+
+
+def test_the_concerts_button_queues_what_is_in_the_concert_folders(
+    fresh: Ui, tiny_video: Path
+) -> None:
+    root, lib, queue, do = fresh.world.root, fresh.world.library, fresh.world.queue, fresh.do
+    show = root / "musicvideos" / "Banda (2004)" / "Banda - Live.mkv"
+    film = root / "movies" / "Filme (2010)" / "Filme.mkv"
+    for f in (show, film):
+        f.parent.mkdir(parents=True)
+        shutil.copy(tiny_video, f)
+    lib.upsert_movie(str(show.parent), str(show), "Banda: Live", 2004, None, False)
+    lib.upsert_movie(str(film.parent), str(film), "Filme", 2010, None, True)
+
+    off = do.queue_concerts()
+    assert not off.ok and "are off" in off.message and queue.pending_count() == 0
+    assert do.save_subtitles(concert_mode="manual", concert_paths=[str(root / "shows")]).ok
+    assert do.queue_concerts().message == "No concert found in the library."
+    assert do.save_subtitles(concert_paths=[str(root / "musicvideos")]).ok
+    queued = do.queue_concerts()  # vale nos dois modos, e até para item não monitorado
+    assert queued.ok and queued.message.startswith("1 concert(s) in the queue")
+    assert [j.video for j in queue.list()] == [str(show)]  # o filme fica de fora
+    assert do.queue_concerts().message.startswith("1 concert(s) in the queue (0 new")

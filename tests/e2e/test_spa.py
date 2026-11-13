@@ -124,6 +124,7 @@ def test_concerts_are_turned_on_with_their_folders_and_the_options_follow(
     expect(mode).to_have_value("off")
     lyrics = section.get_by_role("switch", name="Use the official lyrics from the internet")
     expect(lyrics).to_be_disabled()  # desligado: as opções que dependem dele ficam apagadas
+    expect(section.get_by_role("button", name="Queue the concerts now")).to_be_disabled()
 
     mode.select_option("manual")
     expect(lyrics).to_be_enabled()
@@ -137,6 +138,12 @@ def test_concerts_are_turned_on_with_their_folders_and_the_options_follow(
 
     desktop.reload()
     expect(desktop.get_by_label("Concert folders")).to_have_value("/data/media/musicvideos, /shows")
+    # o botão manda os shows para a fila; com mudança por salvar ele fica apagado
+    button = desktop.get_by_role("button", name="Queue the concerts now")
+    button.click()
+    said(desktop, "No concert found in the library.")
+    desktop.get_by_label("Concert folders").fill("/outra")
+    expect(button).to_be_disabled()
 
 
 def test_discard_goes_back_to_what_is_saved(desktop: Page, spa: Served) -> None:

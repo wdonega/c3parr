@@ -428,6 +428,9 @@ class ApiDriver:
                                     json={"changes": body, "secrets": secrets})  # fmt: skip
         return self._result(response)
 
+    def queue_concerts(self) -> Result:
+        return self._result(self.client.post("/api/v1/library/queue-concerts"))
+
     def add_to_queue(self, *keys: str) -> Result:
         return self._result(self.client.post("/api/v1/library/queue", json={"items": list(keys)}))
 

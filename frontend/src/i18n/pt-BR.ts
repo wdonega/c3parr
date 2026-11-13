@@ -505,6 +505,9 @@ export const ptBR: Catalog = {
   'subs.concert_publish_original': 'Publicar também no idioma em que se canta',
   'subs.concert_publish_original.help':
     'Mesmo que não seja um dos seus idiomas alvo: a letra como é cantada, ao lado da tradução.',
+  'subs.concertQueue': 'Pôr os shows na fila agora',
+  'subs.concertQueueHint': 'Manda todo show da biblioteca para a fila, na frente da rotina.',
+  'subs.concertQueueSave': 'Ligue a legenda de show e salve primeiro.',
   'subs.automation': 'Automação',
   'subs.automationAbout':
     'Um arquivo monitorado espera antes de a rotina trabalhar nele, para um download ou uma cópia terminar primeiro. O que o Radarr e o Sonarr importam e os seus pedidos pulam a espera e passam na frente da rotina.',
@@ -637,6 +640,16 @@ export const ptBR: Catalog = {
   'msg.library.queued': {
     one: '{n} item na fila (etapas novas: {steps}).',
     other: '{n} itens na fila (etapas novas: {steps}).',
+  },
+  'msg.concerts.off': 'A legenda de show está desligada: ligue e salve primeiro.',
+  'msg.concerts.none': 'Nenhum show encontrado na biblioteca.',
+  'msg.concerts.covered': {
+    one: 'Nada a fazer: o show encontrado já tem as legendas.',
+    other: 'Nada a fazer: os {n} shows encontrados já têm as legendas.',
+  },
+  'msg.concerts.queued': {
+    one: '{n} show na fila (etapas novas: {steps}).',
+    other: '{n} shows na fila (etapas novas: {steps}).',
   },
   'msg.test.arr_connected': '{name} {version}: conectado.',
   'msg.test.arr_outdated': '{name} {version}: conectado. Atualize: a versão mais nova é a {latest}.',

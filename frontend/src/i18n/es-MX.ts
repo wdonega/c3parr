@@ -505,6 +505,9 @@ export const esMX: Catalog = {
   'subs.concert_publish_original': 'Publicar también en el idioma en que se canta',
   'subs.concert_publish_original.help':
     'Aunque no sea uno de tus idiomas de destino: la letra tal como se canta, junto a la traducción.',
+  'subs.concertQueue': 'Poner los conciertos en la cola ahora',
+  'subs.concertQueueHint': 'Envía todos los conciertos de la biblioteca a la cola, antes que la rutina.',
+  'subs.concertQueueSave': 'Enciende los subtítulos de concierto y guarda primero.',
   'subs.automation': 'Automatización',
   'subs.automationAbout':
     'Un archivo monitoreado espera antes de que la rutina trabaje en él, para que una descarga o una copia termine primero. Lo que importan Radarr y Sonarr y tus propios pedidos se saltan la espera y pasan antes que la rutina.',
@@ -637,6 +640,16 @@ export const esMX: Catalog = {
   'msg.library.queued': {
     one: '{n} elemento en la cola (pasos nuevos: {steps}).',
     other: '{n} elementos en la cola (pasos nuevos: {steps}).',
+  },
+  'msg.concerts.off': 'Los subtítulos de concierto están apagados: enciéndelos y guarda primero.',
+  'msg.concerts.none': 'No se encontró ningún concierto en la biblioteca.',
+  'msg.concerts.covered': {
+    one: 'Nada que hacer: el concierto encontrado ya tiene sus subtítulos.',
+    other: 'Nada que hacer: los {n} conciertos encontrados ya tienen sus subtítulos.',
+  },
+  'msg.concerts.queued': {
+    one: '{n} concierto en la cola (pasos nuevos: {steps}).',
+    other: '{n} conciertos en la cola (pasos nuevos: {steps}).',
   },
   'msg.test.arr_connected': '{name} {version}: conectado.',
   'msg.test.arr_outdated': '{name} {version}: conectado. Actualízalo: la versión más nueva es la {latest}.',

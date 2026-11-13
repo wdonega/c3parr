@@ -90,6 +90,7 @@ export const api = {
   cancelJob: (id: number) => send<JobDetail>('POST', `/queue/${id}/cancel`),
   retryJob: (id: number) => send<JobDetail>('POST', `/queue/${id}/retry`),
   topJob: (id: number) => send<JobDetail>('POST', `/queue/${id}/top`),
+  queueConcerts: () => send<ActionResult>('POST', '/library/queue-concerts'),
   cancelQueued: () => send<ActionResult>('POST', '/queue/cancel-queued'),
   retryFailed: () => send<ActionResult>('POST', '/queue/retry-failed'),
 

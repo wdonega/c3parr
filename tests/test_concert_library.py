@@ -41,6 +41,21 @@ def test_only_what_is_surely_a_concert_is_called_one(
     assert detect.from_metadata(genres, keywords, title, overview).answer == answer
 
 
+def test_a_cast_that_plays_characters_means_a_film_and_a_series_is_never_a_concert() -> None:
+    band = [("Self - Vocals", "Ana"), ("Guitar", "Beto"), ("Caio Lima", "Caio Lima"),
+            ("Guitarra", "Davi"), ("Self (archive footage)", "Eva")]  # fmt: skip
+    assert detect.played_roles(band) == 1  # só o instrumento com outro nome passa por personagem
+    film = [(f"Personagem {n}", f"Ator {n}") for n in range(8)]
+    assert detect.played_roles(film) == 8
+    live = "Banda X: Ao Vivo em Lisboa"
+    assert detect.from_metadata([MUSIC], [], live, roles=1, cast=5).answer == "yes"
+    assert detect.from_metadata([MUSIC], [], live, roles=8, cast=8).answer == "no"
+    assert detect.from_metadata([], [], live, roles=8, cast=10).answer == "no"  # filme sem gênero
+    # poucos "personagens" num elenco grande: instrumentos com outro nome, não enredo
+    assert detect.from_metadata([MUSIC], [], live, roles=3, cast=9).answer == "yes"
+    assert detect.from_metadata([MUSIC], [], live, series=True).answer == "no"
+
+
 def test_a_concert_folder_is_matched_by_folder_and_not_by_the_start_of_the_name() -> None:
     folders = ["/data/media/musicvideos/", " /mnt/shows"]
     assert detect.under("/data/media/musicvideos/Banda (2004)/show.mkv", folders)

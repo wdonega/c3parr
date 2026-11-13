@@ -75,7 +75,10 @@ def _verdict(video: str) -> detect.Verdict | None:
     except (OSError, ValueError):
         return None
     titles = f"{meta.bible.titulo.original} | {meta.bible.titulo.pt} | {path.parent.name}"
-    return detect.from_metadata(meta.genre_ids, meta.keywords, titles, meta.bible.sinopse)
+    roles = detect.played_roles((c.nome, c.ator) for c in meta.bible.personagens)
+    return detect.from_metadata(meta.genre_ids, meta.keywords, titles, meta.bible.sinopse,
+                                roles=roles, cast=len(meta.bible.personagens),
+                                series=meta.kind == "serie")  # fmt: skip
 
 
 def is_concert(video: str, cfg: AppConfig) -> bool:
