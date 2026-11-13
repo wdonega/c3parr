@@ -28,7 +28,7 @@ from c3parr.jobs.queue import Job
 from c3parr.library.store import AppConfig
 from c3parr.pipeline.catalog import Media, StepState, sha_of
 from c3parr.pipeline.naming import output_file, work_file
-from c3parr.pipeline.reconcile import PipelineContext, reconcile
+from c3parr.pipeline.reconcile import PipelineContext, reconcile, work_files
 from c3parr.recipes import show as show_recipe
 from c3parr.recipes.pipeline import asr_recipe, metadata_step, subtitle_recipe
 from c3parr.recipes.transcribe import WrittenFile
@@ -204,6 +204,9 @@ def do_show(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Progres
     tmp = dest.with_name(dest.name + ".part")
     write_srt(sub, tmp)
     os.replace(tmp, dest)
+    for old in work_files(Path(m.video), "main").values():
+        if Path(old) != dest:  # a gerada antes pelo ASR, em outro idioma: não vale mais
+            Path(old).unlink(missing_ok=True)
     official = done.counts.get("lyric", 0) + done.counts.get("lyric-heard", 0)
     warn = f"; {len(result.degradations)} warnings" if result.degradations else ""
     detail = (f"{len(done.songs)} songs, {official} lyric lines, "

@@ -144,7 +144,7 @@ def _targets(s: ItemState, cfg: AppConfig) -> tuple[str, ...]:
     """Os idiomas que o item deve ter: os alvos e, num show com a legenda de show já feita, o
     idioma em que se canta."""
     targets = list(cfg.target_languages)
-    sung = next(iter(s.generated), None)
+    sung = next(iter(s.generated), None) if s.steps.get("show") == "ok" else None
     if s.concert != "no" and cfg.concert_publish_original and sung:
         human = s.main is not None and s.main.source in ("embedded", "external")
         if not human and not any(same_lang(sung, t) for t in targets):
@@ -310,10 +310,13 @@ def _choose_main(s: ItemState, cfg: AppConfig, c: _Ctx,
                 return None, []
             return MainSub(path=ext.path, lang=ext.lang or lang, source="external"), []
 
-    # nada pronto num show: a legenda de show (letra oficial encaixada no canto) no lugar do ASR
+    # nada pronto num show: a legenda de show (letra oficial encaixada no canto) no lugar do ASR.
+    # Uma principal gerada antes pelo ASR (o show já estava na biblioteca) não conta: a legenda
+    # de show é feita por cima dela, a principal muda de versão e as traduções seguem a opção
+    # de sempre para quando a principal muda.
     if s.concert != "no":
         sung = next(iter(s.generated), None)
-        if sung:
+        if sung and c.state("show") == "ok":
             return MainSub(path=s.generated[sung], lang=sung, source="show"), []
         if s.concert == "manual":
             return None, ["concert: its subtitle is made when someone asks for this item"]

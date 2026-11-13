@@ -85,6 +85,10 @@ V = "/m/musicvideos/Banda (2004)/Banda - Live.mkv"
 MAIN = "/m/musicvideos/Banda (2004)/Banda - Live.main.en.c3parr"
 
 
+MADE = {"metadados": "ok", "show": "ok"}
+"""Os passos de um show cuja legenda de show já foi feita."""
+
+
 def state(**kw: Any) -> ItemState:
     base = {"video": V, "steps": {"metadados": "ok"}, "concert": "yes", "original_language": "pt"}
     return ItemState.model_validate({**base, **kw})
@@ -109,22 +113,41 @@ def test_in_manual_mode_the_routine_waits_for_someone_to_ask() -> None:
     d = decide(state(concert="manual"), cfg())
     assert d.actions == () and "asks for this item" in d.notes[-1]
     # depois de feita, a legenda de show vale mesmo quando é a rotina que passa
-    done = decide(state(concert="manual", generated={"en": MAIN}), cfg())
+    done = decide(state(concert="manual", generated={"en": MAIN}, steps=MADE), cfg())
     assert done.main == MainSub(path=MAIN, lang="en", source="show", version=1)
 
 
+def test_a_concert_already_subtitled_the_plain_way_is_done_again_as_a_concert() -> None:
+    """O show já estava na biblioteca: tem a principal que o ASR gerou e a tradução dela."""
+    old = MainSub(path=MAIN, lang="en", source="asr", version=1)
+    ours = OurOutput(path="/m/x.pt-BR.c3parr.srt", main_version=1)
+    before = state(generated={"en": MAIN}, main=old, outputs={"pt-BR": ours},
+                   asr_path="/m/x.asr.c3parr")  # fmt: skip
+    d = decide(before, cfg())
+    assert kinds(d) == [("show", None)] and d.main == old  # até lá, vale a que existe
+    assert decide(before.model_copy(update={"concert": "manual"}), cfg()).actions == ()
+
+    after = before.model_copy(update={"steps": MADE})
+    d = decide(after, cfg())
+    assert d.main == MainSub(path=MAIN, lang="en", source="show", version=2)
+    after = after.model_copy(update={"main": d.main})
+    assert kinds(decide(after, cfg())) == [("traduzir", "pt-BR"), ("publicar", "en")]
+    # quem pediu para manter as traduções quando a principal muda fica com a antiga
+    kept = decide(after, cfg(derived_on_main_change="keep"))
+    assert kinds(kept) == [("publicar", "en")] and kept.resolved["pt-BR"] == "ours"
+
+
 def test_the_concert_subtitle_is_translated_and_also_published_as_it_is_sung() -> None:
-    d = decide(state(generated={"en": MAIN}), cfg())
+    made = state(generated={"en": MAIN}, steps=MADE)
+    d = decide(made, cfg())
     assert d.main is not None and (d.main.lang, d.main.source) == ("en", "show")
     assert kinds(d) == [("traduzir", "pt-BR"), ("publicar", "en")]
-    only_target = decide(state(generated={"en": MAIN}), cfg(concert_publish_original=False))
-    assert kinds(only_target) == [("traduzir", "pt-BR")]
+    assert kinds(decide(made, cfg(concert_publish_original=False))) == [("traduzir", "pt-BR")]
     # quando o idioma cantado já é um alvo, não há nada a mais
-    assert kinds(decide(state(generated={"en": MAIN}), cfg(target_languages=["en"]))) == [
-        ("publicar", "en")]  # fmt: skip
+    assert kinds(decide(made, cfg(target_languages=["en"]))) == [("publicar", "en")]
     ours = OurOutput(path="/m/x.en.c3parr.srt", main_version=1)
     main = MainSub(path=MAIN, lang="en", source="show", version=1)
-    settled = decide(state(generated={"en": MAIN}, main=main, outputs={"en": ours, "pt-BR": ours}),
+    settled = decide(made.model_copy(update={"main": main, "outputs": {"en": ours, "pt-BR": ours}}),
                      cfg())  # fmt: skip
     assert settled.actions == () and settled.resolved == {"pt-BR": "ours", "en": "ours"}
 
@@ -166,6 +189,27 @@ def test_a_video_in_the_concert_folder_gets_lyrics_a_translation_and_the_origina
     assert media is not None and (media.main_lang, media.main_source) == ("fr", "show")
     detail = env.catalog.steps(media.id)[("show", "")].detail or ""
     assert detail.startswith("1 songs, 8 lyric lines, 2 heard only")
+
+
+def test_turning_concerts_on_redoes_the_concerts_that_were_already_in_the_library(
+    tmp_path: Path, tiny_video: Path
+) -> None:
+    env = concert_env(tmp_path, mode="off")
+    video = place(tiny_video, tmp_path / "musicvideos" / "Banda (2004)" / "Banda - Live.mkv")
+    reconcile(env.ctx, str(video), "manual")
+    assert [j.acao for j in env.drain()] == ["metadados", "asr", "gerar", "traduzir"]
+    plain = work_file(video, "main", "fr").read_text(encoding="utf-8")
+    assert "♪" not in plain
+
+    env.library.save_config(env.library.config().model_copy(update={"concert_mode": "auto"}))
+    reconcile(env.ctx, str(video), "rotina", force=True)  # a rotina de toda hora já pega
+    assert [(j.acao, j.idioma) for j in env.drain()] == [
+        ("show", None), ("traduzir", "pt-BR"), ("publicar", "fr")]  # fmt: skip
+    assert "♪" in work_file(video, "main", "fr").read_text(encoding="utf-8")
+    media = env.catalog.media_by_video(str(video))
+    assert media is not None and (media.main_source, media.main_version) == ("show", 2)
+    reconcile(env.ctx, str(video), "rotina", force=True)
+    assert env.drain() == []  # e não refaz de novo
 
 
 def test_a_film_outside_the_concert_folder_goes_the_usual_way(

@@ -50,7 +50,7 @@ class PipelineContext:
     format_rules: FormatRules
 
 
-def _work_files(video: Path, kind: str) -> dict[str, str]:
+def work_files(video: Path, kind: str) -> dict[str, str]:
     """idioma → arquivo `<vídeo>.<kind>.<idioma>.c3parr` que existe."""
     prefix = f"{video.stem}.{kind}."
     out = {}
@@ -137,7 +137,7 @@ def build_state(cat: Catalog, media: Media, subs: list[SubtitleFile],
         video=media.video, original_language=media.original_language, audio_language=audio_lang,
         embedded=tuple(embedded), externals=tuple(externals), outputs=outputs, main=main,
         asr_path=str(asr) if asr.exists() else None, asr_language=asr_language,
-        generated=_work_files(video, "main"),
+        generated=work_files(video, "main"),
         steps=steps,
         concert=concert,
     )  # fmt: skip
