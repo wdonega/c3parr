@@ -118,6 +118,8 @@ Every image is built for **x86 (amd64)** and **ARM (arm64)**; Docker picks the r
 | `latest`, `latest-cuda`, `revN`, `revN-cuda`, `1.1.N` | NVIDIA: RTX 20xx–50xx on x86; Jetson Orin, Thor and DGX Spark on ARM |
 | `latest-vulkan`, `revN-vulkan`, `1.1.N-vulkan` | AMD, Intel and others through Mesa |
 
+The `cuda` image for x86 carries PyTorch with its CUDA libraries for the [concert subtitles](#concert-subtitles), about 5 GB more on disk; the others carry PyTorch for the CPU.
+
 Both images also run without a GPU: whisper.cpp picks the fastest CPU code for the machine at start. On an **RK3588** (Mali-G610), leave `/dev/dri` out: the Vulkan driver for that GPU fails, and the CPU is faster there anyway.
 
 ## Setup, step by step
@@ -212,10 +214,14 @@ What to expect:
 - Only an **NVIDIA GPU with the `cuda` image on x86** speeds up the voice separation and the lyric fitting. The `vulkan` image and ARM run them on the CPU.
 - The model files (about 1.3 GB) download on the first concert. **System → Status** shows the speed measured on your machine.
 
-| Step (per hour of concert) | RTX 3060 (CUDA) | Apple M3 Pro (CPU) |
+| Per hour of concert | RTX 3060 (`cuda` image) | Apple M3 Pro (CPU; Metal for Whisper) |
 |---|---|---|
 | Voice separation | 1.7 min | 17 min |
-| Lyric fitting | not measured | about 4 min per hour of music |
+| Transcription of the isolated voice | 1.6 min | 2 min |
+| Lyric fitting | 0.6 min | 5.5 min |
+| Everything, start to finish | about 5 min | about 27 min |
+
+The "everything" row comes from a two-hour concert: 11 minutes on the RTX 3060, model downloads included.
 
 From the command line: `c3parr "Band - Live.mkv" --show`. Add `--artist "Band"` when the file name doesn't say who plays, `--year 1995` for the year of the concert, and `--no-lyrics` to skip the lookup.
 

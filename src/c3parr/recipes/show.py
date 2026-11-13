@@ -427,13 +427,35 @@ def _report(song: Played) -> SongReport:
     )
 
 
+def split_long(row: Line, limit: int) -> list[tuple[float, float, str]]:
+    """Uma fala ouvida longa demais para a tela vira falas seguidas, com o tempo dividido pelo
+    tamanho de cada pedaço. Linha de letra não se divide (são curtas, e o ♪ abre e fecha nela)."""
+    if row.kind != "heard" or len(row.text) <= limit:
+        return [(row.start, row.end, row.text)]
+    pieces: list[str] = []
+    for word in row.text.split():
+        if pieces and len(pieces[-1]) + 1 + len(word) <= limit:
+            pieces[-1] += " " + word
+        else:
+            pieces.append(word)
+    total = sum(len(p) for p in pieces)
+    out, at = [], row.start
+    for piece in pieces:
+        end = at + (row.end - row.start) * len(piece) / total
+        out.append((round(at, 3), round(end, 3), piece))
+        at = end
+    return out
+
+
 def make_format(rules: FormatRules) -> Step:
     def run(ctx: StepContext) -> Subtitle:
         done = ctx.require("montagem", Assembled)
+        limit = rules.max_chars_per_line * rules.max_lines - 4  # folga para a quebra em linhas
+        pieces = [piece for row in done.rows for piece in split_long(row, limit)]
         cues = tuple(
-            Cue(index=n, start=r.start, end=r.end,
-                text=wrap_lines(r.text, rules.max_chars_per_line, rules.max_lines))
-            for n, r in enumerate(done.rows, 1)
+            Cue(index=n, start=start, end=end,
+                text=wrap_lines(text, rules.max_chars_per_line, rules.max_lines))
+            for n, (start, end, text) in enumerate(pieces, 1)
         )  # fmt: skip
         return Subtitle(cues=cues, lang=done.language)
 

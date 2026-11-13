@@ -1,6 +1,7 @@
 """A receita `show` de ponta a ponta com providers de mentira: da voz "isolada" à legenda."""
 
 from collections.abc import Callable
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ from concertkit import song
 
 from c3parr.concert.fake import FakePlacer, FakePlacerConfig, FakeSeparator, FakeSeparatorConfig
 from c3parr.concert.fit import Fitted
-from c3parr.concert.models import Assembled, SecondListen, Spoken
+from c3parr.concert.models import Assembled, Line, SecondListen, Spoken
 from c3parr.core.errors import Unavailable
 from c3parr.core.job import ComponentSpec, JobParams
 from c3parr.core.models import Segment, Subtitle, Transcript, Word
@@ -209,6 +210,18 @@ def test_speech_outside_the_songs_is_heard_where_there_is_voice_in_its_own_langu
     assert spoken.languages == {"ja": 2, "en": 1}
     assert [r.language for _, r in whisper.requests] == [None, "ja", "en"]
     assert all(r.vad is False for _, r in whisper.requests)
+
+
+def test_a_long_stretch_of_talk_becomes_cues_that_fit_the_screen() -> None:
+    talk = "we want to thank every single one of you for coming out tonight " * 3
+    long = Line(start=100.0, end=107.0, text=talk.strip(), kind="heard")
+    pieces = show.split_long(long, 80)
+    assert len(pieces) == 3 and all(len(text) <= 80 for _, _, text in pieces)
+    assert " ".join(text for _, _, text in pieces) == long.text
+    assert (pieces[0][0], pieces[-1][1]) == (100.0, 107.0)
+    assert all(a[1] == b[0] for a, b in pairwise(pieces))  # uma atrás da outra, sem buraco
+    lyric = Line(start=1.0, end=4.0, text="♪ " + talk.strip() + " ♪", kind="lyric")
+    assert show.split_long(lyric, 80) == [(1.0, 4.0, lyric.text)]  # letra não se divide
 
 
 def test_an_engine_that_cannot_hear_singing_says_so(tmp_path: Path) -> None:
