@@ -498,7 +498,7 @@ export const ptBR: Catalog = {
   'subs.concertMode.auto': 'Automático',
   'subs.concertPaths': 'Pastas de show',
   'subs.concertPathsHint':
-    'Pastas onde ficam os shows, como o c3parr as vê, separadas por vírgula (por exemplo /data/media/musicvideos). Vazio: o c3parr adivinha pelo TMDb e só trata o item como show quando tem certeza.',
+    'Pastas onde ficam os shows, como o c3parr as vê, separadas por vírgula (por exemplo /data/media/musicvideos). Um filme com enredo ou um documentário que esteja nelas fica de fora (pelo TMDb). Vazio: o c3parr adivinha pelo TMDb e só trata o item como show quando tem certeza.',
   'subs.concert_lyrics': 'Usar a letra oficial da internet',
   'subs.concert_lyrics.help':
     'Consulta o MusicBrainz e o LRCLIB com o nome do artista e os títulos das músicas. Desligado: só o que foi ouvido na voz isolada.',

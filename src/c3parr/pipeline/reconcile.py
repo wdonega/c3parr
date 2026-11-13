@@ -65,29 +65,38 @@ def work_files(video: Path, kind: str) -> dict[str, str]:
     return out
 
 
-def is_concert(video: str, cfg: AppConfig) -> bool:
-    """O item é um show? Com pastas de show em Settings, vale só a pasta; sem elas, o palpite pelos
-    metadados do TMDb, que só diz sim quando há certeza."""
-    if cfg.concert_paths:
-        return detect.under(video, cfg.concert_paths)
+def _verdict(video: str) -> detect.Verdict | None:
+    """O que os metadados do TMDb dizem do item; None quando ainda não há metadados."""
     path = Path(video)
     try:
         meta = MetadataResult.model_validate_json(
             work_file(path, "meta").read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
-        return False
+        return None
     titles = f"{meta.bible.titulo.original} | {meta.bible.titulo.pt} | {path.parent.name}"
-    verdict = detect.from_metadata(meta.genre_ids, meta.keywords, titles, meta.bible.sinopse)
-    return verdict.answer == "yes"
+    return detect.from_metadata(meta.genre_ids, meta.keywords, titles, meta.bible.sinopse)
+
+
+def is_concert(video: str, cfg: AppConfig) -> bool:
+    """O item é um show? Com pastas de show em Settings, é o que está nelas, menos o que o TMDb
+    diz com certeza que não é (um filme com enredo, um documentário que foi parar ali). Sem
+    pastas, só o que o TMDb diz com certeza que é."""
+    verdict = _verdict(video)
+    if cfg.concert_paths:
+        inside = detect.under(video, cfg.concert_paths)
+        return inside and (verdict is None or verdict.answer != "no")
+    return verdict is not None and verdict.answer == "yes"
 
 
 def refresh_old_metadata(cat: Catalog, media: Media, cfg: AppConfig) -> bool:
     """Metadados gravados por uma versão anterior não dizem os gêneros pelo número, e sem eles
-    ninguém sabe se o filme é um show. Quando é o TMDb que decide (sem pastas de show), o passo
-    de metadados roda de novo, uma vez por item: o arquivo fica marcado antes, para um TMDb fora
-    do ar não virar um pedido sem fim."""
-    if cfg.concert_mode == "off" or cfg.concert_paths:
+    ninguém sabe se o filme é um show. Onde isso pesa (sem pastas de show, toda a biblioteca; com
+    elas, o que está nelas), o passo de metadados roda de novo, uma vez por item: o arquivo fica
+    marcado antes, para um TMDb fora do ar não virar um pedido sem fim."""
+    if cfg.concert_mode == "off":
+        return False
+    if cfg.concert_paths and not detect.under(media.video, cfg.concert_paths):
         return False
     path = work_file(Path(media.video), "meta")
     try:

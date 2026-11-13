@@ -498,7 +498,7 @@ export const esMX: Catalog = {
   'subs.concertMode.auto': 'Automático',
   'subs.concertPaths': 'Carpetas de conciertos',
   'subs.concertPathsHint':
-    'Carpetas donde están los conciertos, como las ve c3parr, separadas por comas (por ejemplo /data/media/musicvideos). Vacío: c3parr lo deduce de TMDb y solo trata el elemento como concierto cuando está seguro.',
+    'Carpetas donde están los conciertos, como las ve c3parr, separadas por comas (por ejemplo /data/media/musicvideos). Una película con trama o un documental que esté en ellas queda fuera (según TMDb). Vacío: c3parr lo deduce de TMDb y solo trata el elemento como concierto cuando está seguro.',
   'subs.concert_lyrics': 'Usar la letra oficial de internet',
   'subs.concert_lyrics.help':
     'Consulta MusicBrainz y LRCLIB con el nombre del artista y los títulos de las canciones. Apagado: solo lo que se oyó en la voz aislada.',

@@ -202,7 +202,7 @@ A concert is mostly singing, and Whisper gets singing wrong with full confidence
 **Settings → Subtitles → Concerts** turns it on. It is off by default, and then a concert is treated like any film.
 
 - **Concert subtitles**: off, only when you ask for the item, or automatic.
-- **Concert folders**: where your concerts are, as c3parr sees them (for example `/data/media/musicvideos`, a second root folder in Radarr). Left empty, c3parr guesses from TMDb and only treats an item as a concert when it is sure.
+- **Concert folders**: where your concerts are, as c3parr sees them (for example `/data/media/musicvideos`, a second root folder in Radarr). What TMDb clearly says is not a concert (a film with a plot, a documentary) is left out even there. Left empty, c3parr guesses from TMDb and only treats an item as a concert when it is sure.
 - **Use the official lyrics from the internet**: only the artist name and the song titles leave your machine. Off, the subtitle has only what was heard in the isolated voice.
 - **Also publish in the language that is sung**: the lyrics as they are sung, next to the translation into your target languages.
 

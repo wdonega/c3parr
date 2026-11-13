@@ -497,7 +497,7 @@ export const en = {
   'subs.concertMode.auto': 'Automatic',
   'subs.concertPaths': 'Concert folders',
   'subs.concertPathsHint':
-    'Folders where the concerts are, as c3parr sees them, separated by commas (for example /data/media/musicvideos). Empty: c3parr guesses from TMDb and only treats an item as a concert when it is sure.',
+    'Folders where the concerts are, as c3parr sees them, separated by commas (for example /data/media/musicvideos). A film with a plot or a documentary in them is left out (by TMDb). Empty: c3parr guesses from TMDb and only treats an item as a concert when it is sure.',
   'subs.concert_lyrics': 'Use the official lyrics from the internet',
   'subs.concert_lyrics.help':
     'Asks MusicBrainz and LRCLIB with the artist name and the song titles. Off: only what was heard in the isolated voice.',

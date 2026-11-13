@@ -158,8 +158,9 @@ class AppConfig(Model):
     """Legenda de show (letra oficial encaixada no canto). `manual`: só quando alguém pede o item;
     `auto`: como qualquer outro item. Desligado, um show é tratado como um filme comum."""
     concert_paths: tuple[str, ...] = ()
-    """Pastas onde ficam os shows (como o c3parr as vê). Vazio = adivinha pelo TMDb, e só trata
-    como show quando há certeza."""
+    """Pastas onde ficam os shows (como o c3parr as vê); o que o TMDb diz com certeza que não é
+    show (filme com enredo, documentário) fica de fora mesmo estando nelas. Vazio = adivinha pelo
+    TMDb, e só trata como show quando há certeza."""
     concert_lyrics: bool = True
     """Busca a letra oficial (MusicBrainz e LRCLIB). Desligado, a legenda fica só com o que foi
     ouvido na voz isolada."""
