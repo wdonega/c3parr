@@ -44,6 +44,9 @@ class MetadataResult(Model):
     """Os gêneros pelo número do TMDb (o nome muda com o idioma; o número não)."""
     keywords: tuple[str, ...] = ()
     """Palavras-chave do TMDb (sempre em inglês): com os gêneros, dizem se é um show."""
+    asked_signals: bool = False
+    """Os gêneros pelo número e as palavras-chave já foram pedidos ao TMDb. Metadados gravados
+    por uma versão anterior não os têm: a pipeline pede de novo, uma vez (ver `reconcile`)."""
     candidates: tuple[Candidate, ...] = ()
     chosen_reason: str = ""
 

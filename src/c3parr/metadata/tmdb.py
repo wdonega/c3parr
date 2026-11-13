@@ -246,7 +246,8 @@ class TMDbProvider:
             d = self._movie(tmdb_id)
             return MetadataResult(bible=self._movie_bible(d), tmdb_id=tmdb_id, chosen_reason=how,
                                   original_language=d.get("original_language"),
-                                  genre_ids=_genre_ids(d), keywords=_keywords(d))  # fmt: skip
+                                  genre_ids=_genre_ids(d), keywords=_keywords(d),
+                                  asked_signals=True)  # fmt: skip
         if not hint.title:
             raise InvalidInput("no title to search on TMDb", provider=INFO.id)
         found = self._get("/search/movie", query=hint.title, year=hint.year,
@@ -267,6 +268,7 @@ class TMDbProvider:
                               candidates=tuple(candidates),
                               original_language=chosen.get("original_language"),
                               genre_ids=_genre_ids(chosen), keywords=_keywords(chosen),
+                              asked_signals=True,
                               chosen_reason=f"search by {hint.source}: {reason}")  # fmt: skip
 
     def _identify_show(self, hint: MediaHint, request: MetadataRequest, tmdb_id: int | None,

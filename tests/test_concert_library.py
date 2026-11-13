@@ -50,9 +50,9 @@ def test_a_concert_folder_is_matched_by_folder_and_not_by_the_start_of_the_name(
     assert not detect.under("/data/media/movies/x.mkv", [" ", ""])
 
 
-def meta(video: Path, genres: tuple[int, ...], title: str) -> None:
+def meta(video: Path, genres: tuple[int, ...], title: str, asked: bool = True) -> None:
     result = MetadataResult(bible=Bible(titulo=Title(original=title, pt=title)), tmdb_id=1,
-                            genre_ids=genres)  # fmt: skip
+                            genre_ids=genres, asked_signals=asked)  # fmt: skip
     work_file(video, "meta").write_text(result.model_dump_json(), encoding="utf-8")
 
 
@@ -77,6 +77,32 @@ def test_the_folders_decide_when_given_and_the_metadata_only_when_sure(tmp_path:
     assert concert_state(str(show), manual, "rotina") == "manual"
     assert concert_state(str(show), manual, "manual") == "yes"
     assert concert_state(str(tmp_path / "sem-meta.mkv"), cfg(), "rotina") == "no"
+
+
+def test_metadata_from_before_the_genres_were_kept_is_asked_again_once(
+    tmp_path: Path, tiny_video: Path
+) -> None:
+    env = concert_env(tmp_path)
+    env.library.save_config(env.library.config().model_copy(update={"concert_paths": ()}))
+    video = place(tiny_video, tmp_path / "movies" / "Banda (2004)" / "Banda - Live.mkv")
+    reconcile(env.ctx, str(video), "manual")
+    assert [j.acao for j in env.drain()] == ["metadados", "asr", "gerar", "traduzir"]
+    meta(video, (), "Banda: Live in Lisbon", asked=False)  # como uma versão anterior gravava
+
+    reconcile(env.ctx, str(video), "rotina", force=True)
+    assert [j.acao for j in env.drain()] == ["metadados"]  # pede de novo ao TMDb
+    kept = MetadataResult.model_validate_json(work_file(video, "meta").read_text(encoding="utf-8"))
+    assert kept.asked_signals  # aqui não há TMDb: o arquivo fica marcado e ninguém pede outra vez
+    reconcile(env.ctx, str(video), "rotina", force=True)
+    assert env.drain() == []
+
+    # com pastas de show, quem decide é a pasta: nada é pedido de novo
+    other = place(tiny_video, tmp_path / "movies" / "Outro (2001)" / "Outro.mkv")
+    env.library.save_config(env.library.config().model_copy(update={
+        "concert_paths": (str(tmp_path / "musicvideos"),)}))  # fmt: skip
+    meta(other, (), "Outro", asked=False)
+    reconcile(env.ctx, str(other), "manual")
+    assert "metadados" not in [j.acao for j in env.drain()][1:]
 
 
 # --- o que o decisor pede ---

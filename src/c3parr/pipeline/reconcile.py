@@ -82,6 +82,28 @@ def is_concert(video: str, cfg: AppConfig) -> bool:
     return verdict.answer == "yes"
 
 
+def refresh_old_metadata(cat: Catalog, media: Media, cfg: AppConfig) -> bool:
+    """Metadados gravados por uma versão anterior não dizem os gêneros pelo número, e sem eles
+    ninguém sabe se o filme é um show. Quando é o TMDb que decide (sem pastas de show), o passo
+    de metadados roda de novo, uma vez por item: o arquivo fica marcado antes, para um TMDb fora
+    do ar não virar um pedido sem fim."""
+    if cfg.concert_mode == "off" or cfg.concert_paths:
+        return False
+    path = work_file(Path(media.video), "meta")
+    try:
+        meta = MetadataResult.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if meta.kind != "filme" or meta.asked_signals:
+        return False
+    marked = meta.model_copy(update={"asked_signals": True})
+    tmp = path.with_name(path.name + ".part")
+    tmp.write_text(marked.model_dump_json(indent=1), encoding="utf-8")
+    tmp.replace(path)
+    cat.clear_step(media.id, "metadados")
+    return True
+
+
 def concert_state(video: str, cfg: AppConfig, origem: str) -> ConcertState:
     if cfg.concert_mode == "off" or not is_concert(video, cfg):
         return "no"
@@ -185,6 +207,8 @@ def reconcile(ctx: PipelineContext, video: str, origem: str = "rotina",
         ctx.catalog.resolve_alerts(key=f"probe:{video}")
         media = ctx.catalog.media(media.id)
 
+    if refresh_old_metadata(ctx.catalog, media, cfg):
+        log.info("%s: asking TMDb again for the genres and keywords", path.name)
     subs = index_subtitles(ctx.library, video, media.probe)  # do disco, e atualiza as telas
     decision = Decision()
     for _ in range(4):  # trocar a principal muda o estado; decide de novo até estabilizar
