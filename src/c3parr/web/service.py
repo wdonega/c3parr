@@ -141,7 +141,7 @@ SUBTITLE_FLAGS = (
     "new_external_becomes_main", "asr_enabled", "asr_always",
     "concert_lyrics", "concert_publish_original",
 )  # fmt: skip
-SUBTITLE_CHOICES = ("derived_on_main_change", "foreign_tag", "concert_mode")
+SUBTITLE_CHOICES = ("derived_on_main_change", "foreign_tag", "concert_mode", "concert_memory")
 # campos da AppConfig que a API grava como vieram (a validação é a do próprio modelo)
 PLAIN_SETTINGS = (*SUBTITLE_FLAGS, *SUBTITLE_CHOICES, "wait_minutes", "search_interval_minutes",
                   "monitor_new", "sync_interval_minutes", "theme")  # fmt: skip
@@ -425,6 +425,12 @@ def components_for(settings: Settings, config: AppConfig) -> dict[str, Component
         if config.asr_model:
             params["model"] = config.asr_model
         out["transcricao"] = ComponentSpec(provider=REMOTE_IDS[config.asr_mode], params=params)
+    # o teto de memória do show (Settings → Subtitles → Concerts) vale para os dois modelos dele
+    for iface, provider in (("separacao", "demucs"), ("encaixe", "wav2vec2")):
+        spec = out.get(iface)
+        if spec is not None and spec.provider == provider:
+            limit = {"memory_limit": config.concert_memory}
+            out[iface] = spec.model_copy(update={"params": {**spec.params, **limit}})
     return out
 
 

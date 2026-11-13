@@ -6,7 +6,9 @@ e outra entra uma coluna "qualquer som" (solo, plateia, fala), para a linha não
 o que não é dela. Só inglês: as letras do modelo são as do inglês.
 
 A escuta de uma música inteira (a "emissão") leva 1 minuto a cada 15 de música no processador e
-fica guardada: o encaixe das linhas repetidas usa a mesma.
+fica guardada: o encaixe das linhas repetidas usa a mesma. O modelo escuta em janelas, e o
+tamanho da janela segue a memória livre (`memory.plan`): 30 s ou 10 s. Os pesos (1,3 GB) são lidos
+direto do arquivo, sem a cópia que dobrava a memória ao carregar (2,7 GB → 1,5 GB, escuta idêntica).
 """
 
 import hashlib
@@ -20,6 +22,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from c3parr.concert import device as hw
+from c3parr.concert import memory
 from c3parr.interfaces import lyric_fit
 from c3parr.interfaces.lyric_fit import Placed, PlaceRequest
 from c3parr.interfaces.transcription import AudioRef
@@ -27,7 +30,8 @@ from c3parr.providers.base import Health, ModelDownload, ProviderInfo, Requireme
 
 log = logging.getLogger("c3parr.concert")
 RATE = 16000
-CHUNK_S, CONTEXT_S = 30.0, 1.0
+CONTEXT_S = 1.0
+WEIGHTS_URL = "https://download.pytorch.org/torchaudio/models/"
 LANGUAGES = frozenset({"en"})
 
 
@@ -35,12 +39,14 @@ class Wav2Vec2Config(BaseModel):
     device: Literal["auto", "cpu"] = "auto"
     """`auto`: a GPU NVIDIA se houver, senão o processador; `cpu`: força o processador."""
     model_dir: Path = Field(default_factory=hw.default_model_dir)
+    memory_limit: memory.Limit = "auto"
+    """O teto de memória (Settings → Subtitles → Concerts): `2`, `3` ou `auto`."""
 
 
 INFO = ProviderInfo(
     id="wav2vec2",
     interface=lyric_fit.INTERFACE,
-    version="1",
+    version="2",
     config_schema=Wav2Vec2Config,
     capabilities=LANGUAGES,
     requirements=Requirements(
@@ -115,6 +121,45 @@ def place(emission: Any, per_s: float, start: float, lines: Sequence[str]) -> li
     return out
 
 
+def load_model(model_dir: Path, where: str) -> Any:
+    """O modelo com os pesos lidos direto do arquivo (mapeado), em vez de carregados e copiados.
+    Usa partes internas do torchaudio; se elas mudarem, vale o carregamento comum."""
+    import torch
+    import torchaudio
+
+    bundle = torchaudio.pipelines.WAV2VEC2_ASR_LARGE_LV60K_960H
+    try:
+        path = model_dir / "hub" / "checkpoints" / bundle._path
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            torch.hub.download_url_to_file(WEIGHTS_URL + bundle._path, str(path))
+        state = torch.load(path, mmap=True, weights_only=True)
+        for key in ("aux.weight", "aux.bias"):  # as saídas que o próprio torchaudio descarta
+            rows = state[key]
+            keep = [i for i in range(rows.size(0)) if i not in bundle._remove_aux_axis]
+            state[key] = torch.stack([rows[i] for i in keep])
+        inner = torchaudio.models.wav2vec2_model(**bundle._params)
+        inner.load_state_dict(state, assign=True)
+        normalize = bool(bundle._normalize_waveform)
+    except Exception:
+        log.warning("wav2vec2: mapped loading failed, loading the usual way", exc_info=True)
+        return bundle.get_model().to(where).eval()
+
+    class Normalized(torch.nn.Module):  # type: ignore[misc]
+        """Como o torchaudio faz: a onda normalizada antes de entrar no modelo."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.inner = inner
+
+        def forward(self, wave: Any) -> Any:
+            if normalize:
+                wave = torch.nn.functional.layer_norm(wave, wave.shape)
+            return self.inner(wave)
+
+    return Normalized().to(where).eval()
+
+
 class Wav2Vec2Placer:
     info = INFO
 
@@ -130,12 +175,9 @@ class Wav2Vec2Placer:
 
     def _load(self) -> Any:
         if self._model is None:  # 1,2 GB: só quando falta calcular a escuta de algum trecho
-            import torchaudio
-
             hw.use_model_dir(self.config.model_dir)
             self._where = hw.pick(self.config.device)
-            bundle = torchaudio.pipelines.WAV2VEC2_ASR_LARGE_LV60K_960H
-            self._model = bundle.get_model().to(self._where).eval()
+            self._model = load_model(self.config.model_dir, self._where)
         return self._model
 
     def _emission(self, audio: AudioRef, start: float, end: float, cache: Path,
@@ -146,8 +188,10 @@ class Wav2Vec2Placer:
         import soundfile as sf
         import torch
 
-        name = hashlib.sha1(f"{audio.sha256}|{start:.2f}|{end:.2f}".encode()).hexdigest()[:16]
-        path = cache / f"emission-{name}.npy"
+        # a janela entra no nome: a escuta com outra janela não é a mesma nas emendas
+        window_s = memory.plan(self.config.memory_limit, memory.free_gb(), INFO.id).window_s
+        key = f"{audio.sha256}|{start:.2f}|{end:.2f}|{window_s:g}"
+        path = cache / f"emission-{hashlib.sha1(key.encode()).hexdigest()[:16]}.npy"
         if path.exists():
             saved = torch.from_numpy(np.load(path).astype("float32"))
             return saved, saved.shape[0] / (end - start)
@@ -160,7 +204,7 @@ class Wav2Vec2Placer:
                 raise ValueError(f"expected {RATE} Hz audio, got {f.samplerate}")
             while at < end:
                 lead = min(CONTEXT_S, at - start) if at > start else 0.0
-                stop = min(end, at + CHUNK_S)
+                stop = min(end, at + window_s)
                 tail = min(CONTEXT_S, end - stop)
                 f.seek(int((at - lead) * RATE))
                 data = f.read(int((stop + tail) * RATE) - int((at - lead) * RATE), dtype="float32")

@@ -508,6 +508,12 @@ export const esMX: Catalog = {
   'subs.concertQueue': 'Poner los conciertos en la cola ahora',
   'subs.concertQueueHint': 'Envía todos los conciertos de la biblioteca a la cola, antes que la rutina.',
   'subs.concertQueueSave': 'Enciende los subtítulos de concierto y guarda primero.',
+  'subs.concertMemory': 'Memoria para conciertos',
+  'subs.concertMemoryHint':
+    'Es el tope. Por debajo de él, el concierto usa solo lo que esté libre en ese momento, con un margen. Con menos de 1.5 GB libres la tarea se detiene con una alerta en vez de congelar la máquina.',
+  'subs.concertMemory.auto': 'Automático: lo que esté libre, con margen',
+  'subs.concertMemory.3': 'Hasta 3 GB',
+  'subs.concertMemory.2': 'Hasta 2 GB (el mínimo)',
   'subs.automation': 'Automatización',
   'subs.automationAbout':
     'Un archivo monitoreado espera antes de que la rutina trabaje en él, para que una descarga o una copia termine primero. Lo que importan Radarr y Sonarr y tus propios pedidos se saltan la espera y pasan antes que la rutina.',

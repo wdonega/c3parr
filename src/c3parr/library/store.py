@@ -166,6 +166,10 @@ class AppConfig(Model):
     ouvido na voz isolada."""
     concert_publish_original: bool = True
     """Publica também a legenda no idioma em que se canta, mesmo que não seja um idioma alvo."""
+    concert_memory: Literal["auto", "2", "3"] = "auto"
+    """O teto de memória da legenda de show, em GB. `auto`: o que estiver livre na hora, com uma
+    folga. Em qualquer opção, com menos de 1,5 GB livre a tarefa falha com um alerta em vez de
+    travar a máquina."""
 
     @property
     def target_language(self) -> str:

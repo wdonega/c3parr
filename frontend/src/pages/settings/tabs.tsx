@@ -782,6 +782,17 @@ export function SubtitlesTab({ form }: Tab) {
         />
         {flag('concert_lyrics', !concerts)}
         {flag('concert_publish_original', !concerts)}
+        <Field label={t('subs.concertMemory')} edited={form.edited('concert_memory')} hint={t('subs.concertMemoryHint')}>
+          <select
+            className="input"
+            value={form.value('concert_memory')}
+            onChange={(event) => form.set('concert_memory', event.target.value as AppConfig['concert_memory'])}
+          >
+            <option value="auto">{t('subs.concertMemory.auto')}</option>
+            <option value="3">{t('subs.concertMemory.3')}</option>
+            <option value="2">{t('subs.concertMemory.2')}</option>
+          </select>
+        </Field>
         <QueueConcerts form={form} />
       </Section>
 

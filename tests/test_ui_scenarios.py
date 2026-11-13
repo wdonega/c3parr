@@ -627,6 +627,7 @@ def test_alerts_are_seen_when_opened_and_retried_on_request(seeded: Ui) -> None:
 def test_concert_options_are_saved_and_the_folders_are_tidied(fresh: Ui) -> None:
     saved = fresh.do.save_subtitles(
         concert_mode="manual", concert_lyrics=False, concert_publish_original=False,
+        concert_memory="2",
         concert_paths=[" /data/media/musicvideos/ ", "", "/data/media/musicvideos", "/shows"],
     )  # fmt: skip
     assert saved.ok
@@ -634,6 +635,10 @@ def test_concert_options_are_saved_and_the_folders_are_tidied(fresh: Ui) -> None
     assert (got.concert_mode, got.concert_lyrics, got.concert_publish_original) == (
         "manual", False, False)  # fmt: skip
     assert got.concert_paths == ("/data/media/musicvideos", "/shows")
+    specs = components_for(Settings(), got)
+    assert specs["separacao"].params == {"memory_limit": "2"}  # o teto chega aos dois modelos
+    assert specs["encaixe"].params == {"memory_limit": "2"}
+    assert not fresh.do.save_subtitles(concert_memory="64").ok
     assert not fresh.do.save_subtitles(concert_mode="sometimes").ok
     assert fresh.world.library.config().concert_mode == "manual"
 

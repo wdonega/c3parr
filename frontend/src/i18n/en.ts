@@ -507,6 +507,12 @@ export const en = {
   'subs.concertQueue': 'Queue the concerts now',
   'subs.concertQueueHint': 'Sends every concert in the library to the queue, ahead of the routine.',
   'subs.concertQueueSave': 'Turn concert subtitles on and save first.',
+  'subs.concertMemory': 'Memory for concerts',
+  'subs.concertMemoryHint':
+    'The ceiling. Below it, a concert uses only what is free at the time, with a margin. With less than 1.5 GB free the task stops with an alert instead of stalling the machine.',
+  'subs.concertMemory.auto': 'Automatic: what is free, with a margin',
+  'subs.concertMemory.3': 'Up to 3 GB',
+  'subs.concertMemory.2': 'Up to 2 GB (the minimum)',
   'subs.automation': 'Automation',
   'subs.automationAbout':
     'A monitored file waits before the routine works on it, so a download or copy can finish first. Radarr and Sonarr imports and your own requests skip the wait and go ahead of the routine.',

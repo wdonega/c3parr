@@ -3,10 +3,11 @@
 Sem a voz isolada o resto não funciona. Medido em 10 min de um show: o encaixe da letra acerta 20
 de 30 linhas com a voz isolada e 2 com a mistura, e o detector de voz descarta o canto na mistura.
 Usa a GPU NVIDIA quando há (numa RTX 3060: 36x o tempo real, 550 MB de memória de vídeo); no
-resto, o processador (num M3 Pro: 3,6x o tempo real). O áudio entra em pedaços de 15 min: o modelo
-carrega o pedaço inteiro na memória, e assim cabe em qualquer máquina.
+resto, o processador (num M3 Pro: 3,6x o tempo real). O áudio entra em pedaços, e o tamanho do
+pedaço segue a memória que a máquina tem livre (`memory.plan`): de 15 min a 1 min.
 """
 
+import gc
 import logging
 import tempfile
 import time
@@ -18,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from c3parr.audio import ffmpeg
 from c3parr.concert import device as hw
+from c3parr.concert import memory
 from c3parr.core.errors import InvalidInput
 from c3parr.engine.cache import file_sha256
 from c3parr.interfaces import separation
@@ -33,7 +35,8 @@ class DemucsConfig(BaseModel):
     model: str = "htdemucs"
     device: Literal["auto", "cpu"] = "auto"
     """`auto`: a GPU NVIDIA se houver, senão o processador; `cpu`: força o processador."""
-    chunk_minutes: int = Field(15, ge=1)
+    memory_limit: memory.Limit = "auto"
+    """O teto de memória (Settings → Subtitles → Concerts): `2`, `3` ou `auto`."""
     model_dir: Path = Field(default_factory=hw.default_model_dir)
     """No cache do c3parr (`C3PARR_CACHE_DIR`): no Docker, fica no volume ao atualizar."""
 
@@ -41,7 +44,7 @@ class DemucsConfig(BaseModel):
 INFO = ProviderInfo(
     id="demucs",
     interface=separation.INTERFACE,
-    version="1",
+    version="2",
     config_schema=DemucsConfig,
     requirements=Requirements(
         gpu="opcional",
@@ -104,6 +107,7 @@ class DemucsSeparator:
         return self._model
 
     def separate(self, request: SeparationRequest, progress: Callable[[float, str], None]) -> Voice:
+        tier = memory.plan(self.config.memory_limit, memory.free_gb(), INFO.id)
         import soundfile as sf
         import torch
         from demucs.apply import apply_model
@@ -121,7 +125,7 @@ class DemucsSeparator:
         dest = Path(request.dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         part = dest.with_suffix(".part.wav")
-        chunk_s = float(self.config.chunk_minutes * 60)
+        chunk_s = tier.piece_s
         t0 = time.monotonic()
         with (
             tempfile.TemporaryDirectory() as work,
@@ -145,6 +149,9 @@ class DemucsSeparator:
                 vocals = sources[voice].cpu() * std + mean
                 mono = resample(vocals.mean(0, keepdim=True), model.samplerate, RATE)
                 joined.write(mono[0].clamp(-1, 1).numpy())
+                # o pedaço sai da memória antes de o seguinte entrar (medido: 1,3 GB a menos)
+                del data, wav, ref, sources, vocals, mono
+                gc.collect()
                 start += chunk_s
                 progress(min(0.9, start / total * 0.9), f"separating the voice ({where})")
         part.replace(dest)

@@ -14,9 +14,10 @@ from concertkit import song
 from c3parr.asr.faster_whisper import FasterWhisperConfig
 from c3parr.asr.remote import RemoteASRConfig, RemoteTranscriber
 from c3parr.asr.whisper_cpp import WhisperCppConfig, listen_flags, parse_output
-from c3parr.concert import device, lrclib
+from c3parr.concert import demucs, device, lrclib, memory
 from c3parr.concert.fake import FakePlacer, FakePlacerConfig, FakeSeparator, FakeSeparatorConfig
 from c3parr.concert.words import norm
+from c3parr.core.errors import Unavailable
 from c3parr.interfaces.lyric_fit import PlaceRequest, Span
 from c3parr.interfaces.lyrics import LyricsRequest
 from c3parr.interfaces.separation import SeparationRequest
@@ -228,6 +229,38 @@ def test_each_line_lands_where_it_is_sung_and_a_line_nobody_sang_scores_low() ->
     assert [round(p.start) for p in got] == [104, pytest.approx(107, abs=3), 109]
     assert got[0].score > 0.8 and got[2].score > 0.8 and got[1].score < 0.1
     assert got[0].steady > 0.8 and got[1].steady < 0.1
+
+
+# --- quanta memória o show pode usar ---
+
+
+def test_the_pieces_follow_the_ceiling_and_what_is_free_with_a_margin() -> None:
+    big, mid, small = memory.TIERS
+    assert (small.piece_s, mid.piece_s, big.piece_s) == (60.0, 300.0, 900.0)
+    assert memory.plan("auto", 16.0) == big
+    assert memory.plan("auto", 4.0) == mid  # 4 GB livres, menos a folga: não cabem os 4,5
+    assert memory.plan("auto", 2.6) == small
+    assert memory.plan("3", 16.0) == mid and memory.plan("2", 16.0) == small  # o teto manda
+    assert memory.plan("3", 2.6) == small  # e, abaixo dele, o que está livre
+    assert memory.plan("auto", None) == big  # onde o sistema não diz quanto há livre
+    assert memory.plan("2", None) == small
+
+
+def test_a_little_under_two_gb_still_runs_and_much_less_stops_with_the_reason() -> None:
+    assert memory.plan("auto", 1.6) == memory.TIERS[-1]  # um pouco de troca: devagar, mas vai
+    with pytest.raises(Unavailable, match=r"about 2 GB of free memory.*0\.8 GB available"):
+        memory.plan("auto", 0.8, "demucs")
+    with pytest.raises(Unavailable):
+        memory.plan("2", 1.4)
+
+
+def test_the_separation_checks_the_memory_before_loading_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = SeparationRequest(video=str(tmp_path / "show.mkv"), dest=str(tmp_path / "voz.wav"))
+    monkeypatch.setattr(memory, "free_gb", lambda: 0.8)
+    with pytest.raises(Unavailable, match=r"0\.8 GB available"):
+        demucs.DemucsSeparator(demucs.DemucsConfig()).separate(request, lambda *_: None)
 
 
 # --- os providers de teste e a velocidade medida ---

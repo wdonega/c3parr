@@ -78,6 +78,7 @@ export interface AppConfig {
   concert_paths: string[]
   concert_lyrics: boolean
   concert_publish_original: boolean
+  concert_memory: "auto" | "2" | "3"
 }
 
 export interface ArrConfig {

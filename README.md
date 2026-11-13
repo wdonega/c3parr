@@ -205,6 +205,7 @@ A concert is mostly singing, and Whisper gets singing wrong with full confidence
 - **Concert folders**: where your concerts are, as c3parr sees them (for example `/data/media/musicvideos`, a second root folder in Radarr). What TMDb clearly says is not a concert is left out even there: a film (a plot genre, or a cast that plays characters), a documentary, a series. Left empty, c3parr guesses from TMDb and only treats an item as a concert when it is sure.
 - **Use the official lyrics from the internet**: only the artist name and the song titles leave your machine. Off, the subtitle has only what was heard in the isolated voice.
 - **Also publish in the language that is sung**: the lyrics as they are sung, next to the translation into your target languages.
+- **Memory for concerts**: the ceiling (automatic, up to 3 GB or up to 2 GB). A concert works in pieces sized to the memory that is free at the time, with a margin: 2 GB free is enough, and it takes the same time. With less than 1.5 GB free the task stops with an alert instead of pushing the machine into swap.
 - **Queue the concerts now**: sends every concert in the library to the queue, ahead of the routine. Use it after turning concerts on or changing the folders; concerts that already had a plain subtitle are done again.
 
 What to expect:
@@ -213,6 +214,7 @@ What to expect:
 - Covers, and songs LRCLIB doesn't have, keep what was heard.
 - The transcription has to be whisper.cpp, in the c3parr container or on a [whisper.cpp server](#extra-transcription-on-another-machine): a concert needs two options the other servers don't take.
 - Only an **NVIDIA GPU with the `cuda` image on x86** speeds up the voice separation and the lyric fitting. The `vulkan` image and ARM run them on the CPU.
+- Memory, measured: the voice separation peaks at 2.1 GB with the smallest pieces (the 2 GB ceiling), 3.1 GB at the 3 GB ceiling and 4.1 GB with the largest; the lyric fitting at 2.3 GB (3.5 GB with the largest windows), of which 1.3 GB is the model file read straight from disk.
 - The model files (about 1.3 GB) download on the first concert. **System → Status** shows the speed measured on your machine.
 
 | Per hour of concert | RTX 3060 (`cuda` image) | Apple M3 Pro (CPU; Metal for Whisper) |

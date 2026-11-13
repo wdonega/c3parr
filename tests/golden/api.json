@@ -1636,6 +1636,7 @@
    "asr_url": "",
    "components": {},
    "concert_lyrics": true,
+   "concert_memory": "auto",
    "concert_mode": "off",
    "concert_paths": [],
    "concert_publish_original": true,

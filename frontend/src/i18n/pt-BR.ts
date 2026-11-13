@@ -508,6 +508,12 @@ export const ptBR: Catalog = {
   'subs.concertQueue': 'Pôr os shows na fila agora',
   'subs.concertQueueHint': 'Manda todo show da biblioteca para a fila, na frente da rotina.',
   'subs.concertQueueSave': 'Ligue a legenda de show e salve primeiro.',
+  'subs.concertMemory': 'Memória para shows',
+  'subs.concertMemoryHint':
+    'É o teto. Abaixo dele, o show usa só o que estiver livre na hora, com uma folga. Com menos de 1,5 GB livre a tarefa para com um alerta em vez de travar a máquina.',
+  'subs.concertMemory.auto': 'Automático: o que estiver livre, com folga',
+  'subs.concertMemory.3': 'Até 3 GB',
+  'subs.concertMemory.2': 'Até 2 GB (o mínimo)',
   'subs.automation': 'Automação',
   'subs.automationAbout':
     'Um arquivo monitorado espera antes de a rotina trabalhar nele, para um download ou uma cópia terminar primeiro. O que o Radarr e o Sonarr importam e os seus pedidos pulam a espera e passam na frente da rotina.',
