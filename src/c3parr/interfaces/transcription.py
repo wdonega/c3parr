@@ -30,6 +30,11 @@ class TranscriptionRequest(Model):
     hotwords: tuple[str, ...] = ()
     language_hint: str | None = None
     """Idioma provável (original da obra no TMDb). Não força: só pesa na votação da detecção."""
+    vad: bool = True
+    """Detector de voz. Ele descarta canto: a legenda de show desliga, na voz já isolada."""
+    prompt: str | None = None
+    """Dica: texto que o Whisper recebe como se tivesse vindo antes do áudio. Só vale para um
+    trecho de até 30 s (uma janela), e liga o contexto que normalmente fica desligado."""
 
 
 class Transcriber(Protocol):

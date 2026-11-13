@@ -3,9 +3,14 @@
 from c3parr.align import auto, embed, fuzzy, timing
 from c3parr.asr import fake as asr_fake
 from c3parr.asr import faster_whisper, remote, whisper_cpp
+from c3parr.concert import demucs, lrclib, wav2vec2
+from c3parr.concert import fake as concert_fake
 from c3parr.interfaces import (
     context,
+    lyric_fit,
+    lyrics,
     metadata,
+    separation,
     subtitle_source,
     subtitle_writer,
     sync,
@@ -33,6 +38,10 @@ REGISTRATIONS = (
     llm_context.register,
     llm_translator.register,
     translate_fake.register,
+    demucs.register,
+    wav2vec2.register,
+    lrclib.register,
+    concert_fake.register,
 )
 
 
@@ -50,6 +59,9 @@ def build_factories() -> AbstractComponentFactoryFactory:
                 context.FACTORY,
                 metadata.FACTORY,
                 translation.FACTORY,
+                separation.FACTORY,
+                lyric_fit.FACTORY,
+                lyrics.FACTORY,
             )
         }
     )

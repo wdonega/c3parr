@@ -32,10 +32,45 @@ asr = [
 embed = [
     "sentence-transformers>=6.2.0",
 ]
+# Legenda de show: separar a voz (Demucs) e encaixar a letra (wav2vec2). `concert` usa a GPU
+# NVIDIA quando há (torch com CUDA no Linux x86); `concert-cpu` é o mesmo sem CUDA (imagem menor).
+concert = [
+    "demucs>=4.1.0",
+    "silero-vad>=6.2.3",
+    "soundfile>=0.14.0",
+    "torch>=2.5.1",
+    "torchaudio>=2.5.1",
+]
+concert-cpu = [
+    "demucs>=4.1.0",
+    "silero-vad>=6.2.3",
+    "soundfile>=0.14.0",
+    "torch>=2.5.1",
+    "torchaudio>=2.5.1",
+]
 web = [
     "fastapi>=0.162.0",
     "uvicorn>=0.54.0",
 ]
+
+[tool.uv]
+conflicts = [[{ extra = "concert" }, { extra = "concert-cpu" }]]
+# Sem o Mac Intel: o Demucs exige lá numpy<2 e torch<2.3, que o projeto não aceita, e o torch
+# não publica mais pacote para ele. Docker (Linux x86 e ARM) e Mac com Apple Silicon seguem iguais.
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'win32'",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", extra = "concert-cpu" }]
+torchaudio = [{ index = "pytorch-cpu", extra = "concert-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
@@ -70,6 +105,13 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["faster_whisper.*", "sentence_transformers.*", "soundfile"]
 ignore_missing_imports = true
+
+# O extra `concert` (torch e companhia): tratado como "qualquer coisa" esteja ou não instalado,
+# para os tipos darem o mesmo resultado no CI (sem o extra) e na máquina de quem desenvolve.
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "torchaudio", "torchaudio.*", "demucs.*", "silero_vad"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

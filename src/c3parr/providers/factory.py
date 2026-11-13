@@ -15,7 +15,7 @@ from c3parr.core.errors import InvalidInput, Unavailable
 from c3parr.core.job import ComponentSpec
 from c3parr.providers.base import ProviderInfo
 
-EXTRA_PROBES = {"asr": "faster_whisper", "embed": "sentence_transformers"}
+EXTRA_PROBES = {"asr": "faster_whisper", "embed": "sentence_transformers", "concert": "demucs"}
 
 
 def secret_fields(schema: type[BaseModel], prefix: str = "") -> dict[str, str]:

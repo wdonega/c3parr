@@ -79,7 +79,7 @@ INFO_OPENAI = ProviderInfo(
     interface=transcription.INTERFACE,
     version="1",
     config_schema=RemoteASRConfig,
-    capabilities=frozenset({"word_timestamps", "language_detection"}),
+    capabilities=frozenset({"word_timestamps", "language_detection", "no_vad", "prompt"}),
     requirements=Requirements(network=True),
     description="OpenAI-compatible server (/v1/audio/transcriptions)",
 )
@@ -101,7 +101,9 @@ def _code(lang: str | None, fallback: str) -> str:
     return code if code and len(code.split("-")[0]) <= 3 else fallback
 
 
-def parse_response(data: dict[str, Any], lang: str, cfg: FasterWhisperConfig) -> list[Segment]:
+def parse_response(
+    data: dict[str, Any], lang: str, cfg: FasterWhisperConfig, vad: bool = True
+) -> list[Segment]:
     """Segmentos com tempo, nos dois formatos. Palavras vêm dentro do segmento (webservice,
     whisper.cpp) ou numa lista à parte (OpenAI), e aí entram no segmento pelo tempo."""
     loose = data.get("words") or []
@@ -124,7 +126,7 @@ def parse_response(data: dict[str, Any], lang: str, cfg: FasterWhisperConfig) ->
             for w in words
             if str(w.get("word", "")).strip()
         ]
-        if tokens:
+        if tokens and vad:
             # whisper-server com VAD: o tempo das palavras não conta o que o VAD cortou (música
             # no começo), o do segmento conta. Desloca as palavras para o tempo do segmento.
             shift = start - tokens[0][1]
@@ -221,7 +223,7 @@ class RemoteTranscriber:
             progress(0.05, "transcribing on the server")
             try:
                 with self._client(self.config.timeout_s) as http, upload.open("rb") as f:
-                    r = self._post(http, f, upload.name, lang)
+                    r = self._post(http, f, upload.name, lang, request)
             except httpx.HTTPError as e:
                 msg = f"transcription server failed: {e}"
                 raise TransientFailure(msg, provider=self.info.id) from e
@@ -234,7 +236,8 @@ class RemoteTranscriber:
             msg = f"transcription server did not return JSON: {r.text[:200]}"
             raise TransientFailure(msg, provider=self.info.id) from e
         detected = _code(data.get("language"), lang if lang != "auto" else "und")
-        segments = parse_response(data, detected, FasterWhisperConfig())
+        vad = request.vad and self.config.vad
+        segments = parse_response(data, detected, FasterWhisperConfig(), vad)
         progress(1.0, f"{len(segments)} lines in {detected} (server)")
         model = self.config.model if self.flavor == "openai" else "whisper-asr-webservice"
         return Transcript(
@@ -245,7 +248,9 @@ class RemoteTranscriber:
             audio_duration=audio.duration,
         )
 
-    def _post(self, http: httpx.Client, f: IO[bytes], name: str, lang: str) -> httpx.Response:
+    def _post(
+        self, http: httpx.Client, f: IO[bytes], name: str, lang: str, request: TranscriptionRequest
+    ) -> httpx.Response:
         if self.flavor == "openai":
             data: dict[str, Any] = {
                 "model": self.config.model,
@@ -254,14 +259,23 @@ class RemoteTranscriber:
             }
             if lang != "auto":
                 data["language"] = lang
+            # o whisper-server (whisper.cpp) aceita estas opções por pedido (conferido na 1.9.5);
+            # outros servidores do formato OpenAI ignoram o que não conhecem
+            if not request.vad:
+                data["vad"] = "false"
+            if request.prompt:
+                data["prompt"] = request.prompt
+                data["max_context"] = "-1"  # o servidor sobe com `-mc 0`, que ignora a dica
             return http.post("/audio/transcriptions", data=data, files={"file": (name, f)})
         params = {
             "task": "transcribe",
             "output": "json",
             "encode": "true",
             "word_timestamps": "true",
-            "vad_filter": str(self.config.vad).lower(),
+            "vad_filter": str(self.config.vad and request.vad).lower(),
         }
+        if request.prompt:
+            params["initial_prompt"] = request.prompt
         if lang != "auto":
             params["language"] = lang
         return http.post("/asr", params=params, files={"audio_file": (name, f)})

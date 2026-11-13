@@ -70,7 +70,7 @@ INFO = ProviderInfo(
     interface=transcription.INTERFACE,
     version="1",
     config_schema=WhisperCppConfig,
-    capabilities=frozenset({"word_timestamps", "language_detection"}),
+    capabilities=frozenset({"word_timestamps", "language_detection", "no_vad", "prompt"}),
     requirements=Requirements(
         gpu="opcional", models=(ModelDownload(name="ggml-large-v3-turbo-q8_0", approx_mb=874),)
     ),
@@ -129,11 +129,27 @@ def choose_language(request: TranscriptionRequest, audio: AudioRef) -> str:
     return hint or tag or "auto"
 
 
+def listen_flags(
+    request: TranscriptionRequest, c: "WhisperCppConfig", vad_model: Path
+) -> list[str]:
+    """As opções que mudam com o pedido: contexto (ou dica) e detector de voz.
+
+    Sem dica, nada do texto anterior vira contexto (`-mc 0`); com `-mc 0` o whisper.cpp ignora a
+    dica, então ela liga o contexto (o trecho com dica cabe numa janela só)."""
+    out = ["--prompt", request.prompt] if request.prompt else ["-mc", "0"]
+    if request.vad:
+        out += ["--vad", "-vm", str(vad_model), "-vsd", str(c.vad_min_silence_ms),
+                "-vp", str(c.vad_pad_ms)]  # fmt: skip
+    return out
+
+
 def _clock(ms: float) -> float:
     return round(float(ms) / 1000.0, 3)
 
 
-def parse_output(data: dict[str, Any], lang: str, flags_cfg: FasterWhisperConfig) -> list[Segment]:
+def parse_output(
+    data: dict[str, Any], lang: str, flags_cfg: FasterWhisperConfig, vad: bool = True
+) -> list[Segment]:
     segments: list[Segment] = []
     for entry in data.get("transcription", []):
         text = (entry.get("text") or "").strip()
@@ -150,7 +166,7 @@ def parse_output(data: dict[str, Any], lang: str, flags_cfg: FasterWhisperConfig
             for t in entry.get("tokens", [])
             if t.get("text") and not t["text"].strip().startswith("[_")
         ]
-        if tokens:
+        if tokens and vad:
             # com VAD, o tempo dos tokens não conta o que o VAD cortou (ex.: música no começo);
             # o da fala conta. Desloca os tokens para o tempo real da fala.
             shift = start - tokens[0][1]
@@ -222,10 +238,9 @@ class WhisperCppTranscriber:
             base = Path(tmp) / "out"
             cmd = [
                 binary, "-m", str(model), "-f", audio.path, "-l", lang, "-t", str(threads),
-                "-bs", str(c.beam_size), "-mc", "0", "--vad", "-vm", str(vad),
-                "-vsd", str(c.vad_min_silence_ms), "-vp", str(c.vad_pad_ms),
-                "-ojf", "-of", str(base), "-pp",
+                "-bs", str(c.beam_size), "-ojf", "-of", str(base), "-pp",
             ]  # fmt: skip
+            cmd += listen_flags(request, c, vad)
             if c.device == "cpu":
                 cmd.append("-ng")
             t0 = time.monotonic()
@@ -237,7 +252,7 @@ class WhisperCppTranscriber:
                 raise TransientFailure(msg, provider=INFO.id)
             data = json.loads(out.read_text(encoding="utf-8", errors="replace"))
         detected = (data.get("result") or {}).get("language") or lang
-        segments = parse_output(data, detected, FasterWhisperConfig())
+        segments = parse_output(data, detected, FasterWhisperConfig(), request.vad)
         self._record_speed(seconds, audio.duration)
         progress(1.0, f"{len(segments)} lines in {detected} ({self.last_backend or 'CPU'})")
         return Transcript(

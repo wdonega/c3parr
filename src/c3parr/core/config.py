@@ -45,6 +45,10 @@ def _default_components() -> dict[str, ComponentSpec]:
         "metadados": ComponentSpec(provider="tmdb"),
         "contexto": ComponentSpec(provider="llm"),
         "traducao": ComponentSpec(provider="llm"),
+        # legenda de show: os dois primeiros pedem o extra `concert` (torch)
+        "separacao": ComponentSpec(provider="demucs"),
+        "encaixe": ComponentSpec(provider="wav2vec2"),
+        "letras": ComponentSpec(provider="lrclib"),
     }
 
 
