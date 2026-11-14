@@ -12,6 +12,11 @@ fi
 if [ "$(stat -c %u "$C3PARR_CONFIG_DIR")" != "$PUID" ]; then
   chown -R "$PUID:$PGID" "$C3PARR_CONFIG_DIR"
 fi
+# o cache foi criado aqui em cima, como root: numa pasta nova que já é do PUID, a linha anterior
+# não roda, e o processo não conseguiria escrever nele
+if [ "$(stat -c %u "$C3PARR_CACHE_DIR")" != "$PUID" ]; then
+  chown -R "$PUID:$PGID" "$C3PARR_CACHE_DIR"
+fi
 
 groups=$(stat -c %g /dev/dri/* /dev/nvidia* 2>/dev/null | sort -un | paste -sd, -)
 if [ -n "$groups" ]; then
