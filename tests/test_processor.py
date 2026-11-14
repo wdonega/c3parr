@@ -113,6 +113,16 @@ def test_transcription_runs_there_with_the_whisper_cpp_provider(
     assert health.ok and "Fake GPU, 12 GB" in health.detail
 
 
+def test_an_audio_named_by_something_else_than_its_sha256_still_goes(
+    server: TestClient, tmp_path: Path
+) -> None:
+    """Quem chama pode identificar o áudio de outro jeito: vai o sha256 do arquivo."""
+    audio = voice_file(tmp_path / "trecho.wav").model_copy(update={"sha256": "a1b2c3"})
+    engine = WhisperCppTranscriber(WhisperCppConfig(processor=REF))
+    transcript = engine.transcribe(audio, TranscriptionRequest(), lambda *_: None)
+    assert transcript.segments[0].text == "Bonjour."
+
+
 def test_a_failure_there_comes_back_with_its_kind_and_reason(
     server: TestClient, tmp_path: Path
 ) -> None:

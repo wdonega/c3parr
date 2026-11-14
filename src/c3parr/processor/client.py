@@ -33,6 +33,12 @@ LOCAL_ONLY = frozenset({"processor", "model_dir", "binary", "isolate", "memory_l
                         "low_priority"})  # fmt: skip
 """Parâmetros que só valem aqui: o processador usa os dele."""
 POLL_S = 2.0
+"""O intervalo maior entre duas perguntas. Começa em `FIRST_POLL_S` e cresce: a segunda escuta
+de um show são ~180 tarefas de poucos segundos, e esperar 2 s em cada uma somava minutos."""
+FIRST_POLL_S = 0.25
+SEND_CODEC = "opus"
+"""Como a faixa vai para a separação de voz. Num show de 2 h, Opus (219 MB) e FLAC (641 MB)
+deram o mesmo resultado: 469 e 463 linhas oficiais, dentro da variação entre máquinas."""
 PATIENCE_S = 180.0
 """Quanto tempo sem resposta no meio de uma tarefa antes de desistir (um reinício do processador
 cabe aqui: a tarefa é pedida de novo e ele pega a que já fez)."""
@@ -161,8 +167,10 @@ class Client:
         body = job.model_dump(mode="json")
         state = self._submit(body)
         quiet_since = time.monotonic()
+        wait = min(FIRST_POLL_S, self.poll_s)
         while state.status in ("queued", "running"):
-            time.sleep(self.poll_s)
+            time.sleep(wait)
+            wait = min(self.poll_s, wait * 1.5)
             try:
                 r = self._call("GET", f"/v1/jobs/{state.id}")
                 if r.status_code == 404:  # o processador reiniciou: pede de novo
@@ -193,16 +201,22 @@ class Client:
         return JobOut.model_validate(r.json())
 
 
+def _hashed(audio: AudioRef) -> AudioRef:
+    """O processador guarda e confere pelo sha256 do arquivo: é ele que vai, seja qual for a
+    identificação que o áudio trouxe."""
+    return audio.model_copy(update={"sha256": file_sha256(Path(audio.path))})
+
+
 def separate(ref: ProcessorRef, params: dict[str, Any], request: SeparationRequest,
              progress: Progress) -> Voice:  # fmt: skip
     """A voz isolada feita no processador e trazida para `request.dest`."""
     client = Client(ref)
     dest = Path(request.dest)
-    audio = dest.with_name(dest.name + ".send.ogg")
+    audio = dest.with_name(dest.name + ".send" + ffmpeg.SEND_SUFFIX[SEND_CODEC])
     if not audio.exists():  # sobra de uma tentativa anterior: não extrai de novo
         progress(0.0, "preparing the audio for the CUDA processor")
         part = audio.with_name(audio.name + ".part")
-        ffmpeg.extract_opus(Path(request.video), request.stream_index, part)
+        ffmpeg.extract_for_sending(Path(request.video), request.stream_index, part, SEND_CODEC)
         part.replace(audio)
     sha = file_sha256(audio)
     client.send(audio, sha, progress)
@@ -219,6 +233,7 @@ def separate(ref: ProcessorRef, params: dict[str, Any], request: SeparationReque
 def place(ref: ProcessorRef, params: dict[str, Any], audio: AudioRef, request: PlaceRequest,
           progress: Progress) -> tuple[tuple[Placed, ...], ...]:  # fmt: skip
     client = Client(ref)
+    audio = _hashed(audio)
     client.send(Path(audio.path), audio.sha256, progress)
     job = JobIn(method="place", params=sent(params), audio=audio.sha256,
                 args={"audio": audio.model_dump(mode="json"),
@@ -230,6 +245,7 @@ def place(ref: ProcessorRef, params: dict[str, Any], audio: AudioRef, request: P
 def transcribe(ref: ProcessorRef, params: dict[str, Any], audio: AudioRef,
                request: TranscriptionRequest, progress: Progress) -> Transcript:  # fmt: skip
     client = Client(ref)
+    audio = _hashed(audio)
     client.send(Path(audio.path), audio.sha256, progress)
     job = JobIn(method="transcribe", params=sent(params), audio=audio.sha256,
                 args={"audio": audio.model_dump(mode="json"),

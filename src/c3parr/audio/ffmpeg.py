@@ -179,14 +179,22 @@ def extract_audio(path: Path, stream_index: int, dest: Path) -> None:
     tmp.replace(dest)
 
 
-def extract_opus(path: Path, stream_index: int | None, dest: Path, bitrate: str = "256k") -> None:
-    """A faixa inteira em Opus estéreo: o que o c3parr manda ao processador CUDA para separar a
-    voz (3 h de show dão uns 350 MB, contra 1,9 GB em WAV)."""
+SEND_SUFFIX: dict[str, str] = {"flac": ".flac", "opus": ".ogg"}
+
+
+def extract_for_sending(path: Path, stream_index: int | None, dest: Path,
+                        codec: str = "opus") -> None:  # fmt: skip
+    """A faixa inteira em estéreo, 44,1 kHz: o que o c3parr manda ao processador CUDA para
+    separar a voz. `opus` a 256 kb/s: 3 h de show dão uns 350 MB; `flac`, sem perda, uns 1 GB."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     audio_map = f"0:{stream_index}" if stream_index is not None else "0:a:0"
+    # o Opus só aceita 48 kHz; o separador reamostra para 44,1 kHz do lado de lá
+    encode = (["-ar", "44100", "-c:a", "flac", "-sample_fmt", "s16", "-f", "flac"]
+              if codec == "flac" else ["-ar", "48000", "-c:a", "libopus", "-b:a", "256k",
+                                       "-f", "ogg"])  # fmt: skip
     cmd = [
         _tool("ffmpeg"), "-v", "error", "-y", "-i", str(path), "-map", audio_map, "-vn",
-        "-ac", "2", "-c:a", "libopus", "-b:a", bitrate, "-f", "ogg", str(dest),
+        "-ac", "2", *encode, str(dest),
     ]  # fmt: skip
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:

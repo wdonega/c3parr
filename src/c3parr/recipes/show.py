@@ -28,6 +28,7 @@ from c3parr.concert.models import Asked, Assembled, Line, SecondListen, SongRepo
 from c3parr.concert.words import Phrase, phrases, words
 from c3parr.core.errors import Unavailable
 from c3parr.core.models import Cue, Subtitle, Transcript
+from c3parr.engine.cache import file_sha256
 from c3parr.engine.engine import Recipe, Step, StepContext
 from c3parr.interfaces import (
     lyric_fit,
@@ -90,7 +91,7 @@ def _write(frames: bytes, rate: int, dest: Path) -> AudioRef:
         out.setsampwidth(2)
         out.setframerate(rate)
         out.writeframes(frames)
-    return AudioRef(path=str(dest), sha256=hashlib.sha1(frames).hexdigest(),
+    return AudioRef(path=str(dest), sha256=file_sha256(dest),
                     duration=round(len(frames) / 2 / rate, 3), sample_rate=rate)  # fmt: skip
 
 
