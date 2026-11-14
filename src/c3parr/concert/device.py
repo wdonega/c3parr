@@ -8,6 +8,9 @@ import contextlib
 import importlib.util
 import json
 import os
+import subprocess
+import sys
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +31,41 @@ def default_model_dir() -> Path:
 def installed() -> bool:
     """O extra `concert` está instalado?"""
     return all(importlib.util.find_spec(m) is not None for m in ("torch", "torchaudio", "demucs"))
+
+
+_PROBE = """
+import json
+try:
+    import torch
+    ok = torch.cuda.is_available()
+    props = torch.cuda.get_device_properties(0) if ok else None
+    print(json.dumps({"cuda": ok, "name": props.name if props else None,
+                      "memory_gb": round(props.total_memory / 2**30, 1) if props else None}))
+except Exception as e:
+    print(json.dumps({"cuda": False, "name": None, "memory_gb": None, "error": str(e)[:200]}))
+"""
+_gpu: dict[str, Any] | None = None
+_gpu_lock = threading.Lock()
+
+
+def gpu() -> dict[str, Any]:
+    """A GPU NVIDIA que o torch enxerga: `{"cuda": bool, "name": ..., "memory_gb": ...}`.
+
+    Pergunta num processo filho, uma vez por processo: quem pergunta não carrega o torch (centenas
+    de MB que não voltariam ao sistema). Sem o extra `concert`, não há CUDA."""
+    global _gpu
+    with _gpu_lock:
+        if _gpu is None:
+            if not installed():
+                _gpu = {"cuda": False, "name": None, "memory_gb": None}
+            else:
+                try:
+                    out = subprocess.run([sys.executable, "-c", _PROBE], capture_output=True,
+                                         text=True, timeout=180)  # fmt: skip
+                    _gpu = dict(json.loads(out.stdout.strip().splitlines()[-1]))
+                except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+                    _gpu = {"cuda": False, "name": None, "memory_gb": None}
+        return dict(_gpu)
 
 
 def pick(prefer: str = "auto") -> str:

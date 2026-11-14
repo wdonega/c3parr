@@ -124,6 +124,28 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }},mode=max
 
+      # The same cuda image with another command: every layer comes from the step above.
+      - name: Build and push the CUDA processor
+        if: matrix.variant == 'cuda'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: processor
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VARIANT=cuda
+            C3PARR_VERSION=${{ needs.revision.outputs.version }}
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          tags: ${{ env.IMAGE }}-cuda-processor:rev${{ needs.revision.outputs.n }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.revision.outputs.version }}
+            org.opencontainers.image.title=c3parr-cuda-processor
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          cache-from: type=gha,scope=cuda-${{ matrix.arch }}
+
   publish:
     needs: [revision, build]
     if: github.event_name != 'pull_request'
@@ -156,6 +178,13 @@ jobs:
           docker buildx imagetools create $args \
             "$IMAGE:rev$N-$VARIANT-amd64" "$IMAGE:rev$N-$VARIANT-arm64"
           docker buildx imagetools inspect "$IMAGE:rev$N-$VARIANT"
+          if [ "$VARIANT" = "cuda" ]; then # the CUDA processor: only cuda, bare tags
+            P="$IMAGE-cuda-processor"
+            args="-t $P:rev$N -t $P:$VERSION"
+            [ "$DEFAULT_BRANCH" = "true" ] && args="$args -t $P:latest"
+            docker buildx imagetools create $args "$P:rev$N-amd64" "$P:rev$N-arm64"
+            docker buildx imagetools inspect "$P:rev$N"
+          fi
 
   release:
     needs: [revision, publish]
@@ -184,6 +213,9 @@ jobs:
             "" \
             "# AMD, Intel and others through Vulkan (Mesa)" \
             "docker pull $IMAGE:$VERSION-vulkan   # also rev$N-vulkan, latest-vulkan" \
+            "" \
+            "# The CUDA processor: Whisper and the concert models on another machine's NVIDIA GPU" \
+            "docker pull $IMAGE-cuda-processor:$VERSION   # also rev$N, latest" \
             '```' \
             "" \
             "Without a GPU both transcribe on the CPU; a cloud LLM is the recommended translator." \

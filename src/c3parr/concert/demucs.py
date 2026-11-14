@@ -19,11 +19,13 @@ from pydantic import BaseModel, Field
 
 from c3parr.audio import ffmpeg
 from c3parr.concert import device as hw
-from c3parr.concert import memory
+from c3parr.concert import memory, worker
 from c3parr.core.errors import InvalidInput
 from c3parr.engine.cache import file_sha256
 from c3parr.interfaces import separation
 from c3parr.interfaces.separation import SeparationRequest, Voice
+from c3parr.processor import client as remote
+from c3parr.processor.client import ProcessorRef
 from c3parr.providers.base import Health, ModelDownload, ProviderInfo, Requirements
 
 log = logging.getLogger("c3parr.concert")
@@ -37,8 +39,12 @@ class DemucsConfig(BaseModel):
     """`auto`: a GPU NVIDIA se houver, senão o processador; `cpu`: força o processador."""
     memory_limit: memory.Limit = "auto"
     """O teto de memória (Settings → Subtitles → Concerts): `2`, `3` ou `auto`."""
+    isolate: bool = True
+    """Roda num processo filho, que fecha no fim e devolve toda a memória (ver `worker`)."""
     model_dir: Path = Field(default_factory=hw.default_model_dir)
     """No cache do c3parr (`C3PARR_CACHE_DIR`): no Docker, fica no volume ao atualizar."""
+    processor: ProcessorRef = Field(default_factory=ProcessorRef)
+    """Com URL, separa no c3parr-cuda-processor (Settings → Integrations)."""
 
 
 INFO = ProviderInfo(
@@ -93,10 +99,12 @@ class DemucsSeparator:
         self.config = config
         self._model: Any = None
 
-    def health(self) -> Health:
+    def health(self) -> Health:  # sem carregar o torch no processo de quem pergunta
+        if self.config.processor.url:
+            return Health(ok=True, detail="on the CUDA processor")
         if not hw.installed():
             return Health(ok=False, detail="needs the extra 'concert' (uv sync --extra concert)")
-        return Health(ok=True, detail=f"runs on {hw.pick(self.config.device)}")
+        return Health(ok=True, detail="NVIDIA GPU when there is one, the CPU otherwise")
 
     def _load(self) -> Any:
         if self._model is None:
@@ -107,7 +115,15 @@ class DemucsSeparator:
         return self._model
 
     def separate(self, request: SeparationRequest, progress: Callable[[float, str], None]) -> Voice:
+        if self.config.processor.url:  # a memória que conta é a do processador
+            params = self.config.model_dump(mode="json")
+            return remote.separate(self.config.processor, params, request, progress)
         tier = memory.plan(self.config.memory_limit, memory.free_gb(), INFO.id)
+        if self.config.isolate:
+            params = self.config.model_dump(mode="json")
+            args = {"request": request.model_dump(mode="json")}
+            done = worker.call(separation.INTERFACE, INFO.id, params, "separate", args, progress)
+            return Voice.model_validate(done)
         import soundfile as sf
         import torch
         from demucs.apply import apply_model

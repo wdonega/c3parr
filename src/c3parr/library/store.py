@@ -127,6 +127,9 @@ class AppConfig(Model):
     asr_url: str = ""
     asr_model: str = ""
     """Só no formato OpenAI; vazio = whisper-1."""
+    processor_url: str = ""
+    """O c3parr-cuda-processor (outra máquina, com GPU NVIDIA): com endereço, a transcrição desta
+    máquina, a separação de voz e o encaixe da letra rodam nele. Vazio = tudo aqui."""
 
     # --- fontes de legenda ---
     use_embedded: bool = True

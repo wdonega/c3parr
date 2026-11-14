@@ -38,6 +38,16 @@ def reset_fake_calls() -> None:
 
 
 @pytest.fixture(autouse=True)
+def gpu_here(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Os testes rodam como numa máquina com GPU NVIDIA (sem carregar o torch para perguntar):
+    a legenda de show fica liberada. Os testes do bloqueio trocam isto."""
+    from c3parr.concert import device
+
+    monkeypatch.setattr(device, "_gpu", {"cuda": True, "name": "Test GPU", "memory_gb": 8.0})
+    monkeypatch.delenv("C3PARR_CONCERT_ALLOW_CPU", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_real_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Os testes não leem o `.env`, as chaves do ambiente nem a chave embutida do TMDb."""
     from c3parr.core import config

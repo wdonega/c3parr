@@ -14,10 +14,10 @@ from concertkit import song
 from c3parr.asr.faster_whisper import FasterWhisperConfig
 from c3parr.asr.remote import RemoteASRConfig, RemoteTranscriber
 from c3parr.asr.whisper_cpp import WhisperCppConfig, listen_flags, parse_output
-from c3parr.concert import demucs, device, lrclib, memory
+from c3parr.concert import demucs, device, lrclib, memory, wav2vec2, worker
 from c3parr.concert.fake import FakePlacer, FakePlacerConfig, FakeSeparator, FakeSeparatorConfig
 from c3parr.concert.words import norm
-from c3parr.core.errors import Unavailable
+from c3parr.core.errors import InvalidInput, Unavailable
 from c3parr.interfaces.lyric_fit import PlaceRequest, Span
 from c3parr.interfaces.lyrics import LyricsRequest
 from c3parr.interfaces.separation import SeparationRequest
@@ -261,6 +261,61 @@ def test_the_separation_checks_the_memory_before_loading_anything(
     monkeypatch.setattr(memory, "free_gb", lambda: 0.8)
     with pytest.raises(Unavailable, match=r"0\.8 GB available"):
         demucs.DemucsSeparator(demucs.DemucsConfig()).separate(request, lambda *_: None)
+
+
+# --- o trabalho pesado num processo filho ---
+
+
+def test_a_provider_runs_in_a_child_process_and_hands_back_result_progress_and_errors(
+    tmp_path: Path,
+) -> None:
+    seen: list[tuple[float, str]] = []
+    request = SeparationRequest(video="show.mkv", dest=str(tmp_path / "voz.wav"))
+    args = {"request": request.model_dump(mode="json")}
+    done = worker.call("separacao", "falso", {"seconds": 2.0, "spans": [[0.5, 1.5]]}, "separate",
+                       args, lambda fraction, message: seen.append((fraction, message)))  # fmt: skip
+    assert (done["duration"], done["spans"]) == (2.0, [[0.5, 1.5]])
+    assert Path(done["path"]).exists() and seen == [(1.0, "pronto")]
+
+    spans = [{"start": 10.0, "end": 30.0, "lines": ["a", "b"]}]
+    placed = worker.call("encaixe", "falso", {}, "place", {
+        "audio": {"path": done["path"], "sha256": "x", "duration": 2.0},
+        "request": {"window": [0.0, 60.0], "spans": spans, "cache_dir": str(tmp_path)},
+    }, lambda *_: None)  # fmt: skip
+    assert [(p["line"], p["start"]) for p in placed[0]] == [(0, 10.0), (1, 14.0)]
+
+    with pytest.raises(Unavailable, match="set to fail"):  # o erro volta com o tipo que tinha
+        worker.call("separacao", "falso", {"fail": True}, "separate", args, lambda *_: None)
+    with pytest.raises(InvalidInput, match="unknown provider"):
+        worker.call("separacao", "nao-existe", {}, "separate", args, lambda *_: None)
+
+
+def test_the_heavy_providers_ask_the_child_and_never_load_the_models_themselves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[tuple[str, str, dict[str, Any]]] = []
+
+    def call(interface: str, provider: str, params: dict[str, Any], method: str,
+             args: dict[str, Any], progress: Any) -> Any:  # fmt: skip
+        asked.append((interface, method, params))
+        if method == "separate":
+            return {"path": str(tmp_path / "voz.wav"), "sha256": "x", "duration": 9.0}
+        return [[{"line": 0, "start": 1.0, "end": 2.0, "score": 0.7, "steady": 0.6}]]
+
+    monkeypatch.setattr(worker, "call", call)
+    monkeypatch.setattr(memory, "free_gb", lambda: 8.0)
+    request = SeparationRequest(video="show.mkv", dest=str(tmp_path / "voz.wav"))
+    config = demucs.DemucsConfig(memory_limit="2")
+    voice = demucs.DemucsSeparator(config).separate(request, lambda *_: None)
+    assert voice.duration == 9.0 and asked[0][:2] == ("separacao", "separate")
+    assert asked[0][2]["memory_limit"] == "2"  # o filho recebe o mesmo teto
+
+    place = PlaceRequest(window=(0.0, 60.0), spans=(Span(start=0.0, end=9.0, lines=("a",)),),
+                         cache_dir=str(tmp_path))  # fmt: skip
+    ((placed,),) = wav2vec2.Wav2Vec2Placer(wav2vec2.Wav2Vec2Config()).place(
+        voice.audio(), place, lambda *_: None
+    )
+    assert (placed.line, placed.score) == (0, 0.7) and asked[1][:2] == ("encaixe", "place")
 
 
 # --- os providers de teste e a velocidade medida ---

@@ -330,6 +330,9 @@ def build_api(svc: Service) -> APIRouter:
                 arr_keys=dict(view["arr_keys"]),
                 tmdb_builtin=view["tmdb_builtin"],
                 tmdb_attribution=view["tmdb_attribution"],
+                cuda=bool(view["gpu"].get("cuda")),
+                gpu=view["gpu"].get("name"),
+                concert_cpu_forced=view["concert_cpu_forced"],
             ),
         )
 

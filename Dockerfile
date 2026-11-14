@@ -67,7 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 mesa
  && rm -rf /var/lib/apt/lists/*
 
 # ---------- c3parr ----------
-FROM base-${VARIANT}
+FROM base-${VARIANT} AS app
 ARG VARIANT
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -79,9 +79,9 @@ WORKDIR /app
 ENV UV_PYTHON=python3 UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # dependências antes do código: mudar o código não reinstala tudo
 COPY pyproject.toml uv.lock LICENSE ./
-# o extra do show: `concert` traz o torch com CUDA (só existe para Linux x86); `concert-cpu`, sem
-RUN if [ "$VARIANT" = "cuda" ] && [ "$TARGETARCH" = "amd64" ]; then echo concert; \
-    else echo concert-cpu; fi > /app/.concert-extra
+# o extra do show: `concert` traz o torch com CUDA (x86 e ARM: no ARM, o do PyPI é CUDA 13, o
+# mesmo do whisper.cpp daqui); `concert-cpu`, sem
+RUN if [ "$VARIANT" = "cuda" ]; then echo concert; else echo concert-cpu; fi > /app/.concert-extra
 RUN uv sync --frozen --no-dev --extra web --extra "$(cat /app/.concert-extra)" --no-install-project
 COPY src ./src
 COPY --from=frontend /app/src/c3parr/web/dist ./src/c3parr/web/dist
@@ -111,3 +111,17 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8484/health', timeout=4)"
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["c3parr-web"]
+
+# ---------- c3parr-cuda-processor (só faz sentido na variante cuda) ----------
+# A mesma imagem com outro comando: o whisper.cpp com CUDA e o torch com CUDA já estão nela, e
+# as duas imagens dividem as camadas. Recebe áudio do c3parr pela rede (porta 8485).
+FROM app AS processor
+ENV C3PARR_PROCESSOR_PORT=8485 \
+    C3PARR_PROCESSOR_DIR=/config/cache/processor
+EXPOSE 8485
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8485/health', timeout=4)"
+CMD ["c3parr-cuda-processor"]
+
+# ---------- o alvo padrão continua sendo o c3parr ----------
+FROM app

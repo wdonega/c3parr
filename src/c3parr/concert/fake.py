@@ -23,6 +23,8 @@ class FakeSeparatorConfig(BaseModel):
     seconds: float = 120.0
     spans: tuple[tuple[float, float], ...] = ((0.0, 120.0),)
     fail: bool = False
+    isolate: bool = False
+    """Só para o processo filho aceitar o mesmo pedido que os providers de verdade."""
 
 
 SEPARATOR = ProviderInfo(
@@ -67,6 +69,7 @@ class FakePlacerConfig(BaseModel):
     """Cada linha ocupa 3/4 deste tempo, uma atrás da outra a partir do começo do trecho."""
     lead: float = 0.0
     """Silêncio antes da primeira linha de cada trecho."""
+    isolate: bool = False
 
 
 PLACER = ProviderInfo(id="falso", interface=lyric_fit.INTERFACE, version="1",

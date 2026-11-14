@@ -35,6 +35,7 @@ The result is written as `<video>.<lang>.c3parr.srt`. When a better subtitle sho
 - **Library from Radarr and Sonarr.** "Sync with Radarr/Sonarr" tasks run every hour, with path mappings and filters (monitored only, tags, series type, season zero), like Bazarr. There are no folders to configure and no webhooks.
 - **Transcription (ASR) with whisper.cpp** on CUDA, Vulkan, Metal or the CPU, with VAD (it doesn't hallucinate over music). It can also run on a **separate server**, through an OpenAI-compatible API (whisper.cpp server, speaches, LocalAI) or a whisper-asr-webservice like Bazarr's.
 - **Concert subtitles.** For a concert, c3parr separates the voice from the band, finds which songs are played and places the official lyrics where each line is sung (♪), plus what is said between the songs. See [Concert subtitles](#concert-subtitles).
+- **The CUDA processor.** On a small box, the heavy work (Whisper, voice separation, lyric fitting) runs on another machine with an NVIDIA GPU, in the `c3parr-cuda-processor` container. See [Extra: the heavy work on another machine](#extra-the-heavy-work-on-another-machine).
 - **LLM translation** with your own server (llama.cpp, Ollama, vLLM) or a cloud provider: **DeepSeek**, **Anthropic**, **Gemini** or **OpenAI**. The reasoning effort for Anthropic and Gemini is configurable.
 - **Web UI** in the *arr style:
   - Movies and TV Shows, each item with a Monitored flag;
@@ -118,7 +119,9 @@ Every image is built for **x86 (amd64)** and **ARM (arm64)**; Docker picks the r
 | `latest`, `latest-cuda`, `revN`, `revN-cuda`, `1.1.N` | NVIDIA: RTX 20xx–50xx on x86; Jetson Orin, Thor and DGX Spark on ARM |
 | `latest-vulkan`, `revN-vulkan`, `1.1.N-vulkan` | AMD, Intel and others through Mesa |
 
-The `cuda` image for x86 carries PyTorch with its CUDA libraries for the [concert subtitles](#concert-subtitles), about 5 GB more on disk; the others carry PyTorch for the CPU.
+The `cuda` image carries PyTorch with its CUDA libraries for the [concert subtitles](#concert-subtitles), about 5 GB more on disk; the `vulkan` image carries PyTorch for the CPU.
+
+The [CUDA processor](#the-cuda-processor) is a separate image, NVIDIA only, for x86 and ARM: `ghcr.io/wdonega/c3parr-cuda-processor` with the tags `latest`, `revN` and `1.1.N`. It shares its layers with the `cuda` image.
 
 Both images also run without a GPU: whisper.cpp picks the fastest CPU code for the machine at start. On an **RK3588** (Mali-G610), leave `/dev/dri` out: the Vulkan driver for that GPU fails, and the CPU is faster there anyway.
 
@@ -154,7 +157,7 @@ Or pick a cloud provider. The model in use is filled in, the link points to wher
 
 ### 4. Pick where the transcription runs
 
-**Settings → Integrations → Transcription.** It is only used when an item has no usable subtitle at all. **This machine** runs whisper.cpp in the container. A **separate server** (another machine with a GPU) works through an OpenAI-compatible API or a whisper-asr-webservice like Bazarr's. TMDb needs nothing: c3parr has its own key.
+**Settings → Integrations → Transcription.** It is only used when an item has no usable subtitle at all. **This machine** runs whisper.cpp in the container; with the [CUDA processor](#the-cuda-processor) set just above it, **This machine** runs there instead, and the section says so. A **separate server** (another machine with a GPU) works through an OpenAI-compatible API or a whisper-asr-webservice like Bazarr's. TMDb needs nothing: c3parr has its own key.
 
 <img src="assets/screenshots/08-asr-server.png" alt="Transcription on a separate server" width="800">
 
@@ -201,19 +204,20 @@ A concert is mostly singing, and Whisper gets singing wrong with full confidence
 
 **Settings → Subtitles → Concerts** turns it on. It is off by default, and then a concert is treated like any film.
 
+It needs an **NVIDIA GPU**: either where c3parr runs (the `cuda` image, x86 or ARM) or on another machine with the [CUDA processor](#the-cuda-processor). Without one, the option stays locked and the section says why: on the CPU of a small machine a three-hour concert takes about a day (our estimate for a NanoPi M5, from its first half hour on a real concert: about 14 hours for the voice separation alone). Concerts that were already on wait, with a warning in **System → Status**, until a GPU shows up.¹
+
 - **Concert subtitles**: off, only when you ask for the item, or automatic.
 - **Concert folders**: where your concerts are, as c3parr sees them (for example `/data/media/musicvideos`, a second root folder in Radarr). What TMDb clearly says is not a concert is left out even there: a film (a plot genre, or a cast that plays characters), a documentary, a series. Left empty, c3parr guesses from TMDb and only treats an item as a concert when it is sure.
 - **Use the official lyrics from the internet**: only the artist name and the song titles leave your machine. Off, the subtitle has only what was heard in the isolated voice.
 - **Also publish in the language that is sung**: the lyrics as they are sung, next to the translation into your target languages.
-- **Memory for concerts**: the ceiling (automatic, up to 3 GB or up to 2 GB). A concert works in pieces sized to the memory that is free at the time, with a margin: 2 GB free is enough, and it takes the same time. With less than 1.5 GB free the task stops with an alert instead of pushing the machine into swap.
+- **Memory for concerts**: the ceiling (automatic, up to 3 GB or up to 2 GB). A concert works in pieces sized to the memory that is free at the time, with a margin: 2 GB free is enough, and it takes the same time. With less than 1.5 GB free the task stops with an alert instead of pushing the machine into swap. With the CUDA processor, the memory that counts is the processor's, and this ceiling doesn't apply.
 - **Queue the concerts now**: sends every concert in the library to the queue, ahead of the routine. Use it after turning concerts on or changing the folders; concerts that already had a plain subtitle are done again.
 
 What to expect:
 
 - The lyric fitting works for **English** lyrics. In other languages the subtitle keeps what was heard, with the official text only where the transcript matched a lyric line.
 - Covers, and songs LRCLIB doesn't have, keep what was heard.
-- The transcription has to be whisper.cpp, in the c3parr container or on a [whisper.cpp server](#extra-transcription-on-another-machine): a concert needs two options the other servers don't take.
-- Only an **NVIDIA GPU with the `cuda` image on x86** speeds up the voice separation and the lyric fitting. The `vulkan` image and ARM run them on the CPU.
+- The transcription has to be whisper.cpp: in the c3parr container, on the CUDA processor, or on a [whisper.cpp server](#a-whisper-server-transcription-only). A concert needs two options the other servers don't take.
 - Memory, measured: the voice separation peaks at 2.1 GB with the smallest pieces (the 2 GB ceiling), 3.1 GB at the 3 GB ceiling and 4.1 GB with the largest; the lyric fitting at 2.3 GB (3.5 GB with the largest windows), of which 1.3 GB is the model file read straight from disk.
 - The model files (about 1.3 GB) download on the first concert. **System → Status** shows the speed measured on your machine.
 
@@ -227,6 +231,8 @@ What to expect:
 The "everything" row comes from a two-hour concert: 11 minutes on the RTX 3060, model downloads included.
 
 From the command line: `c3parr "Band - Live.mkv" --show`. Add `--artist "Band"` when the file name doesn't say who plays, `--year 1995` for the year of the concert, and `--no-lyrics` to skip the lookup.
+
+<sub>¹ If you really want to wait a day per concert, `C3PARR_CONCERT_ALLOW_CPU=true` on the c3parr container unlocks it on the CPU. **System → Status** will keep reminding you.</sub>
 
 ### Behind a reverse proxy
 
@@ -257,9 +263,61 @@ The interface speaks English (US), Portuguese (Brazil) and Spanish (Mexico). The
 
 Logs, error messages that come from other services (Radarr, Sonarr, the LLM) and the summaries of the scheduled tasks stay in English.
 
-## Extra: transcription on another machine
+## Extra: the heavy work on another machine
 
-Only needed when c3parr runs on a small box: if its machine already has a good GPU, skip this. Transcription is the only heavy step, and it can run on another machine with a GPU. On a NanoPi M5 (CPU only), a 42-minute episode took 66 minutes; through a Jetson Orin Nano on the network, about 3 minutes, audio upload included.
+Only needed when c3parr runs on a small box: if its machine already has a good NVIDIA GPU, skip this. On a NanoPi M5 (CPU only), a 42-minute episode took 66 minutes to transcribe; through a Jetson Orin Nano on the network, about 3 minutes, audio upload included. A concert on that CPU takes about a day.
+
+| | [The CUDA processor](#the-cuda-processor) | [A whisper server](#a-whisper-server-transcription-only) |
+|---|---|---|
+| GPU | NVIDIA, x86 or ARM | NVIDIA, AMD, Intel |
+| Transcription | yes | yes |
+| Concerts (voice separation, lyric fitting) | yes | no |
+| Image | ready to pull | built on that machine |
+
+### The CUDA processor
+
+`c3parr-cuda-processor` is the c3parr `cuda` image started as a service: whisper.cpp and PyTorch with CUDA, waiting for work. c3parr sends it the audio (never the video) and gets back what its own engines would have made.
+
+1. On the GPU machine (NVIDIA driver and nvidia-container-toolkit):
+
+   ```yaml
+   services:
+     c3parr-cuda-processor:
+       image: ghcr.io/wdonega/c3parr-cuda-processor:latest
+       container_name: c3parr-cuda-processor
+       restart: unless-stopped
+       ports:
+         - "8485:8485"
+       environment:
+         C3PARR_PROCESSOR_API_KEY: "a-long-random-key"   # the same in c3parr; empty = no key
+       volumes:
+         - ./cuda-processor:/config   # the models (about 2.2 GB) and the audio it is working on
+       deploy:
+         resources:
+           reservations:
+             devices:
+               - driver: nvidia
+                 count: all
+                 capabilities: [gpu]
+   ```
+
+2. Start it and check it from any machine: the answer is `{"ok":true,"service":"c3parr-cuda-processor"}`. The models download on the first task.
+
+   ```bash
+   docker compose up -d
+   curl http://<gpu-machine>:8485/health
+   ```
+
+3. In c3parr, **Settings → Integrations → CUDA processor**: **Server URL** = `http://<gpu-machine>:8485` and the same **API key**. **Test connection** answers with the GPU it sees, then **Save**.
+
+From then on, the transcription of **This machine** and the voice separation and lyric fitting of concerts run there:
+
+- Only audio goes: Opus for a concert (about 350 MB for three hours), 16 kHz WAV for a transcription (about 115 MB per hour). What is already there isn't sent again.
+- It runs one task at a time; the others wait in its queue. A file it received stays for a day, 20 GB at most.
+- When it doesn't answer, the task fails as temporary and runs again later. Nothing falls back to the CPU of this machine.
+- Keep c3parr and the processor on the same version (`1.1.N`); the test says so when they don't understand each other.
+
+### A whisper server (transcription only)
 
 [`examples/whisper-server`](examples/whisper-server) builds whisper.cpp and serves the OpenAI API c3parr talks to. Like c3parr's image, it has two variants, for x86 and ARM: **cuda** for NVIDIA (the machine needs the driver and the nvidia-container-toolkit) and **vulkan** for AMD, Intel and others through Mesa. On an AMD BC-250 the Vulkan build took 5 minutes and transcribed 6 minutes of audio in 10 s over the network.
 

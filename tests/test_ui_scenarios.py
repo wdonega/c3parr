@@ -664,3 +664,102 @@ def test_the_concerts_button_queues_what_is_in_the_concert_folders(
     assert queued.ok and queued.message.startswith("1 concert(s) in the queue")
     assert [j.video for j in queue.list()] == [str(show)]  # o filme fica de fora
     assert do.queue_concerts().message.startswith("1 concert(s) in the queue (0 new")
+
+
+# --- shows sem GPU e o c3parr-cuda-processor ---
+
+NO_GPU = {"cuda": False, "name": None, "memory_gb": None}
+
+
+def test_without_a_gpu_concerts_stay_off_until_the_cuda_processor_is_set(
+    fresh: Ui, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from c3parr.concert import device
+
+    monkeypatch.setattr(device, "_gpu", NO_GPU)
+    do, lib = fresh.do, fresh.world.library
+    refused = do.save_subtitles(concert_mode="auto")
+    assert not refused.ok and "need an NVIDIA GPU with CUDA" in refused.message
+    assert lib.config().concert_mode == "off"
+    options = do._get("/settings")["options"]
+    assert (options["cuda"], options["gpu"], options["concert_cpu_forced"]) == (False, None, False)
+    assert not do.save_integrations(processor_url="gpu.lan:8485").ok  # sem http://
+    assert do.save_integrations(processor_url=" http://gpu.lan:8485/ ").ok
+    assert lib.config().processor_url == "http://gpu.lan:8485"
+    assert do.save_subtitles(concert_mode="auto").ok
+    assert "Transcription on the CUDA processor" in do.warnings()
+    # com shows ligados, o processador não sai sem desligar os shows antes
+    assert not do.save_integrations(processor_url="").ok
+    assert do.save_subtitles(concert_mode="off").ok
+    assert do.save_integrations(processor_url="").ok
+
+
+def test_concerts_already_on_without_a_gpu_are_paused_with_a_warning(
+    fresh: Ui, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from c3parr.concert import device
+
+    lib = fresh.world.library
+    lib.save_config(lib.config().model_copy(update={"concert_mode": "auto"}))  # de antes
+    monkeypatch.setattr(device, "_gpu", NO_GPU)
+    assert "Concert subtitles are paused" in fresh.do.warnings()
+    paused = fresh.do.queue_concerts()
+    assert not paused.ok and "need an NVIDIA GPU" in paused.message
+    monkeypatch.setenv("C3PARR_CONCERT_ALLOW_CPU", "true")
+    assert "Concert subtitles run on the CPU" in fresh.do.warnings()
+    assert fresh.do._get("/settings")["options"]["concert_cpu_forced"] is True
+
+
+def test_the_cuda_processor_test_says_which_gpu_answered(
+    fresh: Ui, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from c3parr.processor import client as remote
+    from c3parr.processor.protocol import Info
+    from c3parr.processor.server import create_app
+
+    def info(runner: Any) -> Info:
+        return Info(version="9.9.9", cuda=True, gpu="Fake GPU", gpu_memory_gb=12.0,
+                    whisper="ready")  # fmt: skip
+
+    app = create_app(tmp_path / "processor", api_key="segredo", info=info)
+    with TestClient(app, base_url="http://gpu.test") as http:
+
+        def factory(ref: Any) -> Any:
+            key = ref.api_key.get_secret_value() if ref.api_key else ""
+            http.headers["Authorization"] = f"Bearer {key}"
+            return http
+
+        monkeypatch.setattr(remote, "http_factory", factory)
+        do = fresh.do
+        none = do.test_connection("processor")
+        assert not none.ok and none.message == "CUDA processor: put its URL."
+        right = {"C3PARR_PROCESSOR_API_KEY": "segredo"}
+        ok = do.test_connection("processor", processor_url="http://gpu.test", secrets=right)
+        assert ok.ok and ok.message == (
+            "CUDA processor: connected (Fake GPU, 12 GB; c3parr-cuda-processor 9.9.9).")  # fmt: skip
+        wrong = do.test_connection("processor", processor_url="http://gpu.test",
+                                   secrets={"C3PARR_PROCESSOR_API_KEY": "outra"})  # fmt: skip
+        assert not wrong.ok and "refused the API key" in wrong.message
+        asr = do.test_connection("asr", asr_mode="local", processor_url="http://gpu.test",
+                                 secrets=right)  # fmt: skip
+        assert asr.ok and asr.message == ("Transcription: whisper.cpp on the CUDA processor "
+                                          "(Fake GPU, 12 GB; c3parr-cuda-processor 9.9.9).")  # fmt: skip
+
+
+def test_with_the_processor_set_the_heavy_engines_run_there(tmp_path: Path) -> None:
+    from c3parr.library.store import AppConfig
+
+    settings = Settings(cache_dir=tmp_path)
+    url = "http://gpu.lan:8485"
+    here = components_for(settings, AppConfig(processor_url=url))
+    where = {"url": url}
+    assert here["transcricao"].provider == "whisper-cpp"  # qualquer que seja o motor daqui
+    assert here["transcricao"].params["processor"] == where
+    assert here["separacao"].params["processor"] == where
+    assert here["encaixe"].params["processor"] == where
+    other = components_for(settings, AppConfig(processor_url=url, asr_mode="openai",
+                                               asr_url="http://whisper:9000/v1"))  # fmt: skip
+    assert other["transcricao"].provider == REMOTE_IDS["openai"]  # o servidor à parte manda
+    assert other["separacao"].params["processor"] == where
+    none = components_for(settings, AppConfig())
+    assert "processor" not in none["separacao"].params

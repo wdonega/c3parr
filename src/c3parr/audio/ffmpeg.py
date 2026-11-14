@@ -179,6 +179,21 @@ def extract_audio(path: Path, stream_index: int, dest: Path) -> None:
     tmp.replace(dest)
 
 
+def extract_opus(path: Path, stream_index: int | None, dest: Path, bitrate: str = "256k") -> None:
+    """A faixa inteira em Opus estéreo: o que o c3parr manda ao processador CUDA para separar a
+    voz (3 h de show dão uns 350 MB, contra 1,9 GB em WAV)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    audio_map = f"0:{stream_index}" if stream_index is not None else "0:a:0"
+    cmd = [
+        _tool("ffmpeg"), "-v", "error", "-y", "-i", str(path), "-map", audio_map, "-vn",
+        "-ac", "2", "-c:a", "libopus", "-b:a", bitrate, "-f", "ogg", str(dest),
+    ]  # fmt: skip
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        dest.unlink(missing_ok=True)
+        raise InvalidInput(f"ffmpeg failed to extract the audio: {proc.stderr.strip()[:300]}")
+
+
 def extract_stereo(path: Path, stream_index: int | None, start: float, seconds: float,
                    dest: Path, rate: int = 44100) -> None:  # fmt: skip
     """Grava `seconds` da faixa a partir de `start` como WAV estéreo (o que o separador de voz

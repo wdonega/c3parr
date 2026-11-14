@@ -405,6 +405,7 @@ export function IntegrationsTab({ form }: Tab) {
   const custom = provider.id === 'custom'
   const mode = form.value('asr_mode')
   const remote = mode !== 'local'
+  const processor = form.value('processor_url').trim()
   const secrets = view.secrets
   const llmReady = custom ? !!llmUrlShown(draft, view) && !!llmModelShown(draft, view) : secrets[provider.key] !== ''
   const tmdbSource = secrets.TMDB_READ_ACCESS_TOKEN
@@ -491,11 +492,39 @@ export function IntegrationsTab({ form }: Tab) {
       </Section>
 
       <Section
+        title={t('int.processor')}
+        about={t('int.processorAbout')}
+        state={
+          processor ? (
+            <StateLine tone="ok">{t('int.configured')}</StateLine>
+          ) : (
+            <StateLine tone="muted">{t('int.processorNone')}</StateLine>
+          )
+        }
+      >
+        <Text
+          label={t('int.serverUrl')}
+          type="url"
+          code
+          optional
+          placeholder="http://gpu-host:8485"
+          value={form.value('processor_url')}
+          edited={form.edited('processor_url')}
+          hint={t('int.processorHint')}
+          onChange={(value) => form.set('processor_url', value)}
+        />
+        <Secret form={form} name="C3PARR_PROCESSOR_API_KEY" label={t('lib.apiKey')} optional />
+        <TestRow form={form} target="processor" />
+      </Section>
+
+      <Section
         title={t('int.asr')}
         about={t('int.asrAbout')}
         state={
           remote ? (
             <StateLine tone="ok">{t('int.asrRemote')}</StateLine>
+          ) : processor ? (
+            <StateLine tone="ok">{t('int.asrProcessor')}</StateLine>
           ) : (
             <StateLine tone="muted">{t('int.asrLocal')}</StateLine>
           )
@@ -514,7 +543,9 @@ export function IntegrationsTab({ form }: Tab) {
           />
         </Field>
         <p className="hint muted">
+          {mode === 'local' && processor && t('int.localProcessorHint', { url: processor })}
           {mode === 'local' &&
+            !processor &&
             rich('int.localHint', { engines: (text) => <Link to="/settings/engines">{text}</Link> })}
           {mode === 'openai' && t('int.openaiHint')}
           {mode === 'asr-webservice' && t('int.webserviceHint')}
@@ -685,13 +716,35 @@ export function EnginesTab({ form }: Tab) {
 
 // --- Subtitles ---
 
+/** Onde a legenda de show roda: no processador CUDA, na GPU NVIDIA daqui, na CPU (forçado pela
+ * variável C3PARR_CONCERT_ALLOW_CPU) ou em lugar nenhum. O servidor recusa ligar no último caso. */
+function concertGate(form: Form): 'processor' | 'cuda' | 'forced' | 'blocked' {
+  if (form.value('processor_url').trim()) return 'processor'
+  if (form.view.options.cuda) return 'cuda'
+  return form.view.options.concert_cpu_forced ? 'forced' : 'blocked'
+}
+
+function ConcertWhere({ form }: Tab) {
+  const where = concertGate(form)
+  if (where === 'blocked') {
+    return (
+      <StateLine tone="warn">
+        {rich('subs.concertBlocked', { link: (text) => <Link to="/settings/integrations">{text}</Link> })}
+      </StateLine>
+    )
+  }
+  if (where === 'forced') return <StateLine tone="warn">{t('subs.concertForced')}</StateLine>
+  if (where === 'processor') return <StateLine tone="ok">{t('subs.concertOnProcessor')}</StateLine>
+  return <StateLine tone="ok">{t('subs.concertOnGpu', { gpu: form.view.options.gpu ?? 'NVIDIA' })}</StateLine>
+}
+
 /** Põe na fila todo show da biblioteca. Vale o que está salvo: com mudanças por salvar (ou com a
  * legenda de show desligada) o botão fica apagado e a linha ao lado diz por quê. */
 function QueueConcerts({ form }: Tab) {
   const { report } = useFeedback()
   const queue = useMutation({ mutationFn: api.queueConcerts, onSuccess: report })
   const dirty = Object.keys(form.draft.changes).length + Object.keys(form.draft.secrets).length > 0
-  const off = form.view.config.concert_mode === 'off'
+  const off = form.view.config.concert_mode === 'off' || concertGate(form) === 'blocked'
   return (
     <div className="test-row">
       <button type="button" className="btn" disabled={dirty || off || queue.isPending} onClick={() => queue.mutate()}>
@@ -706,7 +759,8 @@ function QueueConcerts({ form }: Tab) {
 export function SubtitlesTab({ form }: Tab) {
   const syncs = form.value('sync_new_external')
   const transcribes = form.value('asr_enabled')
-  const concerts = form.value('concert_mode') !== 'off'
+  const blocked = concertGate(form) === 'blocked'
+  const concerts = form.value('concert_mode') !== 'off' && !blocked
   // `off` vem para as opções que dependem de outra: ficam recuadas e apagadas quando ela está desligada
   const flag = (name: SubtitleFlag, off?: boolean) => (
     <Flag
@@ -761,7 +815,7 @@ export function SubtitlesTab({ form }: Tab) {
         </Field>
       </Section>
 
-      <Section title={t('subs.concerts')} about={t('subs.concertsAbout')}>
+      <Section title={t('subs.concerts')} about={t('subs.concertsAbout')} state={<ConcertWhere form={form} />}>
         <Field label={t('subs.concertMode')} edited={form.edited('concert_mode')} hint={t('subs.concertModeHint')}>
           <select
             className="input"
@@ -769,8 +823,12 @@ export function SubtitlesTab({ form }: Tab) {
             onChange={(event) => form.set('concert_mode', event.target.value as AppConfig['concert_mode'])}
           >
             <option value="off">{t('subs.concertMode.off')}</option>
-            <option value="manual">{t('subs.concertMode.manual')}</option>
-            <option value="auto">{t('subs.concertMode.auto')}</option>
+            <option value="manual" disabled={blocked}>
+              {t('subs.concertMode.manual')}
+            </option>
+            <option value="auto" disabled={blocked}>
+              {t('subs.concertMode.auto')}
+            </option>
           </select>
         </Field>
         <Tags
@@ -782,9 +840,14 @@ export function SubtitlesTab({ form }: Tab) {
         />
         {flag('concert_lyrics', !concerts)}
         {flag('concert_publish_original', !concerts)}
-        <Field label={t('subs.concertMemory')} edited={form.edited('concert_memory')} hint={t('subs.concertMemoryHint')}>
+        <Field
+          label={t('subs.concertMemory')}
+          edited={form.edited('concert_memory')}
+          hint={concertGate(form) === 'processor' ? t('subs.concertMemoryProcessor') : t('subs.concertMemoryHint')}
+        >
           <select
             className="input"
+            disabled={concertGate(form) === 'processor'}
             value={form.value('concert_memory')}
             onChange={(event) => form.set('concert_memory', event.target.value as AppConfig['concert_memory'])}
           >

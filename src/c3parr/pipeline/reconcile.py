@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from c3parr.audio import ffmpeg
-from c3parr.concert import detect
+from c3parr.concert import detect, gate
 from c3parr.core.job import ComponentSpec
 from c3parr.engine.engine import Engine
 from c3parr.interfaces.metadata import MetadataResult
@@ -119,6 +119,8 @@ def refresh_old_metadata(cat: Catalog, media: Media, cfg: AppConfig) -> bool:
 def concert_state(video: str, cfg: AppConfig, origem: str) -> ConcertState:
     if cfg.concert_mode == "off" or not is_concert(video, cfg):
         return "no"
+    if gate.gate(cfg.processor_url) == "blocked":
+        return "waiting"
     return "manual" if cfg.concert_mode == "manual" and origem != "manual" else "yes"
 
 

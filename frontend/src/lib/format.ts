@@ -118,6 +118,16 @@ const PROGRESS: [RegExp, (found: string[]) => string][] = [
   [/^finding where there is voice$/, () => t('progress.findingVoice')],
   [/^voice separated \((.+)\)$/, ([where]) => t('progress.voiceDone', { where })],
   [/^listening for the lyrics$/, () => t('progress.listening')],
+  // c3parr-cuda-processor
+  [/^preparing the audio for the CUDA processor$/, () => t('progress.processorAudio')],
+  [
+    /^sending the audio to the CUDA processor \((\d+) of (\d+) MB\)$/,
+    ([done, total]) => t('progress.processorSending', { done, total }),
+  ],
+  [/^bringing the voice from the CUDA processor$/, () => t('progress.processorVoice')],
+  [/^waiting for the CUDA processor$/, () => t('progress.processorWaiting')],
+  [/^waiting for the CUDA processor \((\d+) ahead\)$/, ([n]) => t('progress.processorAhead', { n })],
+  [/^starting$/, () => t('progress.starting')],
   [/^finding the artist$/, () => t('progress.artist')],
   [/^no artist found: no official lyrics$/, () => t('progress.noArtist')],
   [/^artist: (.+)$/, ([names]) => t('progress.artistFound', { names })],

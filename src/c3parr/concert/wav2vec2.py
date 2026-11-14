@@ -22,10 +22,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from c3parr.concert import device as hw
-from c3parr.concert import memory
+from c3parr.concert import memory, worker
 from c3parr.interfaces import lyric_fit
 from c3parr.interfaces.lyric_fit import Placed, PlaceRequest
 from c3parr.interfaces.transcription import AudioRef
+from c3parr.processor import client as remote
+from c3parr.processor.client import ProcessorRef
 from c3parr.providers.base import Health, ModelDownload, ProviderInfo, Requirements
 
 log = logging.getLogger("c3parr.concert")
@@ -41,6 +43,10 @@ class Wav2Vec2Config(BaseModel):
     model_dir: Path = Field(default_factory=hw.default_model_dir)
     memory_limit: memory.Limit = "auto"
     """O teto de memória (Settings → Subtitles → Concerts): `2`, `3` ou `auto`."""
+    isolate: bool = True
+    """Roda num processo filho, que fecha no fim e devolve toda a memória (ver `worker`)."""
+    processor: ProcessorRef = Field(default_factory=ProcessorRef)
+    """Com URL, encaixa no c3parr-cuda-processor (Settings → Integrations)."""
 
 
 INFO = ProviderInfo(
@@ -168,10 +174,12 @@ class Wav2Vec2Placer:
         self._model: Any = None
         self._where = "cpu"
 
-    def health(self) -> Health:
+    def health(self) -> Health:  # sem carregar o torch no processo de quem pergunta
+        if self.config.processor.url:
+            return Health(ok=True, detail="on the CUDA processor")
         if not hw.installed():
             return Health(ok=False, detail="needs the extra 'concert' (uv sync --extra concert)")
-        return Health(ok=True, detail=f"runs on {hw.pick(self.config.device)}")
+        return Health(ok=True, detail="NVIDIA GPU when there is one, the CPU otherwise")
 
     def _load(self) -> Any:
         if self._model is None:  # 1,2 GB: só quando falta calcular a escuta de algum trecho
@@ -233,6 +241,20 @@ class Wav2Vec2Placer:
     def place(
         self, audio: AudioRef, request: PlaceRequest, progress: Callable[[float, str], None]
     ) -> tuple[tuple[Placed, ...], ...]:
+        if self.config.processor.url:  # a memória que conta é a do processador
+            params = self.config.model_dump(mode="json")
+            return remote.place(self.config.processor, params, audio, request, progress)
+        if self.config.isolate:
+            memory.plan(
+                self.config.memory_limit, memory.free_gb(), INFO.id
+            )  # recusa antes de abrir
+            params = self.config.model_dump(mode="json")
+            args = {
+                "audio": audio.model_dump(mode="json"),
+                "request": request.model_dump(mode="json"),
+            }
+            done = worker.call(lyric_fit.INTERFACE, INFO.id, params, "place", args, progress)
+            return tuple(tuple(Placed.model_validate(p) for p in group) for group in done)
         origin, end = request.window
         emission, per_s = self._emission(audio, origin, end, Path(request.cache_dir), progress)
         out = []

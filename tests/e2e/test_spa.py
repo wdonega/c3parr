@@ -146,6 +146,38 @@ def test_concerts_are_turned_on_with_their_folders_and_the_options_follow(
     expect(button).to_be_disabled()
 
 
+def test_without_a_gpu_concerts_point_to_the_cuda_processor(
+    desktop: Page, spa: Served, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from c3parr.concert import device
+
+    monkeypatch.setattr(device, "_gpu", {"cuda": False, "name": None, "memory_gb": None})
+    desktop.goto(spa.url + "/settings/subtitles")
+    section = desktop.get_by_role("region", name="Concerts")
+    expect(section.get_by_text("Needs an NVIDIA GPU with CUDA on this machine")).to_be_visible()
+    expect(section.locator("option[value=manual]")).to_be_disabled()
+    section.get_by_role("link", name="CUDA processor").click()
+
+    expect(desktop).to_have_url(re.compile("/settings/integrations$"))
+    processor = desktop.get_by_role("region", name="CUDA processor")
+    transcription = desktop.get_by_role("region", name="Transcription")
+    expect(transcription.get_by_text("On this machine", exact=True)).to_be_visible()
+    processor.get_by_label("Server URL").fill("http://gpu.lan:8485")
+    # a opção "esta máquina" passa a dizer que roda no processador
+    expect(transcription.get_by_text("On the CUDA processor", exact=True)).to_be_visible()
+    expect(
+        transcription.get_by_text("Runs on the CUDA processor (http://gpu.lan:8485)")
+    ).to_be_visible()
+    save_bar(desktop).get_by_role("button", name="Save 1 change").click()
+    said(desktop, "Saved.")
+    assert spa.world.library.config().processor_url == "http://gpu.lan:8485"
+
+    desktop.goto(spa.url + "/settings/subtitles")
+    section = desktop.get_by_role("region", name="Concerts")
+    expect(section.get_by_text("Runs on the CUDA processor", exact=True)).to_be_visible()
+    expect(section.locator("option[value=manual]")).to_be_enabled()
+
+
 def test_discard_goes_back_to_what_is_saved(desktop: Page, spa: Served) -> None:
     desktop.goto(spa.url + "/settings/subtitles")
     wait = desktop.get_by_label("Wait time (minutes)")

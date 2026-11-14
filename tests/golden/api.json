@@ -1662,6 +1662,7 @@
    "llm_provider": "custom",
    "monitor_new": true,
    "new_external_becomes_main": true,
+   "processor_url": "",
    "radarr": {
     "base_url": "",
     "enabled": true,
@@ -1717,6 +1718,8 @@
     "radarr": "RADARR_API_KEY",
     "sonarr": "SONARR_API_KEY"
    },
+   "concert_cpu_forced": false,
+   "cuda": true,
    "engines": [
     {
      "id": "transcricao",
@@ -1779,6 +1782,7 @@
      "selected": "srt"
     }
    ],
+   "gpu": "Test GPU",
    "languages": [
     {
      "code": "pt-BR",
@@ -1963,6 +1967,7 @@
    "ANTHROPIC_API_KEY": "",
    "C3PARR_ASR_API_KEY": "",
    "C3PARR_LLM_API_KEY": "",
+   "C3PARR_PROCESSOR_API_KEY": "",
    "DEEPSEEK_API_KEY": "",
    "GEMINI_API_KEY": "",
    "OPENAI_API_KEY": "",
@@ -2361,6 +2366,10 @@
    },
    {
     "name": "C3PARR_ASR_API_KEY",
+    "source": ""
+   },
+   {
+    "name": "C3PARR_PROCESSOR_API_KEY",
     "source": ""
    },
    {

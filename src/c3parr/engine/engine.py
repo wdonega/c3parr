@@ -21,6 +21,8 @@ from c3parr.providers.base import ProviderInfo
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 
 log = logging.getLogger("c3parr.engine")
+WHERE_PARAMS = frozenset({"processor"})
+"""Parâmetros do provider que dizem onde ele roda, não o que faz: ficam fora da chave do cache."""
 
 Progress = Callable[[str, float, str], None]
 """(estágio, fração 0..1, mensagem)"""
@@ -169,7 +171,13 @@ class Engine:
                         "version": step.version,
                         "provider": b.info.id if b else None,
                         "provider_version": b.info.version if b else None,
-                        "provider_params": b.spec.params if b else None,
+                        # onde roda (aqui ou no processador CUDA) não muda o resultado: trocar
+                        # não refaz o que já foi feito
+                        "provider_params": (
+                            {k: v for k, v in b.spec.params.items() if k not in WHERE_PARAMS}
+                            if b
+                            else None
+                        ),
                         "params": step.key_params(params),
                         "inputs": {n: hashes.get(n) for n in step.needs},
                     }

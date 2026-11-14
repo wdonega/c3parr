@@ -62,6 +62,7 @@ export interface AppConfig {
   asr_mode: "local" | "openai" | "asr-webservice"
   asr_url: string
   asr_model: string
+  processor_url: string
   use_embedded: boolean
   embedded_resolves: boolean
   external_resolves: boolean
@@ -368,6 +369,9 @@ export interface SettingsOptions {
   arr_keys: Record<string, string>
   tmdb_builtin: boolean
   tmdb_attribution: string
+  cuda: boolean
+  gpu: string | null
+  concert_cpu_forced: boolean
 }
 
 export interface SettingsPatch {

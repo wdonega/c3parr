@@ -29,6 +29,7 @@ from c3parr import __version__
 from c3parr.asr.remote import REMOTE_IDS, RemoteASRConfig
 from c3parr.asr.whisper_cpp import measured_speed
 from c3parr.concert import device as concert_device
+from c3parr.concert import gate
 from c3parr.core.config import LLM_ENV, SECRET_NAMES, Settings, load_env, load_secrets
 from c3parr.core.errors import ProviderError
 from c3parr.core.job import ComponentSpec
@@ -44,6 +45,8 @@ from c3parr.metadata.tmdb import TMDbConfig
 from c3parr.pipeline.catalog import Catalog
 from c3parr.pipeline.naming import norm_lang, same_base, same_lang
 from c3parr.pipeline.reconcile import PipelineContext, is_concert, reconcile
+from c3parr.processor import client as processor_client
+from c3parr.processor.client import ProcessorRef
 from c3parr.providers.factory import AbstractComponentFactoryFactory
 
 STEP_LABELS = {
@@ -114,6 +117,7 @@ INTEGRATION_SECRETS = (
     "TMDB_READ_ACCESS_TOKEN",
     *LLM_KEY_ENV.values(),
     "C3PARR_ASR_API_KEY",
+    "C3PARR_PROCESSOR_API_KEY",
     *ARR_KEY_ENV.values(),
 )
 SETTINGS_PAGES = [
@@ -149,6 +153,7 @@ PATCHABLE = frozenset({
     *PLAIN_SETTINGS, "radarr", "sonarr", "target_languages", "fallback_languages", "components",
     "url_base", "instance_name", "allowed_hosts", "concert_paths",
     "llm_provider", "llm_model", "llm_base_url", "llm_effort", "asr_mode", "asr_url", "asr_model",
+    "processor_url",
 })  # fmt: skip
 
 
@@ -162,8 +167,10 @@ TEST_INPUTS: dict[str, frozenset[str]] = {
     "sonarr": frozenset({"sonarr", "SONARR_API_KEY"}),
     "llm": frozenset({"llm_provider", "llm_model", "llm_base_url", "llm_effort",
                       *LLM_KEY_ENV.values()}),
-    "asr": frozenset({"asr_mode", "asr_url", "asr_model", "C3PARR_ASR_API_KEY", "components"}),
+    "asr": frozenset({"asr_mode", "asr_url", "asr_model", "C3PARR_ASR_API_KEY", "components",
+                      "processor_url", "C3PARR_PROCESSOR_API_KEY"}),
     "tmdb": frozenset({"TMDB_READ_ACCESS_TOKEN"}),
+    "processor": frozenset({"processor_url", "C3PARR_PROCESSOR_API_KEY"}),
 }  # fmt: skip
 
 
@@ -228,6 +235,16 @@ MESSAGES = {
     "test.asr_remote": "Transcription: connected.{extra}",
     "test.asr_local": "Transcription: {engine} ready on this machine.{extra}",
     "test.asr_error": "Transcription: {detail}",
+    "test.asr_processor": "Transcription: whisper.cpp on the CUDA processor ({detail}).",
+    "test.processor": "CUDA processor: connected ({detail}).",
+    "test.processor_no_gpu": "CUDA processor: connected, but it sees no NVIDIA GPU ({detail}).",
+    "test.processor_error": "CUDA processor: {detail}",
+    "test.processor_none": "CUDA processor: put its URL.",
+    "settings.processor_url": "CUDA processor: the URL starts with http:// or https://.",
+    "settings.concert_needs_gpu": "Concert subtitles need an NVIDIA GPU with CUDA on this machine, "
+    "or the CUDA processor set in Integrations.",
+    "concerts.blocked": "Concert subtitles need an NVIDIA GPU with CUDA on this machine, or the "
+    "CUDA processor set in Integrations.",
     "settings.saved": "Saved.",
     "settings.invalid": "Not saved, check: {fields}",
     "settings.unknown": "Not saved, unknown: {fields}",
@@ -259,6 +276,14 @@ NOTICES = {
                      "The latest is {name} {latest}. c3parr is made for it; update {name} to "
                      "keep the library in sync."),
     "asr_remote": ("Transcription on a separate server", "{url} ({provider})."),
+    "asr_processor": ("Transcription on the CUDA processor",
+                      "{url}: whisper.cpp on its NVIDIA GPU."),
+    "concert_blocked": ("Concert subtitles are paused",
+                        "They need an NVIDIA GPU with CUDA on this machine, or the CUDA processor "
+                        "set in Settings → Integrations. The concerts wait until then."),
+    "concert_cpu": ("Concert subtitles run on the CPU",
+                    "Forced by {env}. A three-hour concert can take a whole day on a small "
+                    "machine."),
     "asr_cpu": ("Transcription runs on the CPU",
                 "Measured here: about {minutes} min per hour of video. A GPU build of "
                 "whisper.cpp (Metal, Vulkan, CUDA) is 5-8x faster."),
@@ -431,6 +456,20 @@ def components_for(settings: Settings, config: AppConfig) -> dict[str, Component
         if spec is not None and spec.provider == provider:
             limit = {"memory_limit": config.concert_memory}
             out[iface] = spec.model_copy(update={"params": {**spec.params, **limit}})
+    # o c3parr-cuda-processor (Settings → Integrations) faz o pesado: a transcrição "desta
+    # máquina" (no whisper.cpp dele, qualquer que seja o motor escolhido aqui), a separação de
+    # voz e o encaixe da letra. Um servidor de transcrição à parte continua mandando na transcrição.
+    if config.processor_url:
+        where = {"processor": {"url": config.processor_url}}
+        spec = out.get("transcricao")
+        if config.asr_mode == "local":
+            same = spec is not None and spec.provider == "whisper-cpp"
+            params = spec.params if spec is not None and same else {}
+            out["transcricao"] = ComponentSpec(provider="whisper-cpp", params={**params, **where})
+        for iface, provider in (("separacao", "demucs"), ("encaixe", "wav2vec2")):
+            spec = out.get(iface)
+            if spec is not None and spec.provider == provider:
+                out[iface] = spec.model_copy(update={"params": {**spec.params, **where}})
     return out
 
 
@@ -559,8 +598,16 @@ class Service:
             if getattr(cfg, kind).enabled and found and latest and found < latest:
                 out.append(notice("arr_outdated", "warn", name=kind.capitalize(), found=found,
                                   latest=latest))  # fmt: skip
+        if cfg.concert_mode != "off":
+            where = gate.gate(cfg.processor_url)
+            if where == "blocked":
+                out.append(notice("concert_blocked", "warn", env=gate.ALLOW_ENV))
+            elif where == "forced":
+                out.append(notice("concert_cpu", "warn", env=gate.ALLOW_ENV))
         asr = components_for(self.settings, cfg).get("transcricao")
-        if asr is not None and asr.provider in REMOTE_IDS.values():
+        if asr is not None and "processor" in asr.params:
+            out.append(notice("asr_processor", "info", url=cfg.processor_url))
+        elif asr is not None and asr.provider in REMOTE_IDS.values():
             out.append(notice("asr_remote", "info", url=cfg.asr_url, provider=asr.provider))
         elif asr is not None and asr.provider == "whisper-cpp":
             speed = measured_speed()
@@ -923,6 +970,8 @@ class Service:
         config = self.lib.config()
         if config.concert_mode == "off":
             return say("concerts.off", error=True)
+        if gate.gate(config.processor_url) == "blocked":
+            return say("concerts.blocked", error=True)
         videos = [video for video in self.lib.videos() if is_concert(video, config)]
         if not videos:
             return say("concerts.none")
@@ -975,6 +1024,7 @@ class Service:
             "llm_model_from_env": (not config.llm_model and config.llm_provider == "custom"
                                    and "C3PARR_LLM_MODEL" in llm_env),
             "secret_state": secret_state, "secret_values": secret_values,
+            "gpu": concert_device.gpu(), "concert_cpu_forced": gate.forced(),
         }  # fmt: skip
 
     # Os botões "Test" usam o que está na tela, mesmo antes de salvar (como nos *arr): o que
@@ -1028,9 +1078,12 @@ class Service:
         ok, detail = client.health()
         return self._tested("LLM", ok, detail)
 
-    def test_asr(self, mode: str, url: str, model: str, api_key: str) -> Outcome:
-        config = self.lib.config()
+    def test_asr(self, mode: str, url: str, model: str, api_key: str,
+                 processor_url: str = "", processor_key: str = "") -> Outcome:  # fmt: skip
+        config = self.lib.config().model_copy(update={"processor_url": processor_url})
         secrets = self.effective_secrets()
+        if processor_key:
+            secrets["C3PARR_PROCESSOR_API_KEY"] = processor_key
         mode = mode or config.asr_mode
         local_engine = ""
         if mode in REMOTE_IDS:
@@ -1052,10 +1105,27 @@ class Service:
             local_engine = engine.info.id
         if not health.ok:
             return say("test.asr_error", error=True, detail=health.detail)
+        if local_engine and config.processor_url:
+            return say("test.asr_processor", detail=health.detail.removeprefix(
+                "on the CUDA processor").strip(" ():"))  # fmt: skip
         extra = f" {health.detail}" if health.detail else ""
         if local_engine:
             return say("test.asr_local", engine=local_engine, extra=extra)
         return say("test.asr_remote", extra=extra)
+
+    def test_processor(self, url: str, api_key: str) -> Outcome:
+        if not url:
+            return say("test.processor_none", error=True, status=422)
+        key = api_key or self.effective_secrets().get("C3PARR_PROCESSOR_API_KEY")
+        ref = ProcessorRef.model_validate({"url": url, "api_key": key or None})
+        try:
+            info = processor_client.Client(ref).info()
+        except ProviderError as e:
+            return say("test.processor_error", error=True, detail=e.message)
+        detail = processor_client.describe(info)
+        if not info.cuda:
+            return say("test.processor_no_gpu", detail=detail)
+        return say("test.processor", detail=detail)
 
     @staticmethod
     def _tested(name: str, ok: bool, detail: str) -> Outcome:
@@ -1147,6 +1217,16 @@ class Service:
                 return say("settings.asr_url", error=True, status=422)
             out["asr_mode"], out["asr_url"] = mode, url
             out["asr_model"] = str(changes.get("asr_model", config.asr_model) or "").strip()
+        if "processor_url" in changes:
+            url = str(changes["processor_url"] or "").strip().rstrip("/")
+            if url and not re.match(r"^https?://[^\s/]+", url):
+                return say("settings.processor_url", error=True, status=422)
+            out["processor_url"] = url
+        if changes.keys() & {"concert_mode", "processor_url"}:
+            mode = changes.get("concert_mode", config.concert_mode)
+            url = out.get("processor_url", config.processor_url)
+            if mode != "off" and gate.gate(url) == "blocked":
+                return say("settings.concert_needs_gpu", error=True, status=422)
         if "url_base" in changes:
             base = clean_url_base(str(changes["url_base"] or ""))
             if base is None:
@@ -1219,7 +1299,12 @@ class Service:
                                  field("llm_effort"), key)  # fmt: skip
         if target == "asr":
             return self.test_asr(field("asr_mode"), field("asr_url"), field("asr_model"),
-                                 typed.get("C3PARR_ASR_API_KEY", ""))  # fmt: skip
+                                 typed.get("C3PARR_ASR_API_KEY", ""),
+                                 field("processor_url"),
+                                 typed.get("C3PARR_PROCESSOR_API_KEY", ""))  # fmt: skip
+        if target == "processor":
+            return self.test_processor(field("processor_url"),
+                                       typed.get("C3PARR_PROCESSOR_API_KEY", ""))  # fmt: skip
         raise NotFound("Not Found")
 
     # --- system ---
@@ -1299,7 +1384,9 @@ class Service:
             (
                 "concert",
                 "Concert models",
-                concert_device.summary(self.settings.cache_dir / "models" / "torch"),
+                f"on the CUDA processor ({self.lib.config().processor_url})"
+                if self.lib.config().processor_url
+                else concert_device.summary(self.settings.cache_dir / "models" / "torch"),
             ),
         ]
         stored = self.lib.secrets()

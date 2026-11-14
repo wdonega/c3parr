@@ -286,3 +286,23 @@ def test_in_manual_mode_only_a_request_for_the_item_starts_the_concert_subtitle(
     assert [j.acao for j in env.drain()] == ["metadados"]  # e para: espera alguém pedir
     reconcile(env.ctx, str(video), "manual")
     assert [j.acao for j in env.drain()] == ["show", "traduzir", "publicar"]
+
+
+def test_without_a_gpu_or_the_processor_a_concert_waits_instead_of_running_on_the_cpu(
+    tmp_path: Path, tiny_video: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from c3parr.concert import device
+
+    monkeypatch.setattr(device, "_gpu", {"cuda": False, "name": None, "memory_gb": None})
+    env = concert_env(tmp_path)
+    video = place(tiny_video, tmp_path / "musicvideos" / "Banda (2004)" / "Banda - Live.mkv")
+    reconcile(env.ctx, str(video), "manual")
+    assert [j.acao for j in env.drain()] == ["metadados"]  # nem o ASR comum: espera a GPU
+    assert concert_state(str(video), env.library.config(), "manual") == "waiting"
+    monkeypatch.setenv("C3PARR_CONCERT_ALLOW_CPU", "true")  # quem quer esperar um dia, liga
+    assert concert_state(str(video), env.library.config(), "manual") == "yes"
+    monkeypatch.delenv("C3PARR_CONCERT_ALLOW_CPU")
+    env.library.save_config(env.library.config().model_copy(
+        update={"processor_url": "http://gpu.lan:8485"}))  # fmt: skip
+    reconcile(env.ctx, str(video), "manual")
+    assert [j.acao for j in env.drain()] == ["show", "traduzir", "publicar"]

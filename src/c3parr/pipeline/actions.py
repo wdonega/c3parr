@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from c3parr.audio import ffmpeg
+from c3parr.concert import gate
 from c3parr.concert.models import Assembled
 from c3parr.core.errors import InvalidInput, ProviderError, Unavailable
 from c3parr.core.job import JobParams
@@ -189,6 +190,8 @@ def do_show(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Progres
             cancelled: Callable[[], bool]) -> Outcome:  # fmt: skip
     """A legenda de um show: a letra oficial encaixada no canto e a fala entre as músicas. Sai
     como principal gerada, no idioma em que se canta."""
+    if gate.gate(cfg.processor_url) == "blocked":  # uma tarefa que já estava na fila
+        raise Unavailable(f"{gate.WHY} ({gate.ALLOW_ENV}=true forces the CPU)")
     title, year = ctx.library.title_of(m.video)
     params = JobParams(recipe="show", video=m.video, title=title, year=year,
                        no_lyrics=not cfg.concert_lyrics)  # fmt: skip

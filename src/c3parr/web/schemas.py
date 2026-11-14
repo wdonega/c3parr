@@ -425,6 +425,12 @@ class SettingsOptions(Out):
     arr_keys: dict[str, str]
     tmdb_builtin: bool
     tmdb_attribution: str
+    cuda: bool
+    """Esta máquina tem GPU NVIDIA que o torch enxerga (a legenda de show precisa dela ou do
+    processador CUDA)."""
+    gpu: str | None
+    concert_cpu_forced: bool
+    """`C3PARR_CONCERT_ALLOW_CPU=true`: a legenda de show roda na CPU mesmo assim."""
 
 
 class SettingsShown(Out):

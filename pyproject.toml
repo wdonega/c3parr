@@ -23,6 +23,7 @@ dependencies = [
 c3parr = "c3parr:main"
 c3parr-avaliar = "c3parr.report.evaluate:cli"
 c3parr-web = "c3parr.web.app:serve"
+c3parr-cuda-processor = "c3parr.processor.server:serve"
 
 [project.optional-dependencies]
 asr = [

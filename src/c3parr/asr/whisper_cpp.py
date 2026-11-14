@@ -28,10 +28,12 @@ from pydantic import BaseModel, Field
 
 from c3parr.asr.faster_whisper import FasterWhisperConfig, flags_for, merge_tokens
 from c3parr.audio.ffmpeg import normalize_lang
-from c3parr.core.errors import TransientFailure, Unavailable
+from c3parr.core.errors import ProviderError, TransientFailure, Unavailable
 from c3parr.core.models import Segment, Transcript
 from c3parr.interfaces import transcription
 from c3parr.interfaces.transcription import AudioRef, TranscriptionRequest
+from c3parr.processor import client as remote
+from c3parr.processor.client import ProcessorRef
 from c3parr.providers.base import Health, ModelDownload, ProviderInfo, Requirements
 
 log = logging.getLogger("c3parr.asr")
@@ -63,6 +65,8 @@ class WhisperCppConfig(BaseModel):
     beam_size: int = 5
     vad_min_silence_ms: int = 500
     vad_pad_ms: int = 300
+    processor: ProcessorRef = Field(default_factory=ProcessorRef)
+    """Com URL, transcreve no c3parr-cuda-processor (Settings → Integrations)."""
 
 
 INFO = ProviderInfo(
@@ -216,6 +220,14 @@ class WhisperCppTranscriber:
         return self.config.model_dir / f"ggml-{self.config.model}.bin"
 
     def health(self) -> Health:
+        if self.config.processor.url:  # só no teste da tela: pergunta ao processador
+            try:
+                info = remote.Client(self.config.processor).info()
+            except ProviderError as e:
+                return Health(ok=False, detail=e.message)
+            if info.whisper != "ready":
+                return Health(ok=True, detail=f"on the CUDA processor: {info.whisper}")
+            return Health(ok=True, detail=f"on the CUDA processor ({remote.describe(info)})")
         try:
             self._binary()
         except Unavailable as e:
@@ -228,6 +240,9 @@ class WhisperCppTranscriber:
         self, audio: AudioRef, request: TranscriptionRequest, progress: Callable[[float, str], None]
     ) -> Transcript:
         c = self.config
+        if c.processor.url:
+            params = c.model_dump(mode="json")
+            return remote.transcribe(c.processor, params, audio, request, progress)
         binary = self._binary()
         progress(0.0, "preparing the model")
         model = _fetch(MODEL_URL.format(name=c.model), self.model_path())

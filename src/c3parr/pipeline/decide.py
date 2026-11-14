@@ -25,7 +25,7 @@ from c3parr.pipeline.naming import same_base, same_lang
 ActionKind = Literal["metadados", "extrair", "asr", "sincronizar", "gerar", "show",
                      "traduzir", "publicar", "remover"]  # fmt: skip
 SourceKind = Literal["embedded", "external", "asr", "show"]
-ConcertState = Literal["no", "yes", "manual"]
+ConcertState = Literal["no", "yes", "manual", "waiting"]
 
 
 class EmbeddedTrack(Model):
@@ -75,7 +75,8 @@ class ItemState(Model):
     """`acao` ou `acao:idioma` → ok | nao_encontrado | falhou (último resultado)."""
     concert: ConcertState = "no"
     """`yes`: é um show e a legenda dele pode ser feita agora; `manual`: é um show, mas a legenda
-    só é feita quando alguém pede o item (quem monta o estado sabe se este pedido é manual)."""
+    só é feita quando alguém pede o item (quem monta o estado sabe se este pedido é manual);
+    `waiting`: é um show, mas aqui não há GPU NVIDIA nem processador CUDA (`concert.gate`)."""
 
 
 class Action(Model):
@@ -320,6 +321,8 @@ def _choose_main(s: ItemState, cfg: AppConfig, c: _Ctx,
             return MainSub(path=s.generated[sung], lang=sung, source="show"), []
         if s.concert == "manual":
             return None, ["concert: its subtitle is made when someone asks for this item"]
+        if s.concert == "waiting":  # nem o ASR comum: na CPU, seria um dia por uma legenda ruim
+            return None, ["concert: waiting for an NVIDIA GPU (CUDA) or the CUDA processor"]
         if c.needs("show"):
             actions.append(Action(kind="show", reason="concert: lyrics fitted to the singing"))
         return None, []
