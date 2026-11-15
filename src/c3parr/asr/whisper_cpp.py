@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 import time
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -277,6 +277,21 @@ class WhisperCppTranscriber:
             model=f"whisper.cpp {c.model}",
             audio_duration=audio.duration,
         )
+
+    def transcribe_many(
+        self, items: Sequence[tuple[AudioRef, TranscriptionRequest]],
+        progress: Callable[[float, str], None],
+    ) -> list[Transcript]:  # fmt: skip
+        """Vários trechos curtos. No processador vão numa tarefa só (o custo de cada pedido somava
+        minutos na segunda escuta de um show); aqui, um depois do outro."""
+        if self.config.processor.url:
+            params = self.config.model_dump(mode="json")
+            return remote.transcribe_many(self.config.processor, params, items, progress)
+        out = []
+        for n, (audio, request) in enumerate(items):
+            out.append(self.transcribe(audio, request, lambda *_: None))
+            progress((n + 1) / len(items), f"{n + 1} of {len(items)}")
+        return out
 
     def _run(self, cmd: list[str], progress: Callable[[float, str], None]) -> str:
         nice = self.config.low_priority and os.name == "posix"

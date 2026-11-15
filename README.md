@@ -312,7 +312,7 @@ Only needed when c3parr runs on a small box: if its machine already has a good N
 
 From then on, the transcription of **This machine** and the voice separation and lyric fitting of concerts run there:
 
-- Only audio goes: Opus for a concert (about 350 MB for three hours), 16 kHz WAV for a transcription (about 115 MB per hour). What is already there isn't sent again.
+- Only audio goes: lossless FLAC for a concert (about 1 GB for three hours, so the voice comes out as it would on the GPU machine itself), 16 kHz WAV for a transcription (about 115 MB per hour). What is already there isn't sent again.
 - It runs one task at a time; the others wait in its queue. A file it received stays for a day, 20 GB at most.
 - When it doesn't answer, the task fails as temporary and runs again later. Nothing falls back to the CPU of this machine.
 - Keep c3parr and the processor on the same version (`1.1.N`); the test says so when they don't understand each other.

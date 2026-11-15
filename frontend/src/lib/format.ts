@@ -128,6 +128,7 @@ const PROGRESS: [RegExp, (found: string[]) => string][] = [
   [/^waiting for the CUDA processor$/, () => t('progress.processorWaiting')],
   [/^waiting for the CUDA processor \((\d+) ahead\)$/, ([n]) => t('progress.processorAhead', { n })],
   [/^starting$/, () => t('progress.starting')],
+  [/^(\d+) of (\d+)$/, ([n, total]) => t('progress.count', { n, total })],
   [/^finding the artist$/, () => t('progress.artist')],
   [/^no artist found: no official lyrics$/, () => t('progress.noArtist')],
   [/^artist: (.+)$/, ([names]) => t('progress.artistFound', { names })],

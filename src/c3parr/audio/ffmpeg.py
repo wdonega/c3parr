@@ -183,7 +183,7 @@ SEND_SUFFIX: dict[str, str] = {"flac": ".flac", "opus": ".ogg"}
 
 
 def extract_for_sending(path: Path, stream_index: int | None, dest: Path,
-                        codec: str = "opus") -> None:  # fmt: skip
+                        codec: str = "flac") -> None:  # fmt: skip
     """A faixa inteira em estéreo, 44,1 kHz: o que o c3parr manda ao processador CUDA para
     separar a voz. `opus` a 256 kb/s: 3 h de show dão uns 350 MB; `flac`, sem perda, uns 1 GB."""
     dest.parent.mkdir(parents=True, exist_ok=True)

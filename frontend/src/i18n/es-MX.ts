@@ -639,6 +639,7 @@ export const esMX: Catalog = {
   'progress.processorWaiting': 'esperando al procesador CUDA',
   'progress.processorAhead': 'esperando al procesador CUDA ({n} adelante)',
   'progress.starting': 'empezando',
+  'progress.count': '{n} de {total}',
   'progress.artist': 'buscando al artista',
   'progress.noArtist': 'artista no encontrado: sin letra oficial',
   'progress.artistFound': 'artista: {names}',

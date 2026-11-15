@@ -50,7 +50,7 @@ class DemucsConfig(BaseModel):
 INFO = ProviderInfo(
     id="demucs",
     interface=separation.INTERFACE,
-    version="2",
+    version="3",
     config_schema=DemucsConfig,
     requirements=Requirements(
         gpu="opcional",
@@ -159,9 +159,13 @@ class DemucsSeparator:
                 wav = torch.from_numpy(data.T.copy())
                 ref = wav.mean(0)
                 mean, std = ref.mean(), ref.std() + 1e-8
+                # shifts=0: o padrão (1) desloca o áudio por um sorteio de até 0,5 s, sem média
+                # nenhuma; cada execução saía diferente, e o encaixe da letra junto (447 a 488
+                # linhas oficiais no mesmo show)
                 with torch.no_grad():
                     sources = apply_model(model, ((wav - mean) / std)[None], device=where,
-                                          split=True, overlap=0.25, progress=False)[0]  # fmt: skip
+                                          shifts=0, split=True, overlap=0.25,
+                                          progress=False)[0]  # fmt: skip
                 vocals = sources[voice].cpu() * std + mean
                 mono = resample(vocals.mean(0, keepdim=True), model.samplerate, RATE)
                 joined.write(mono[0].clamp(-1, 1).numpy())

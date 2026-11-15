@@ -6,7 +6,7 @@ ar é falha temporária: a tarefa tenta de novo depois, e não passa a rodar na 
 """
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,9 +36,10 @@ POLL_S = 2.0
 """O intervalo maior entre duas perguntas. Começa em `FIRST_POLL_S` e cresce: a segunda escuta
 de um show são ~180 tarefas de poucos segundos, e esperar 2 s em cada uma somava minutos."""
 FIRST_POLL_S = 0.25
-SEND_CODEC = "opus"
-"""Como a faixa vai para a separação de voz. Num show de 2 h, Opus (219 MB) e FLAC (641 MB)
-deram o mesmo resultado: 469 e 463 linhas oficiais, dentro da variação entre máquinas."""
+SEND_CODEC = "flac"
+"""Como a faixa vai para a separação de voz. FLAC é o áudio que a separação leria aqui: a voz
+sai igual à de rodar na própria máquina. Com Opus (3x menor) ela mudava em 62% das amostras, e o
+encaixe da letra seguia outro caminho (num show de 2 h, 400 de ~470 linhas oficiais iguais)."""
 PATIENCE_S = 180.0
 """Quanto tempo sem resposta no meio de uma tarefa antes de desistir (um reinício do processador
 cabe aqui: a tarefa é pedida de novo e ele pega a que já fez)."""
@@ -251,6 +252,25 @@ def transcribe(ref: ProcessorRef, params: dict[str, Any], audio: AudioRef,
                 args={"audio": audio.model_dump(mode="json"),
                       "request": request.model_dump(mode="json")})  # fmt: skip
     return Transcript.model_validate(client.run(job, progress))
+
+
+def transcribe_many(ref: ProcessorRef, params: dict[str, Any],
+                    items: Sequence[tuple[AudioRef, TranscriptionRequest]],
+                    progress: Progress) -> list[Transcript]:  # fmt: skip
+    """Vários trechos numa tarefa só: um pedido e um processo do lado de lá para todos (a
+    segunda escuta de um show são ~180 trechos de poucos segundos)."""
+    if not items:
+        return []
+    client = Client(ref)
+    hashed = [(_hashed(audio), request) for audio, request in items]
+    for audio, _ in hashed:
+        client.send(Path(audio.path), audio.sha256, progress)
+    job = JobIn(method="transcribe_many", params=sent(params), audio=hashed[0][0].sha256,
+                audios=[audio.sha256 for audio, _ in hashed],
+                args={"items": [{"audio": audio.model_dump(mode="json"),
+                                 "request": request.model_dump(mode="json")}
+                                for audio, request in hashed]})  # fmt: skip
+    return [Transcript.model_validate(t) for t in client.run(job, progress)]
 
 
 def describe(info: Info) -> str:

@@ -639,6 +639,7 @@ export const ptBR: Catalog = {
   'progress.processorWaiting': 'esperando o processador CUDA',
   'progress.processorAhead': 'esperando o processador CUDA ({n} na frente)',
   'progress.starting': 'começando',
+  'progress.count': '{n} de {total}',
   'progress.artist': 'procurando o artista',
   'progress.noArtist': 'artista não encontrado: sem letra oficial',
   'progress.artistFound': 'artista: {names}',

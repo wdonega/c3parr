@@ -239,24 +239,44 @@ def hear_again(ctx: StepContext) -> SecondListen:
     memo: dict[str, str] = {}
     if memo_file.exists():
         memo = dict(json.loads(memo_file.read_text(encoding="utf-8")))
-    out: list[Asked] = []
+    keys: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
-        for k, (n, ask) in enumerate(jobs):
+        missing: list[tuple[str, AudioRef, TranscriptionRequest]] = []
+        for k, (_, ask) in enumerate(jobs):
             a, b = ask.region
             said = hashlib.sha1(ask.prompt.encode()).hexdigest()[:12]
             key = f"{voice.sha256[:12]}|{a:.2f}|{b:.2f}|{said}|{lang}"
-            if key not in memo:
-                clip = cut(voice, a, b, Path(tmp) / "again.wav")
+            keys.append(key)
+            if key not in memo and all(key != m for m, _, _ in missing):
+                clip = cut(voice, a, b, Path(tmp) / f"again-{k}.wav")
                 request = TranscriptionRequest(language=lang, vad=False, prompt=ask.prompt)
-                got: Transcript = ctx.component.transcribe(clip, request, _quiet)
+                missing.append((key, clip, request))
+        for i in range(0, len(missing), BATCH):
+            group = missing[i : i + BATCH]
+            heard_now = _listen(ctx.component, [(clip, request) for _, clip, request in group])
+            for (key, _, _), got in zip(group, heard_now, strict=True):
                 memo[key] = " ".join(s.text.strip() for s in got.segments)
-                if k % 10 == 9:
-                    memo_file.write_text(json.dumps(memo), encoding="utf-8")
-            out.append(Asked(song=n, start=a, end=b, among=ask.among, first=ask.first,
-                             text=memo[key]))  # fmt: skip
-            ctx.progress((k + 1) / len(jobs), f"hearing again ({k + 1} of {len(jobs)})")
+            memo_file.write_text(json.dumps(memo), encoding="utf-8")
+            done = i + len(group)
+            ctx.progress(done / len(missing), f"hearing again ({done} of {len(missing)})")
     memo_file.write_text(json.dumps(memo), encoding="utf-8")
+    out = [Asked(song=n, start=ask.region[0], end=ask.region[1], among=ask.among,
+                 first=ask.first, text=memo[key])
+           for (n, ask), key in zip(jobs, keys, strict=True)]  # fmt: skip
     return SecondListen(asked=tuple(out))
+
+
+BATCH = 40
+"""Trechos por pedido ao motor: no processador CUDA, um pedido só para cada 40 trechos; o memo e
+o andamento seguem a cada lote."""
+
+
+def _listen(component: Any, items: list[tuple[AudioRef, TranscriptionRequest]]) -> list[Transcript]:
+    """Vários trechos: de uma vez quando o motor sabe (`transcribe_many`), senão um a um."""
+    many = getattr(component, "transcribe_many", None)
+    if many is not None:
+        return list(many(items, _quiet))
+    return [component.transcribe(clip, request, _quiet) for clip, request in items]
 
 
 def fit_again(ctx: StepContext) -> Fitted:
@@ -321,17 +341,24 @@ def hear_speech(ctx: StepContext) -> Spoken:
         ctx.component.transcribe(clip, TranscriptionRequest(language=lang, vad=False), _quiet)
     )
     with tempfile.TemporaryDirectory() as tmp:
-        for k, chunk in enumerate(long):  # o idioma é detectado no próprio trecho
+        clips = []  # o idioma é detectado no próprio trecho
+        for k, chunk in enumerate(long):
             origin = max(0.0, chunk[0] - speech.EDGE_S)
-            got = listen(
-                cut(voice, origin, chunk[1] + speech.EDGE_S, Path(tmp) / "speech.wav"), None
-            )
-            lang = _base(got.language) or fallback or "und"
-            known[chunk] = lang
-            found += [(_phrase(origin + s.start, min(origin + s.end, chunk[1] + speech.EDGE_S),
-                               s.text.strip(), [w.conf for w in s.words]), lang)
-                      for s in got.segments if s.text.strip() and s.words]  # fmt: skip
-            ctx.progress(0.9 * (k + 1) / len(long), f"hearing the speech ({k + 1} of {len(long)})")
+            dest = Path(tmp) / f"speech-{k}.wav"
+            clips.append((chunk, origin, cut(voice, origin, chunk[1] + speech.EDGE_S, dest)))
+        for i in range(0, len(clips), BATCH):
+            batch = clips[i : i + BATCH]
+            asked = TranscriptionRequest(language=None, vad=False)
+            heard_now = _listen(ctx.component, [(clip, asked) for _, _, clip in batch])
+            for (chunk, origin, _), got in zip(batch, heard_now, strict=True):
+                lang = _base(got.language) or fallback or "und"
+                known[chunk] = lang
+                end = chunk[1] + speech.EDGE_S
+                found += [(_phrase(origin + s.start, min(origin + s.end, end), s.text.strip(),
+                                   [w.conf for w in s.words]), lang)
+                          for s in got.segments if s.text.strip() and s.words]  # fmt: skip
+            done = i + len(batch)
+            ctx.progress(0.9 * done / len(clips), f"hearing the speech ({done} of {len(clips)})")
         # os trechos curtos vão juntos, com silêncio no meio, no idioma do vizinho
         for lang, group in speech.by_language(short, known, fallback or "und").items():
             found += [(p, lang) for p in _together(voice, group, _base(lang), Path(tmp), listen)]

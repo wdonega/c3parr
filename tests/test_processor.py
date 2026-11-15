@@ -23,7 +23,7 @@ from c3parr.interfaces.separation import SeparationRequest
 from c3parr.interfaces.transcription import AudioRef, TranscriptionRequest
 from c3parr.processor import client as remote
 from c3parr.processor.client import Client, ProcessorRef
-from c3parr.processor.protocol import Info, Job, JobIn
+from c3parr.processor.protocol import PROTOCOL, Info, Job, JobIn
 from c3parr.processor.server import Runner, Store, create_app
 
 URL = "http://testserver"
@@ -31,11 +31,12 @@ FAKE_JOBS = {
     "separate": Job("separacao", "falso", frozenset({"seconds", "spans", "fail"})),
     "place": Job("encaixe", "falso", frozenset({"score", "per_line"})),
     "transcribe": Job("transcricao", "falso", frozenset({"lines", "fail"})),
+    "transcribe_many": Job("transcricao", "falso", frozenset({"lines", "fail"})),
 }
 REF = ProcessorRef.model_validate({"url": URL, "api_key": "segredo"})
 
 
-def fake_info(protocol: int = 1) -> Callable[[Runner], Info]:
+def fake_info(protocol: int = PROTOCOL) -> Callable[[Runner], Info]:
     def info(runner: Runner) -> Info:
         busy, queued = runner.load()
         return Info(version="9.9.9", protocol=protocol, cuda=True, gpu="Fake GPU",
@@ -123,6 +124,20 @@ def test_an_audio_named_by_something_else_than_its_sha256_still_goes(
     assert transcript.segments[0].text == "Bonjour."
 
 
+def test_many_clips_go_in_one_job_and_come_back_in_order(
+    server: TestClient, tmp_path: Path
+) -> None:
+    """A segunda escuta de um show: vários trechos, um pedido só, as respostas na ordem."""
+    clips = [voice_file(tmp_path / f"trecho-{n}.wav", 2.0 + n) for n in range(5)]
+    engine = WhisperCppTranscriber(WhisperCppConfig(processor=REF))
+    items = [(clip, TranscriptionRequest(language=lang)) for clip, lang in
+             zip(clips, ("fr", "en", "pt", "es", "de"), strict=True)]  # fmt: skip
+    got = engine.transcribe_many(items, lambda *_: None)
+    assert [t.language for t in got] == ["fr", "en", "pt", "es", "de"]
+    assert [t.audio_duration for t in got] == [2.0, 3.0, 4.0, 5.0, 6.0]
+    assert len(server.app.state.runner._states) == 1  # type: ignore[attr-defined]
+
+
 def test_a_failure_there_comes_back_with_its_kind_and_reason(
     server: TestClient, tmp_path: Path
 ) -> None:
@@ -171,10 +186,10 @@ def test_the_wrong_key_and_another_protocol_are_refused(
     wrong = ProcessorRef.model_validate({"url": URL, "api_key": "outra"})
     with pytest.raises(Unavailable, match="refused the API key"):
         Client(wrong).info()
-    other = create_app(tmp_path / "outro", info=fake_info(protocol=2))
+    other = create_app(tmp_path / "outro", info=fake_info(protocol=PROTOCOL + 1))
     with TestClient(other, base_url=URL) as http:
         monkeypatch.setattr(remote, "http_factory", lambda ref: http)
-        with pytest.raises(Unavailable, match="protocol 2"):
+        with pytest.raises(Unavailable, match=f"protocol {PROTOCOL + 1}"):
             Client(ProcessorRef(url=URL)).info()
 
 

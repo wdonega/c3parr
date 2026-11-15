@@ -111,6 +111,15 @@ def main() -> None:
             audio = AudioRef.model_validate(args["audio"])
             asked = TranscriptionRequest.model_validate(args["request"])
             result = component.transcribe(audio, asked, progress).model_dump(mode="json")
+        elif job["method"] == "transcribe_many":  # um processo e um pedido para vários trechos
+            items = args["items"]
+            result = []
+            for n, item in enumerate(items):
+                clip = AudioRef.model_validate(item["audio"])
+                asked = TranscriptionRequest.model_validate(item["request"])
+                done = component.transcribe(clip, asked, lambda *_: None)
+                result.append(done.model_dump(mode="json"))
+                progress((n + 1) / len(items), f"{n + 1} of {len(items)}")
         else:
             raise InvalidInput(f"unknown method {job['method']}")
         answer: dict[str, Any] = {"result": result}

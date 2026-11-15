@@ -8,13 +8,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 SERVICE = "c3parr-cuda-processor"
-PROTOCOL = 1
+PROTOCOL = 2
+"""2: `transcribe_many`, vários trechos numa tarefa só (a segunda escuta de um show)."""
 DEFAULT_PORT = 8485
 KEY_ENV = "C3PARR_PROCESSOR_API_KEY"
 SHA = re.compile(r"^[0-9a-f]{64}$")
 SUFFIX = re.compile(r"^\.[a-z0-9]{1,5}$")
 
-Method = Literal["separate", "place", "transcribe"]
+Method = Literal["separate", "place", "transcribe", "transcribe_many"]
+WHISPER_PARAMS = frozenset({"model", "device", "beam_size", "vad_min_silence_ms", "vad_pad_ms"})
 
 
 @dataclass(frozen=True)
@@ -29,11 +31,8 @@ class Job:
 JOBS: dict[str, Job] = {
     "separate": Job("separacao", "demucs", frozenset({"model", "device"})),
     "place": Job("encaixe", "wav2vec2", frozenset({"device"})),
-    "transcribe": Job(
-        "transcricao",
-        "whisper-cpp",
-        frozenset({"model", "device", "beam_size", "vad_min_silence_ms", "vad_pad_ms"}),
-    ),
+    "transcribe": Job("transcricao", "whisper-cpp", WHISPER_PARAMS),
+    "transcribe_many": Job("transcricao", "whisper-cpp", WHISPER_PARAMS),
 }
 NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 """Nome de modelo: vira nome de arquivo e parte de URL do lado do processador."""
@@ -58,6 +57,8 @@ class JobIn(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     audio: str
     """sha256 do áudio já enviado (`PUT /v1/files/{sha}`)."""
+    audios: list[str] = Field(default_factory=list)
+    """Em `transcribe_many`: o sha256 de cada trecho, na ordem de `args["items"]`."""
 
 
 class JobOut(BaseModel):

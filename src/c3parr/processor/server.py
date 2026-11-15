@@ -198,8 +198,11 @@ class Runner:
             raise HTTPException(400, f"unknown method {job.method}")
         if "model" in job.params and not NAME.match(str(job.params["model"])):
             raise HTTPException(400, "invalid model name")
-        if not SHA.match(job.audio) or self.store.find(job.audio) is None:
-            raise HTTPException(409, "send the audio first")
+        for sha in (job.audio, *job.audios):
+            if not SHA.match(sha) or self.store.find(sha) is None:
+                raise HTTPException(409, "send the audio first")
+        if job.method == "transcribe_many" and len(job.audios) != len(job.args.get("items", [])):
+            raise HTTPException(400, "one audio per item")
         job = job.model_copy(
             update={"params": {k: v for k, v in job.params.items() if k in spec.params}}
         )
@@ -280,7 +283,7 @@ class Runner:
             audio = self.store.find(state.job.audio)
             if audio is None:
                 raise ProviderError("the audio was removed before the job started")
-            self.store.clean(busy=frozenset({state.job.audio}))
+            self.store.clean(busy=frozenset({state.job.audio, *state.job.audios}))
             args = self._args(state.job, audio, work)
             result = self.call(spec.interface, spec.provider, dict(state.job.params),
                                state.job.method, args, progress, started=started)  # fmt: skip
@@ -312,6 +315,15 @@ class Runner:
             args["request"] = {**args.get("request", {}), "video": str(audio),
                                "stream_index": None, "dest": str(work / "voice.wav")}  # fmt: skip
             return args
+        if job.method == "transcribe_many":
+            items = []
+            for item, sha in zip(args.get("items", []), job.audios, strict=True):
+                path = self.store.find(sha)
+                if path is None:
+                    raise ProviderError("an audio of the batch was removed before the job started")
+                items.append({**item, "audio": {**item.get("audio", {}), "path": str(path),
+                                                "sha256": sha}})  # fmt: skip
+            return {"items": items}
         args["audio"] = {**args.get("audio", {}), "path": str(audio), "sha256": job.audio}
         if job.method == "place":
             args["request"] = {**args.get("request", {}),

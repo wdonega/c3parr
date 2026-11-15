@@ -638,6 +638,7 @@ export const en = {
   'progress.processorWaiting': 'waiting for the CUDA processor',
   'progress.processorAhead': 'waiting for the CUDA processor ({n} ahead)',
   'progress.starting': 'starting',
+  'progress.count': '{n} of {total}',
   'progress.artist': 'finding the artist',
   'progress.noArtist': 'no artist found: no official lyrics',
   'progress.artistFound': 'artist: {names}',
