@@ -366,6 +366,20 @@ class JobQueue:
             )
             return int(cur.rowcount)
 
+    def clear(self, query: str = "", statuses: Iterable[str] = ()) -> int:
+        """Apaga da fila as tarefas terminadas que casam com a busca e os status (sem status:
+        todas as terminadas). Nunca as que rodam ou esperam. Devolve quantas saíram."""
+        asked = set(statuses)
+        wanted = sorted(asked & FINISHED) if asked else sorted(FINISHED)
+        if not wanted:
+            return 0
+        where, args = self._text_filter(query)
+        where.append(f"status IN ({', '.join('?' * len(wanted))})")
+        with self._lock, self._db() as db:
+            db.create_function("fold", 1, fold, deterministic=True)
+            cur = db.execute(f"DELETE FROM tarefas WHERE {' AND '.join(where)}", [*args, *wanted])
+            return int(cur.rowcount)
+
     def move_to_top(self, job_id: int) -> None:
         """Passa a tarefa que espera na frente de todas as outras da fila."""
         with self._lock, self._db() as db:

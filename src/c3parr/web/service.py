@@ -215,6 +215,8 @@ NO_PARAMS: Mapping[str, Param] = MappingProxyType({})
 MESSAGES = {
     "queue.cancelled": "{n} task(s) cancelled.",
     "queue.none_waiting": "Nothing is waiting in the queue.",
+    "queue.cleared": "{n} task(s) cleared from the list.",
+    "queue.none_finished": "No finished task to clear.",
     "queue.retried": "{n} task(s) back in the queue.",
     "queue.none_failed": "No failed task to run again.",
     "library.select_one": "Select at least one item.",
@@ -253,6 +255,9 @@ MESSAGES = {
     "settings.url_base": "URL base: use a path like /c3parr (letters, digits, - and _).",
     "task.starting": "{task}: starting.",
     "alert.resolved": "Alert already resolved.",
+    "alert.dismissed": "{n} alert(s) dismissed.",
+    "alert.gone": "This alert is already gone.",
+    "alert.none": "No alert to dismiss.",
     "alert.still_failing": "Still failing for {n} item(s).",
     "alert.retrying": "Retrying: {n} step(s) queued.",
 }
@@ -719,6 +724,13 @@ class Service:
         n = self.jobs.retry_failed()
         return say("queue.retried", n=n) if n else say("queue.none_failed")
 
+    def clear_queue(self, q: str, status: str) -> Outcome:
+        """Tira da lista as tarefas terminadas do filtro e da busca em uso. Só o registro da
+        tarefa sai: o que ela fez (legendas, passos do vídeo) fica."""
+        statuses = QUEUE_FILTERS.get(status, QUEUE_FILTERS[""])[1]
+        n = self.jobs.clear(q, statuses)
+        return say("queue.cleared", n=n) if n else say("queue.none_finished")
+
     def move_to_top(self, job_id: int) -> dict[str, Any]:
         self.job(job_id)
         self.jobs.move_to_top(job_id)
@@ -732,9 +744,18 @@ class Service:
         order = list(ACTION_LABELS)
         done = sorted(steps.values(), key=lambda r: (
             order.index(r.action) if r.action in order else len(order), r.lang))  # fmt: skip
-        pipeline = [{"action": r.action, "label": ACTION_LABELS.get(r.action, r.action),
-                     "language": r.lang or None, "state": r.state, "detail": r.detail,
-                     "attempts": r.attempts, "updated_at": r.updated_at} for r in done]  # fmt: skip
+        # o passo que falhou e está sendo refeito (rodando ou na fila) não mostra o erro antigo
+        again = {(j.acao, j.idioma or ""): "running" if j.status == "processando" else "queued"
+                 for j in sorted(self.jobs.active_steps(job.media_id), key=lambda j: j.status)
+                 } if job.media_id is not None else {}  # fmt: skip
+        pipeline = []
+        for r in done:
+            redo = again.get((r.action, r.lang or "")) if r.state == "falhou" else None
+            pipeline.append({
+                "action": r.action, "label": ACTION_LABELS.get(r.action, r.action),
+                "language": r.lang or None, "state": redo or r.state,
+                "detail": None if redo else r.detail, "attempts": r.attempts,
+                "updated_at": r.updated_at})  # fmt: skip
         return {"stage": stage, "stage_name": stage_name, "pipeline": pipeline}
 
     def job(self, job_id: int) -> Job:
@@ -1341,6 +1362,14 @@ class Service:
 
     def mark_alerts_seen(self) -> None:
         self.catalog.mark_alerts_seen()
+
+    def dismiss_alert(self, key: str) -> Outcome:
+        n = self.catalog.dismiss_alerts(key)
+        return say("alert.dismissed", n=n) if n else say("alert.gone")
+
+    def dismiss_alerts(self) -> Outcome:
+        n = self.catalog.dismiss_alerts()
+        return say("alert.dismissed", n=n) if n else say("alert.none")
 
     def retry_alert(self, key: str) -> Outcome:
         alert = next((a for a in self.catalog.alerts(include_resolved=False) if a.key == key), None)

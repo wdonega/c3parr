@@ -93,6 +93,7 @@ export const api = {
   queueConcerts: () => send<ActionResult>('POST', '/library/queue-concerts'),
   cancelQueued: () => send<ActionResult>('POST', '/queue/cancel-queued'),
   retryFailed: () => send<ActionResult>('POST', '/queue/retry-failed'),
+  clearQueue: (filter: { q: string; status: string }) => send<ActionResult>('POST', '/queue/clear', filter),
 
   settings: () => get<SettingsView>('/settings'),
   saveSettings: (patch: SettingsPatch) => send<ActionResult>('PATCH', '/settings', patch),
@@ -104,6 +105,8 @@ export const api = {
   alerts: () => get<Alerts>('/system/alerts'),
   alertsSeen: () => send<ActionResult>('POST', '/system/alerts/seen'),
   retryAlert: (key: string) => send<ActionResult>('POST', '/system/alerts/retry', { key }),
+  dismissAlert: (key: string) => send<ActionResult>('POST', '/system/alerts/dismiss', { key }),
+  dismissAlerts: () => send<ActionResult>('POST', '/system/alerts/dismiss-all'),
   logs: () => get<LogRow[]>('/system/logs'),
   status: () => get<Status>('/system/status'),
 }

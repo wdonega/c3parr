@@ -451,3 +451,18 @@ class ApiDriver:
 
     def retry_alert(self, key: str) -> Result:
         return self._result(self.client.post("/api/v1/system/alerts/retry", json={"key": key}))
+
+    def dismiss_alert(self, key: str) -> Result:
+        return self._result(self.client.post("/api/v1/system/alerts/dismiss", json={"key": key}))
+
+    def dismiss_alerts(self) -> Result:
+        return self._result(self.client.post("/api/v1/system/alerts/dismiss-all"))
+
+    def clear_queue(self, q: str = "", status: str = "") -> Result:
+        return self._result(self.client.post("/api/v1/queue/clear",
+                                             json={"q": q, "status": status}))  # fmt: skip
+
+    def pipeline(self, job_id: int) -> list[tuple[str, str | None, str, str | None]]:
+        """O painel "pipeline deste vídeo" da tarefa: passo, idioma, estado e o texto do erro."""
+        data = self.client.get(f"/api/v1/queue/{job_id}").json()
+        return [(p["action"], p["language"], p["state"], p["detail"]) for p in data["pipeline"]]

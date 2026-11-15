@@ -356,6 +356,14 @@ class Catalog:
                     db.execute("UPDATE alert SET media_ids = '[]', resolved_at = ? WHERE key = ?",
                                (now(), r["key"]))  # fmt: skip
 
+    def dismiss_alerts(self, key: str | None = None) -> int:
+        """Some com o alerta `key` (ou com todos, sem `key`), aberto ou resolvido. Devolve quantos.
+        O passo que falhou fica como está: se a falha se repetir, nasce um alerta novo."""
+        with self._lock, self._db() as db:
+            if key is None:
+                return int(db.execute("DELETE FROM alert").rowcount)
+            return int(db.execute("DELETE FROM alert WHERE key = ?", (key,)).rowcount)
+
     def mark_alerts_seen(self) -> None:
         with self._lock, self._db() as db:
             db.execute("UPDATE alert SET seen = 1 WHERE resolved_at IS NULL")

@@ -163,16 +163,19 @@ class PipelineStep(Out):
     action: str
     label: str
     language: str | None
-    state: Literal["done", "not_found", "failed"]
+    state: Literal["done", "not_found", "failed", "running", "queued"]
+    """`running`/`queued`: o passo falhou antes e está sendo refeito agora (sem o erro antigo)."""
     detail: str | None
     attempts: int
     updated_at: str
 
 
-PIPELINE_STATE: dict[str, Literal["done", "not_found", "failed"]] = {
+PIPELINE_STATE: dict[str, Literal["done", "not_found", "failed", "running", "queued"]] = {
     "ok": "done",
     "nao_encontrado": "not_found",
     "falhou": "failed",
+    "running": "running",
+    "queued": "queued",
 }
 
 
@@ -506,6 +509,11 @@ class AlertRow(Out):
 class Alerts(Out):
     setup: list[SetupItem]
     alerts: list[AlertRow]
+
+
+class QueueClear(In):
+    q: str = ""
+    status: str = ""
 
 
 class AlertRetry(In):

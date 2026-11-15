@@ -413,6 +413,61 @@ def test_cancelling_everything_waiting_asks_first(desktop: Page, spa: Served) ->
     assert world.queue.get(world.ids["running"]).status == "processando"
 
 
+def test_clearing_the_finished_follows_the_filter_and_asks_first(
+    desktop: Page, spa: Served
+) -> None:
+    world = spa.world
+    desktop.goto(spa.url + "/queue?status=running")
+    expect(desktop.get_by_role("button", name="Cancel 1 queued")).to_be_visible()
+    expect(desktop.get_by_role("button", name=re.compile("^Clear"))).to_have_count(0)
+
+    desktop.goto(spa.url + "/queue?status=failed")
+    desktop.get_by_role("button", name="Clear 1").click()
+    question = desktop.get_by_role("dialog").filter(has_text="Clear 1 failed task from the list?")
+    question.get_by_role("button", name="Cancel", exact=True).click()  # desistiu
+    assert world.queue.get(world.ids["failed"]).status == "falhou"
+
+    desktop.get_by_role("button", name="Clear 1").click()
+    question.get_by_role("button", name="Clear them").click()
+    said(desktop, "1 task cleared from the list.")
+    assert [j.id for j in world.queue.list() if j.status == "falhou"] == []
+
+    desktop.goto(spa.url + "/queue")
+    desktop.get_by_role("button", name="Clear 3").click()  # todas: as 3 terminadas que sobraram
+    desktop.get_by_role("dialog").filter(
+        has_text="Clear 3 finished tasks from the list?"
+    ).get_by_role("button", name="Clear them").click()
+    said(desktop, "3 tasks cleared from the list.")
+    assert sorted(j.status for j in world.queue.list()) == ["na_fila", "processando"]
+
+
+def test_a_task_running_again_does_not_show_the_old_error(desktop: Page, spa: Served) -> None:
+    world = spa.world
+    desktop.goto(spa.url + f"/queue?job={world.ids['failed']}")
+    details = desktop.get_by_role("region", name="Task details")
+    expect(details).to_contain_text("LLM fora do ar")
+    details.get_by_role("button", name="Run again").click()
+    expect(details).to_contain_text("queued to try again")
+    expect(details).not_to_contain_text("LLM fora do ar")
+
+
+def test_alerts_are_dismissed_one_or_all(desktop: Page, spa: Served) -> None:
+    catalog = spa.world.catalog
+    desktop.goto(spa.url + "/system/alerts")
+    alerts = desktop.get_by_role("region", name="Alerts")
+    expect(alerts).to_contain_text("could not read old.mkv")
+    alerts.get_by_role("button", name="Dismiss", exact=True).last.click()
+    said(desktop, "1 alert dismissed.")
+    expect(alerts).not_to_contain_text("could not read old.mkv")
+
+    alerts.get_by_role("button", name="Dismiss all").click()
+    question = desktop.get_by_role("dialog").filter(has_text="Dismiss 1 alert?")
+    question.get_by_role("button", name="Dismiss all").click()
+    said(desktop, "1 alert dismissed.")
+    expect(alerts).to_contain_text("No alerts")
+    assert catalog.alerts() == []
+
+
 def test_on_a_phone_the_task_details_open_over_the_list(phone: Page, spa: Served) -> None:
     phone.goto(spa.url + "/queue")
     phone.get_by_role("region", name="Tasks").get_by_role(

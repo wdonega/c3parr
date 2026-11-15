@@ -264,6 +264,11 @@ def build_api(svc: Service) -> APIRouter:
     def retry_failed() -> JSONResponse:
         return result(svc.retry_failed())
 
+    @api.post("/queue/clear", response_model=s.ActionResult)
+    def clear_queue(body: s.QueueClear) -> JSONResponse:
+        """Apaga as tarefas terminadas do filtro e da busca dados. Nunca a que roda."""
+        return result(svc.clear_queue(body.q, body.status))
+
     @api.get("/queue/{job_id}")
     def job(job_id: int) -> s.JobDetail:
         return job_detail(svc.job_detail(job_id))
@@ -378,6 +383,14 @@ def build_api(svc: Service) -> APIRouter:
         """A tela de alertas chama ao abrir: os abertos passam a contar como vistos."""
         svc.mark_alerts_seen()
         return s.ActionResult(ok=True, message="")
+
+    @api.post("/system/alerts/dismiss", response_model=s.ActionResult)
+    def dismiss_alert(body: s.AlertRetry) -> JSONResponse:
+        return result(svc.dismiss_alert(body.key))
+
+    @api.post("/system/alerts/dismiss-all", response_model=s.ActionResult)
+    def dismiss_alerts() -> JSONResponse:
+        return result(svc.dismiss_alerts())
 
     @api.post("/system/alerts/retry", response_model=s.ActionResult)
     def retry_alert(body: s.AlertRetry) -> JSONResponse:

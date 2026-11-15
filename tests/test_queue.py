@@ -64,6 +64,29 @@ def test_cancel_queued_leaves_the_running_and_the_finished_alone(queue: JobQueue
     assert queue.cancel_queued() == 0 and queue.take_next() is None
 
 
+def test_clear_removes_only_the_finished_of_the_filter(queue: JobQueue) -> None:
+    done = queue.submit("/m/done.mkv", "pt-BR")
+    queue.take_next()
+    _finish(queue, done.id)
+    failed = queue.submit("/m/failed.mkv", "pt-BR")
+    queue.take_next()
+    queue.fail(failed.id, "LLM fora do ar")
+    other = queue.submit("/m/other.mkv", "pt-BR")
+    queue.take_next()
+    queue.fail(other.id, "sem disco")
+    running = queue.submit("/m/running.mkv", "pt-BR")
+    queue.take_next()
+    waiting = queue.submit("/m/waiting.mkv", "pt-BR")
+
+    assert queue.clear(statuses=("processando", "na_fila")) == 0  # nunca as que rodam ou esperam
+    assert queue.clear("llm", ("falhou",)) == 1  # a busca vale também para limpar
+    assert [j.id for j in queue.list()] == [waiting.id, running.id, other.id, done.id]
+    assert queue.clear() == 2  # sem status: todas as terminadas
+    assert [(j.id, j.status) for j in queue.list()] == [
+        (waiting.id, "na_fila"), (running.id, "processando")]  # fmt: skip
+    assert queue.clear() == 0
+
+
 def test_retry_failed_brings_back_one_attempt_per_piece_of_work(queue: JobQueue) -> None:
     def fail(media: int, video: str, lang: str = "pt-BR") -> int:
         job, _ = queue.submit_step(media, video, "traduzir", lang)

@@ -62,6 +62,13 @@ function useQueueActions() {
         refresh()
       },
     }),
+    clear: useMutation({
+      mutationFn: api.clearQueue,
+      onSuccess: (result) => {
+        report(result)
+        refresh()
+      },
+    }),
   }
 }
 
@@ -296,8 +303,17 @@ function JobPanel({ id, onClose }: { id: number; onClose?: () => void }) {
                 {step.language && <span className="mono muted"> {step.language}</span>}
               </span>
               <span className="text">
-                {step.state === 'failed' ? step.detail : step.state === 'not_found' ? t('queue.nothingFound') : ''}
-                {step.attempts > 1 ? t('queue.tries', { n: step.attempts }) : ''} · {dayTime(step.updated_at)}
+                {step.state === 'failed'
+                  ? step.detail
+                  : step.state === 'not_found'
+                    ? t('queue.nothingFound')
+                    : step.state === 'running'
+                      ? t('queue.redoing')
+                      : step.state === 'queued'
+                        ? t('queue.redoQueued')
+                        : ''}
+                {step.attempts > 1 ? t('queue.tries', { n: step.attempts }) : ''}
+                {step.state !== 'running' && step.state !== 'queued' && ` · ${dayTime(step.updated_at)}`}
               </span>
             </div>
           ))}
@@ -405,6 +421,23 @@ export function Queue() {
     })
     if (sure) actions.cancelQueued.mutate()
   }
+  // limpar vale para o filtro em uso; as que rodam ou esperam nunca saem por aqui
+  const finishedFilter = status === 'done' || status === 'failed' || status === 'cancelled' ? status : null
+  const clearable = finishedFilter
+    ? (counts[finishedFilter] ?? 0)
+    : status === ''
+      ? (counts.done ?? 0) + (counts.failed ?? 0) + (counts.cancelled ?? 0)
+      : 0
+  const clearFinished = async () => {
+    const sure = await confirm({
+      title: t(`queue.clear.title.${finishedFilter ?? 'all'}`, { n: clearable }),
+      body: t('queue.clear.body'),
+      confirm: t('queue.clear.confirm'),
+      danger: true,
+    })
+    if (!sure) return
+    actions.clear.mutate({ q, status }, { onSuccess: () => set({ job: null }) })
+  }
   const line = (job: JobRow, extra?: { lead?: ReactNode; children?: ReactNode }) => (
     <JobLine key={job.id} job={job} selected={job.id === selected} onSelect={() => select(job.id)} lead={extra?.lead}>
       {extra?.children}
@@ -456,6 +489,12 @@ export function Queue() {
         {(counts.queued ?? 0) > 0 && (
           <button type="button" className="btn" disabled={actions.cancelQueued.isPending} onClick={cancelQueued}>
             {t('queue.cancelQueued', { n: counts.queued ?? 0 })}
+          </button>
+        )}
+        {clearable > 0 && (
+          <button type="button" className="btn" disabled={actions.clear.isPending} onClick={clearFinished}>
+            <Icon name="trash" size={14} />
+            {t('queue.clear', { n: clearable })}
           </button>
         )}
       </PageHead>

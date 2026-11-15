@@ -320,7 +320,7 @@ export interface PipelineStep {
   action: string
   label: string
   language: string | null
-  state: "done" | "not_found" | "failed"
+  state: "done" | "not_found" | "failed" | "running" | "queued"
   detail: string | null
   attempts: number
   updated_at: string
@@ -332,6 +332,11 @@ export interface ProviderStatus {
   provider: string
   ok: boolean
   detail: string
+}
+
+export interface QueueClear {
+  q?: string
+  status?: string
 }
 
 export interface QueueRequest {

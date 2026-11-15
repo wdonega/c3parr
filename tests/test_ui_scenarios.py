@@ -624,6 +624,50 @@ def test_alerts_are_seen_when_opened_and_retried_on_request(seeded: Ui) -> None:
     assert not retried.ok and catalog.unseen_alerts() == 1
 
 
+def test_alerts_can_be_dismissed_one_by_one_or_all_at_once(seeded: Ui) -> None:
+    do, catalog = seeded.do, seeded.world.catalog
+    gone = do.dismiss_alert("probe:old")
+    assert gone.ok and gone.message == "1 alert(s) dismissed."
+    assert [a["key"] for a in do.alerts()] == ["traduzir:pt-BR:llm"]
+    assert do.dismiss_alert("probe:old").message == "This alert is already gone."  # já saiu: nada a fazer
+
+    catalog.raise_alert("probe:new", "sondar", "could not read new.mkv", "new.mkv")
+    assert do.dismiss_alerts().message == "2 alert(s) dismissed."
+    assert do.alerts() == [] and do.alerts_badge() == 2  # sobra só o que falta configurar
+    assert do.dismiss_alerts().message == "No alert to dismiss."
+    # a mesma falha de novo: o alerta volta, novo
+    catalog.raise_alert("traduzir:pt-BR:llm", "traduzir", "LLM fora do ar", "pt-BR")
+    assert [(a["key"], a["count"], a["seen"]) for a in do.alerts()] == [
+        ("traduzir:pt-BR:llm", 1, False)]  # fmt: skip
+
+
+def test_clearing_the_queue_follows_the_filter_and_spares_what_runs(seeded: Ui) -> None:
+    do, ids = seeded.do, seeded.world.ids
+    assert do.clear_queue(status="running").message == "No finished task to clear."
+    assert do.clear_queue(status="queued").message == "No finished task to clear."
+    cleared = do.clear_queue(status="failed")
+    assert cleared.ok and cleared.message == "1 task(s) cleared from the list."
+    assert do.job(ids["failed"]) is None and do.job(ids["done"]) is not None
+    assert do.clear_queue(q="roma").ok  # "todas" com busca: só a terminada que casa
+    assert do.job(ids["cancelled"]) is None and do.job(ids["warned"]) is not None
+    assert do.clear_queue().ok  # todas as terminadas
+    assert [j["status"] for j in do.queue()["rows"]] == ["queued", "running"]
+    assert do.clear_queue().message == "No finished task to clear."
+
+
+def test_a_step_being_redone_does_not_show_its_old_error(seeded: Ui) -> None:
+    do, ids = seeded.do, seeded.world.ids
+    failed = ("traduzir", "pt-BR", "failed", "LLM fora do ar")
+    assert do.pipeline(ids["failed"]) == [failed]
+    assert do.retry(ids["failed"]) == 200  # de volta à fila: o erro antigo sai do painel
+    assert do.pipeline(ids["failed"]) == [("traduzir", "pt-BR", "queued", None)]
+    seeded.world.queue.cancel(ids["running"])
+    seeded.world.queue.fail(ids["running"], "cancelled")
+    seeded.world.queue.cancel(ids["queued"])
+    assert seeded.world.queue.take_next() is not None  # agora é ela que roda
+    assert do.pipeline(ids["failed"]) == [("traduzir", "pt-BR", "running", None)]
+
+
 def test_concert_options_are_saved_and_the_folders_are_tidied(fresh: Ui) -> None:
     saved = fresh.do.save_subtitles(
         concert_mode="manual", concert_lyrics=False, concert_publish_original=False,

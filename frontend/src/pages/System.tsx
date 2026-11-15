@@ -80,7 +80,7 @@ function Tasks() {
 
 function Alerts() {
   const client = useQueryClient()
-  const { report } = useFeedback()
+  const { report, confirm } = useFeedback()
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: api.alerts, refetchInterval: LIVE.slow })
   const seen = useRef(false)
   const retry = useMutation({
@@ -90,6 +90,13 @@ function Alerts() {
       for (const key of ['alerts', 'shell', 'queue']) void client.invalidateQueries({ queryKey: [key] })
     },
   })
+
+  const gone = (result: Parameters<typeof report>[0]) => {
+    report(result)
+    for (const key of ['alerts', 'shell']) void client.invalidateQueries({ queryKey: [key] })
+  }
+  const dismiss = useMutation({ mutationFn: api.dismissAlert, onSuccess: gone })
+  const dismissAll = useMutation({ mutationFn: api.dismissAlerts, onSuccess: gone })
 
   // abrir a tela é ver: depois de mostrar o que era novo, o contador do menu zera
   useEffect(() => {
@@ -104,6 +111,16 @@ function Alerts() {
     alert.items.length > 3
       ? t('system.andMore', { items: alert.items.slice(0, 3).join(', '), n: alert.items.length - 3 })
       : alert.items.join(', ')
+
+  const askDismissAll = async () => {
+    const sure = await confirm({
+      title: t('system.dismissAll.title', { n: rows.length }),
+      body: t('system.dismissAll.body'),
+      confirm: t('system.dismissAll'),
+      danger: true,
+    })
+    if (sure) dismissAll.mutate()
+  }
 
   return (
     <>
@@ -136,10 +153,16 @@ function Alerts() {
           </Empty>
         ) : (
           <div className="rows">
-            {rows.map((alert, index) => {
+            <div className="row" style={{ justifyContent: 'flex-end', borderTop: 0 }}>
+              <button type="button" className="btn small" disabled={dismissAll.isPending} onClick={askDismissAll}>
+                <Icon name="close" size={13} />
+                {t('system.dismissAll')}
+              </button>
+            </div>
+            {rows.map((alert) => {
               const resolved = alert.resolved_at !== null
               return (
-                <div key={alert.key} className="row" style={{ alignItems: 'flex-start', borderTop: index ? undefined : 0, opacity: resolved ? 0.6 : 1 }}>
+                <div key={alert.key} className="row" style={{ alignItems: 'flex-start', opacity: resolved ? 0.6 : 1 }}>
                   <Icon name={resolved ? 'check' : 'alert'} size={18} className={resolved ? 'ok' : 'bad'} />
                   <div className="grow">
                     <div>
@@ -159,6 +182,10 @@ function Alerts() {
                       {t('system.retryNow')}
                     </button>
                   )}
+                  <button type="button" className="btn small" disabled={dismiss.isPending} onClick={() => dismiss.mutate(alert.key)}>
+                    <Icon name="close" size={13} />
+                    {t('system.dismiss')}
+                  </button>
                 </div>
               )
             })}
