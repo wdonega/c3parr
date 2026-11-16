@@ -374,3 +374,6 @@ def test_a_suite_in_one_track_is_split_into_its_parts() -> None:
     assert parts("Um / Dois / Três (ao vivo)") == ["Um", "Dois", "Três"]
     assert parts("Título: com dois pontos / Outra") == ["Título: com dois pontos", "Outra"]
     assert parts("Uma Música Só") == [] and parts("Civil. Guerra") == []
+    # álbum conceitual: a faixa traz ato e cena; a música é o que vem por último
+    assert parts("Ato II: Cena Seis: I. Casa") == ["Casa"]
+    assert parts("Livro, Parte I: O Farol (ao vivo)") == ["O Farol"]

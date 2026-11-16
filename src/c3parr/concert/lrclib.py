@@ -61,7 +61,7 @@ class LrclibConfig(BaseModel):
 INFO = ProviderInfo(
     id="lrclib",
     interface=lyrics.INTERFACE,
-    version="1",
+    version="2",
     config_schema=LrclibConfig,
     requirements=Requirements(network=True, sends_data_off_machine=True),
     description="MusicBrainz (artist and discography) + LRCLIB (lyrics)",

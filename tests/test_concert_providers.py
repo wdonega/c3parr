@@ -88,14 +88,15 @@ def test_the_engines_that_can_hear_a_concert_say_so() -> None:
 
 # --- as letras: MusicBrainz e LRCLIB de mentira ---
 
-ALFA, BETA, VOZES = song("Alfa", 1), song("Beta", 2), song("Vozes", 3)
+ALFA, BETA, VOZES, CASA = song("Alfa", 1), song("Beta", 2), song("Vozes", 3), song("Casa", 4)
 ALBUMS = {
     "id-Banda Teste": [("g1", "Primeiro", "1999", [], ["Alfa", "Beta"]),
                        ("g2", "Ao Vivo", "2000", ["Live"], ["Alfa"]),
                        ("g3", "Depois do Show", "2005", [], ["Gama"]),
-                       ("g4", "Suíte", "2000", [], ["Mente: I. Solo / II. Vozes / III. Beta"])],
+                       ("g4", "Suíte", "2000", [], ["Mente: I. Solo / II. Vozes / III. Beta"]),
+                       ("g5", "Conceito", "2000", [], ["Ato II: Cena Seis: I. Casa"])],
 }  # fmt: skip
-LYRICS = {"alfa": ALFA, "beta": BETA, "vozes": VOZES}
+LYRICS = {"alfa": ALFA, "beta": BETA, "vozes": VOZES, "casa": CASA}
 
 
 class World:
@@ -159,8 +160,20 @@ def test_a_suite_in_one_track_gets_the_lyrics_of_the_parts_nobody_else_has() -> 
     assert titles == [
         "Alfa",
         "Beta",
+        "Casa",
         "Vozes",
-    ]  # "Beta" já tinha letra: não entra de novo; "Solo" não tem
+    ]  # "Beta" já tinha letra: não entra de novo; "Solo" não tem; "Casa" vem de outro álbum
+
+
+def test_a_track_named_by_act_and_scene_gets_the_lyrics_under_the_name_of_the_song() -> None:
+    """A lista de faixas diz "Ato II: Cena Seis: I. Casa"; a fonte de letras só conhece "Casa"."""
+    world = World()
+    got = catalogue(world, titles=("Banda Teste - Show",), year=2001)
+    by_title = {s.title: s for s in got.songs}
+    assert by_title["Ato II: Cena Seis: I. Casa"].lines == ()  # pelo título inteiro, nada
+    assert by_title["Casa"].lines == CASA.lines and by_title["Casa"].album == "Conceito"
+    asked = [p["track_name"] for url, p in world.asked if "track_name" in p]
+    assert asked.index("Ato II: Cena Seis: I. Casa") < asked.index("Casa")
 
 
 def test_two_artists_in_the_title_and_an_artist_given_by_hand() -> None:

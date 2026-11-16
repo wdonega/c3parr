@@ -61,10 +61,14 @@ def parse_synced(text: str) -> tuple[tuple[float, str], ...]:
 
 
 def parts(title: str) -> list[str]:
-    """As partes de uma faixa composta: "Suíte: I. Um / II. Dois" → ["Um", "Dois"]."""
+    """As partes de uma faixa composta: "Suíte: I. Um / II. Dois" → ["Um", "Dois"]. E o nome da
+    música numa faixa de álbum conceitual: "Ato II: Cena Seis: I. Casa" → ["Casa"] (a fonte de
+    letras a tem só pelo nome)."""
     text = re.sub(r"\s*\([^)]*\)\s*$", "", title)  # "(versão tal)" no fim
     if " / " not in text:
-        return []
+        head, colon, name = text.rpartition(": ")
+        name = NUMBER.sub("", name).strip()
+        return [name] if colon and head and name else []
     pieces = text.split(" / ")
     _, colon, rest = pieces[0].partition(": ")
     if colon and NUMBER.match(rest):
