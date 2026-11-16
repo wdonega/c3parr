@@ -629,7 +629,9 @@ def test_alerts_can_be_dismissed_one_by_one_or_all_at_once(seeded: Ui) -> None:
     gone = do.dismiss_alert("probe:old")
     assert gone.ok and gone.message == "1 alert(s) dismissed."
     assert [a["key"] for a in do.alerts()] == ["traduzir:pt-BR:llm"]
-    assert do.dismiss_alert("probe:old").message == "This alert is already gone."  # já saiu: nada a fazer
+    assert (
+        do.dismiss_alert("probe:old").message == "This alert is already gone."
+    )  # já saiu: nada a fazer
 
     catalog.raise_alert("probe:new", "sondar", "could not read new.mkv", "new.mkv")
     assert do.dismiss_alerts().message == "2 alert(s) dismissed."
