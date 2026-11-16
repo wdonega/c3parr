@@ -181,6 +181,14 @@ export const ptBR: Catalog = {
   'library.make': 'Fazer {langs}',
   'library.addMissing': { one: 'Adicionar {n} que falta', other: 'Adicionar {n} que faltam' },
   'library.added': 'adicionado {when}',
+  'library.redo': 'Começar do zero',
+  'library.redo.confirm': 'Apagar e começar do zero',
+  'library.redo.title': {
+    one: 'Apagar o que o c3parr fez para {n} item e começar do zero?',
+    other: 'Apagar o que o c3parr fez para {n} itens e começar do zero?',
+  },
+  'library.redo.body':
+    'Tudo o que o c3parr gerou para eles é apagado: as legendas dele (até uma que você editou à mão), os arquivos de trabalho e o registro de cada etapa. Depois cada item passa pela pipeline inteira de novo, como se o arquivo tivesse acabado de chegar. Legendas de outras fontes ficam. Itens na fila ou rodando ficam como estão.',
   'library.doneOf': '{done} de {total}',
 
   // --- uma série ---
@@ -677,6 +685,12 @@ export const ptBR: Catalog = {
     other: '{n} itens não puderam ser lidos (veja Sistema → Alertas).',
   },
   'msg.library.covered': 'Nada a fazer: todos os idiomas alvo estão cobertos.',
+  'msg.library.redo_queued': {
+    one: '{n} item começando do zero (etapas na fila: {steps}).',
+    other: '{n} itens começando do zero (etapas na fila: {steps}).',
+  },
+  'msg.library.redo_busy': 'Nada recomeçado: os itens já estão na fila ou rodando.',
+  'msg.library.redo_nothing': 'Tudo o que era nosso foi apagado; não há nada a fazer para esses itens.',
   'msg.library.queued': {
     one: '{n} item na fila (etapas novas: {steps}).',
     other: '{n} itens na fila (etapas novas: {steps}).',

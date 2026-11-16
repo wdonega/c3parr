@@ -15,7 +15,7 @@ from c3parr.library.store import Library
 from c3parr.pipeline.actions import run_step
 from c3parr.pipeline.catalog import Catalog
 from c3parr.pipeline.naming import output_file, work_file
-from c3parr.pipeline.reconcile import PipelineContext, reconcile, reconcile_all
+from c3parr.pipeline.reconcile import PipelineContext, reconcile, reconcile_all, start_over
 from c3parr.providers.registry import build_factories
 from c3parr.subtitle.format import FormatRules
 
@@ -97,6 +97,31 @@ def test_embedded_english_is_extracted_and_translated_without_asr(
     media = env.catalog.media_by_video(str(video))
     assert media is not None and media.main_source == "embedded"
     assert reconcile(env.ctx, str(video), "manual") is not None and env.drain() == []
+
+
+def test_an_item_can_start_over_as_if_the_file_had_just_arrived(
+    tmp_path: Path, embedded_mkv: Path
+) -> None:
+    env = Env(tmp_path)
+    video = place(embedded_mkv, tmp_path / "tv" / "Show" / "Season 1" / "Show S01E01.mkv")
+    human = video.with_name("Show S01E01.es.srt")
+    human.write_text(SRT_EN, encoding="utf-8")
+    reconcile(env.ctx, str(video), "manual")
+    first = [j.acao for j in env.drain()]
+    out = output_file(video, "pt-BR")
+    out.write_text("edited by hand", encoding="utf-8")
+    assert reconcile(env.ctx, str(video), "manual") is not None and env.drain() == []  # coberto
+
+    media = env.catalog.media_by_video(str(video))
+    assert media is not None
+    start_over(env.catalog, video, media.id)
+    assert not out.exists() and not work_file(video, "embedded", "en").exists()
+    assert human.exists()  # o que veio de outra fonte fica
+    assert env.catalog.steps(media.id) == {} and env.catalog.outputs(media.id) == {}
+
+    reconcile(env.ctx, str(video), "manual")
+    assert [j.acao for j in env.drain()] == first  # todos os passos, do primeiro
+    assert "[pt-BR] Hello there." in out.read_text(encoding="utf-8")
 
 
 def test_no_subtitle_goes_through_asr_generate_and_translate(

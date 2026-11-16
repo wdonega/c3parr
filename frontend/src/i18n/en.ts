@@ -181,6 +181,14 @@ export const en = {
   'library.make': 'Make {langs}',
   'library.addMissing': { one: 'Add {n} missing', other: 'Add {n} missing' },
   'library.added': 'added {when}',
+  'library.redo': 'Start over',
+  'library.redo.confirm': 'Erase and start over',
+  'library.redo.title': {
+    one: 'Erase what c3parr made for {n} item and start over?',
+    other: 'Erase what c3parr made for {n} items and start over?',
+  },
+  'library.redo.body':
+    'Everything c3parr generated for them is erased: its subtitles (even one you edited by hand), the work files and the record of every step. Each item then goes through the whole pipeline again, as if the file had just arrived. Subtitles from other sources stay. Items in the queue or running are left as they are.',
   'library.doneOf': '{done} of {total}',
 
   // --- uma série ---
@@ -676,6 +684,12 @@ export const en = {
     other: '{n} items could not be read (see System → Alerts).',
   },
   'msg.library.covered': 'Nothing to do: every target language is covered.',
+  'msg.library.redo_queued': {
+    one: '{n} item starting over (steps in the queue: {steps}).',
+    other: '{n} items starting over (steps in the queue: {steps}).',
+  },
+  'msg.library.redo_busy': 'Nothing started over: the items are already in the queue or running.',
+  'msg.library.redo_nothing': 'Everything of ours was erased; there is nothing to make for these items.',
   'msg.library.queued': {
     one: '{n} item in the queue (new steps: {steps}).',
     other: '{n} items in the queue (new steps: {steps}).',

@@ -434,6 +434,9 @@ class ApiDriver:
     def add_to_queue(self, *keys: str) -> Result:
         return self._result(self.client.post("/api/v1/library/queue", json={"items": list(keys)}))
 
+    def redo(self, *keys: str) -> Result:
+        return self._result(self.client.post("/api/v1/library/redo", json={"items": list(keys)}))
+
     def toggle_monitor(self, kind: str, item_id: int) -> bool | None:
         response = self.client.post(f"/api/v1/library/{kind}/{item_id}/monitor")
         if response.status_code == 404:

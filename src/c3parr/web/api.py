@@ -231,6 +231,11 @@ def build_api(svc: Service) -> APIRouter:
     def add_to_queue(body: s.QueueRequest) -> JSONResponse:
         return result(svc.add_to_queue(body.items))
 
+    @api.post("/library/redo", response_model=s.ActionResult)
+    def redo(body: s.QueueRequest) -> JSONResponse:
+        """Apaga o que o c3parr fez para os itens e começa cada um do zero."""
+        return result(svc.redo(body.items))
+
     @api.post("/library/queue-concerts", response_model=s.ActionResult)
     def queue_concerts() -> JSONResponse:
         """Põe na fila, com prioridade, todo show da biblioteca."""

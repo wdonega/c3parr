@@ -44,7 +44,7 @@ from c3parr.metadata import tmdb as tmdb_meta
 from c3parr.metadata.tmdb import TMDbConfig
 from c3parr.pipeline.catalog import Catalog
 from c3parr.pipeline.naming import norm_lang, same_base, same_lang
-from c3parr.pipeline.reconcile import PipelineContext, is_concert, reconcile
+from c3parr.pipeline.reconcile import PipelineContext, is_concert, reconcile, start_over
 from c3parr.processor import client as processor_client
 from c3parr.processor.client import ProcessorRef
 from c3parr.providers.factory import AbstractComponentFactoryFactory
@@ -223,6 +223,9 @@ MESSAGES = {
     "library.unreadable": "{n} item(s) could not be read (see System → Alerts).",
     "library.covered": "Nothing to do: every target language is covered.",
     "library.queued": "{n} item(s) in the queue ({steps} new step(s)).",
+    "library.redo_queued": "{n} item(s) starting over ({steps} step(s) in the queue).",
+    "library.redo_busy": "Nothing started over: the item(s) are already in the queue or running.",
+    "library.redo_nothing": "Everything of ours was erased; nothing to make for the item(s).",
     "concerts.off": "Concert subtitles are off: turn them on and save first.",
     "concerts.none": "No concert found in the library.",
     "concerts.covered": "Nothing to do: the {n} concert(s) found already have their subtitles.",
@@ -983,6 +986,28 @@ class Service:
         if not items:
             return say("library.covered")
         return say("library.queued", n=items, steps=steps)
+
+    def redo(self, keys: list[str]) -> Outcome:
+        """Começa os itens do zero (`start_over`): apaga o que o c3parr fez para cada um e decide
+        de novo, como se o arquivo tivesse acabado de chegar. Serve quando uma versão nova faz
+        melhor, ou quando a tarefa já saiu da fila e não há onde clicar em rodar de novo. Um
+        item com tarefa na fila ou rodando fica como está."""
+        if not keys:
+            return say("library.select_one", error=True)
+        videos = [v for key in keys for v in self._videos_for(key)]
+        free = [v for v in videos if not self.jobs.active_steps_for(v)]
+        if not free:
+            return say("library.redo_busy", error=True)
+        for video in free:
+            media = self.catalog.media_by_video(video)
+            if media is not None:
+                start_over(self.catalog, Path(video), media.id)
+        steps, items, failed = self._process(free)
+        if failed:
+            return say("library.unreadable", error=True, n=failed)
+        if not items:
+            return say("library.redo_nothing")
+        return say("library.redo_queued", n=items, steps=steps)
 
     def queue_concerts(self) -> Outcome:
         """Pedido manual para todo show da biblioteca (os das pastas de show ou, sem elas, os que

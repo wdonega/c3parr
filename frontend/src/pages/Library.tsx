@@ -47,7 +47,7 @@ export function refreshLibrary(client: QueryClient) {
 /** Pedir legendas para itens e marcar/desmarcar monitorado. */
 export function useLibraryActions() {
   const client = useQueryClient()
-  const { report, toast } = useFeedback()
+  const { report, toast, confirm } = useFeedback()
   const add = useMutation({
     mutationFn: (items: string[]) => api.addToQueue(items),
     onSuccess: (result) => {
@@ -56,6 +56,24 @@ export function useLibraryActions() {
     },
     onError: (error) => toast(error.message, true),
   })
+  const redo = useMutation({
+    mutationFn: (items: string[]) => api.startOver(items),
+    onSuccess: (result) => {
+      report(result)
+      refreshLibrary(client)
+    },
+    onError: (error) => toast(error.message, true),
+  })
+  /** Pede a confirmação e começa do zero os itens escolhidos. */
+  const startOver = async (keys: string[], after?: () => void) => {
+    const sure = await confirm({
+      title: t('library.redo.title', { n: keys.length }),
+      body: t('library.redo.body'),
+      confirm: t('library.redo.confirm'),
+      danger: true,
+    })
+    if (sure) redo.mutate(keys, { onSuccess: after })
+  }
   const monitor = useMutation({
     mutationFn: (v: { kind: ItemKind; id: number; monitored: boolean }) =>
       api.monitor(v.kind, v.id, v.monitored),
@@ -67,7 +85,7 @@ export function useLibraryActions() {
     onSuccess: (result) => report(result),
     onError: (error) => toast(error.message, true),
   })
-  return { add, monitor, sync }
+  return { add, monitor, sync, redo, startOver }
 }
 
 function useView(): [View, (view: View) => void] {
@@ -129,7 +147,7 @@ function ListPage(props: Common) {
   const [view, setView] = useView()
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const { add, sync } = useLibraryActions()
+  const { add, sync, redo, startOver } = useLibraryActions()
   const counts = props.counts ?? {}
   const filters: ChipOption<Filter>[] = [
     { value: '', label: t('common.all'), count: counts.all },
@@ -250,6 +268,14 @@ function ListPage(props: Common) {
             onClick={() => add.mutate([...picked], { onSuccess: stopSelecting })}
           >
             {t('common.addToQueue')}
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={!picked.size || redo.isPending}
+            onClick={() => void startOver([...picked], stopSelecting)}
+          >
+            {t('library.redo')}
           </button>
         </div>
       )}

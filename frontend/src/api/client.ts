@@ -82,6 +82,7 @@ export const api = {
   monitor: (kind: ItemKind, id: number, monitored: boolean) =>
     send<Monitored>('POST', `/library/${kind}/${id}/monitor`, { monitored }),
   addToQueue: (items: string[]) => send<ActionResult>('POST', '/library/queue', { items }),
+  startOver: (items: string[]) => send<ActionResult>('POST', '/library/redo', { items }),
 
   queue: (params: QueueParams) => get<JobPage>('/queue', params),
   upcoming: (limit: number) => get<JobRow[]>('/queue/upcoming', { limit }),

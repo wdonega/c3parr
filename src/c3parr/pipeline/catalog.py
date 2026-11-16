@@ -206,6 +206,18 @@ class Catalog:
                     )
         return self.media(media_id), changed
 
+    def reset_media(self, media_id: int) -> None:
+        """O item volta a ser um vídeo que acabou de chegar: sem passos, sem legendas nossas,
+        sem principal e sem sondagem. É o que `ensure_media` faz quando o arquivo muda."""
+        with self._lock, self._db() as db:
+            db.execute("DELETE FROM step WHERE media_id = ?", (media_id,))
+            db.execute("DELETE FROM output WHERE media_id = ?", (media_id,))
+            db.execute(
+                "UPDATE media SET probe_json = NULL, main_path = NULL, main_lang = NULL, "
+                "main_source = NULL, updated_at = ? WHERE id = ?",
+                (now(), media_id),
+            )
+
     def remove_media(self, video: str) -> None:
         with self._lock, self._db() as db:
             db.execute("DELETE FROM media WHERE video = ?", (video,))

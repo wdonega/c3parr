@@ -141,7 +141,7 @@ function SeasonBlock({
 export function Show() {
   useLocale()
   const id = Number(useParams().id)
-  const { add, monitor, sync } = useLibraryActions()
+  const { add, monitor, sync, redo, startOver } = useLibraryActions()
   const show = useQuery({
     queryKey: ['show', id],
     queryFn: () => api.show(id),
@@ -279,6 +279,14 @@ export function Show() {
             onClick={() => add.mutate([...picked], { onSuccess: () => setPicked(new Set()) })}
           >
             {t('common.addToQueue')}
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={redo.isPending}
+            onClick={() => void startOver([...picked], () => setPicked(new Set()))}
+          >
+            {t('library.redo')}
           </button>
         </div>
       )}

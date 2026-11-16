@@ -181,6 +181,14 @@ export const esMX: Catalog = {
   'library.make': 'Hacer {langs}',
   'library.addMissing': { one: 'Agregar {n} que falta', other: 'Agregar {n} que faltan' },
   'library.added': 'agregado {when}',
+  'library.redo': 'Empezar de cero',
+  'library.redo.confirm': 'Borrar y empezar de cero',
+  'library.redo.title': {
+    one: '¿Borrar lo que c3parr hizo para {n} elemento y empezar de cero?',
+    other: '¿Borrar lo que c3parr hizo para {n} elementos y empezar de cero?',
+  },
+  'library.redo.body':
+    'Se borra todo lo que c3parr generó para ellos: sus subtítulos (incluso uno que editaste a mano), los archivos de trabajo y el registro de cada paso. Después cada elemento pasa de nuevo por todo el proceso, como si el archivo acabara de llegar. Los subtítulos de otras fuentes se quedan. Los elementos en la cola o en ejecución quedan como están.',
   'library.doneOf': '{done} de {total}',
 
   // --- uma série ---
@@ -677,6 +685,12 @@ export const esMX: Catalog = {
     other: '{n} elementos no se pudieron leer (ve a Sistema → Alertas).',
   },
   'msg.library.covered': 'Nada que hacer: todos los idiomas de destino están cubiertos.',
+  'msg.library.redo_queued': {
+    one: '{n} elemento empezando de cero (pasos en la cola: {steps}).',
+    other: '{n} elementos empezando de cero (pasos en la cola: {steps}).',
+  },
+  'msg.library.redo_busy': 'Nada reiniciado: los elementos ya están en la cola o en ejecución.',
+  'msg.library.redo_nothing': 'Se borró todo lo nuestro; no hay nada que hacer para estos elementos.',
   'msg.library.queued': {
     one: '{n} elemento en la cola (pasos nuevos: {steps}).',
     other: '{n} elementos en la cola (pasos nuevos: {steps}).',

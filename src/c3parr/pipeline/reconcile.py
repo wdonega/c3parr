@@ -191,6 +191,22 @@ def _forget_old_work(cat: Catalog, video: Path, media_id: int) -> None:
         cat.forget_output(media_id, rec.lang)
 
 
+def start_over(cat: Catalog, video: Path, media_id: int) -> None:
+    """Apaga tudo o que o c3parr fez para o vídeo e o deixa como um arquivo que acabou de
+    chegar: os arquivos de trabalho, as legendas nossas (até a que alguém editou à mão: foi
+    pedido) e todo o registro de passos. Legendas de outra fonte ficam.
+
+    O cache do motor não entra: ele vale pelo conteúdo do áudio, e um arquivo novo com o mesmo
+    conteúdo também o aproveitaria (transcrição, voz separada)."""
+    for rec in cat.outputs(media_id).values():
+        Path(rec.path).unlink(missing_ok=True)
+    if video.parent.is_dir():
+        for f in video.parent.iterdir():
+            if f.name.startswith(video.stem + ".") and f.name.endswith(WORK_EXT):
+                f.unlink(missing_ok=True)
+    cat.reset_media(media_id)
+
+
 def reconcile(ctx: PipelineContext, video: str, origem: str = "rotina",
               retry_failed: bool = False, force: bool = False) -> Decision | None:  # fmt: skip
     """Decide e enfileira os próximos passos de um vídeo. A rotina respeita monitorado e espera;

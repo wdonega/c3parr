@@ -809,3 +809,21 @@ def test_with_the_processor_set_the_heavy_engines_run_there(tmp_path: Path) -> N
     assert other["separacao"].params["processor"] == where
     none = components_for(settings, AppConfig())
     assert "processor" not in none["separacao"].params
+
+
+def test_starting_an_item_over_asks_the_pipeline_and_leaves_running_items_alone(
+    fresh: Ui, tiny_video: Path
+) -> None:
+    root, lib, queue, do = fresh.world.root, fresh.world.library, fresh.world.queue, fresh.do
+    movie = root / "movies" / "Incendies (2010)" / "Incendies.mkv"
+    movie.parent.mkdir(parents=True)
+    shutil.copy(tiny_video, movie)
+    lib.upsert_movie(str(movie.parent), str(movie), "Incendies", 2010, None, True)
+    key = f"movie:{next(m.id for m in lib.movies())}"
+
+    assert not do.redo().ok  # nada escolhido
+    assert do.redo("movie:999").status == 404
+    done = do.redo(key)
+    assert done.ok and "starting over" in done.message and queue.pending_count() == 1
+    busy = do.redo(key)  # já está na fila: fica como está
+    assert not busy.ok and "already in the queue" in busy.message and queue.pending_count() == 1
