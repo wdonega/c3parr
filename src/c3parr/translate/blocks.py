@@ -16,6 +16,19 @@ class BlockRules(Model):
     max_chars: int = 84
 
 
+class SongSpan(Model):
+    """Uma música do show e de onde até onde ela é cantada (segundos)."""
+
+    title: str
+    artist: str = ""
+    start: float
+    end: float
+
+    @property
+    def label(self) -> str:
+        return f"{self.title}, de {self.artist}" if self.artist else self.title
+
+
 def _speaker_gender(seg: Segment, bible: Bible) -> Gender:
     if seg.speaker:
         link = bible.falantes.get(seg.speaker)
@@ -40,8 +53,13 @@ def build_blocks(
     bible: Bible,
     refs: Mapping[int, str] | None = None,
     rules: BlockRules | None = None,
+    songs: Sequence[SongSpan] = (),
 ) -> list[Block]:
-    """`refs`: texto da referência sincronizada por id de segmento, quando houver."""
+    """`refs`: texto da referência sincronizada por id de segmento, quando houver.
+
+    `songs` (legenda de show): cada música é um contexto só. As falas dentro dela ficam juntas,
+    sem cortar nas pausas (um solo não é outra cena), para o verso quebrado em duas linhas e o
+    refrão repetido saírem com o mesmo sentido; música longa vai em partes de `max_lines`."""
     rules = rules or BlockRules()
     refs = refs or {}
     lines = [
@@ -61,27 +79,47 @@ def build_blocks(
         for seg in segments
     ]
 
+    def song_of(line: BlockLine) -> int | None:
+        return next((n for n, s in enumerate(songs) if s.start <= line.start <= s.end), None)
+
     blocks: list[Block] = []
     current: list[BlockLine] = []
     pause_before: float | None = None
+    owner: int | None = None  # a música das falas em `current`
+    part = 0
+
+    def close() -> None:
+        block = _block(len(blocks), current, blocks, pause_before, rules)
+        if owner is not None:
+            block = block.model_copy(update={"song": songs[owner].label, "song_part": part})
+        blocks.append(block)
+
     for line in lines:
+        mine = song_of(line)
         if current:
             pause = line.start - current[-1].end
-            last_two = {ln.speaker for ln in current[-2:]}
-            speakers_changed = (
-                line.speaker is not None
-                and None not in last_two
-                and len(current) >= 2
-                and line.speaker not in last_two
-                and pause > rules.scene_pause / 2
-            )
-            if pause > rules.scene_pause or speakers_changed or len(current) >= rules.max_lines:
-                blocks.append(_block(len(blocks), current, blocks, pause_before, rules))
+            full = len(current) >= rules.max_lines
+            if mine is not None or owner is not None:
+                cut = mine != owner or full  # a música inteira junta: a pausa é só um solo
+            else:
+                last_two = {ln.speaker for ln in current[-2:]}
+                speakers_changed = (
+                    line.speaker is not None
+                    and None not in last_two
+                    and len(current) >= 2
+                    and line.speaker not in last_two
+                    and pause > rules.scene_pause / 2
+                )
+                cut = pause > rules.scene_pause or speakers_changed or full
+            if cut:
+                close()
+                part = part + 1 if mine == owner and owner is not None else 0
                 pause_before = pause
                 current = []
+        owner = mine
         current.append(line)
     if current:
-        blocks.append(_block(len(blocks), current, blocks, pause_before, rules))
+        close()
     return _with_addressees(blocks)
 
 

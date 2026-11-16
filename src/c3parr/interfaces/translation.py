@@ -38,6 +38,10 @@ class Block(Model):
     previous: tuple[BlockLine, ...] = ()
     """Últimas falas do bloco anterior: outra cena, sem continuidade."""
     pause_before: float | None = None
+    song: str | None = None
+    """Num show: a música deste bloco ("Título, de Artista"). As falas com ♪ são versos dela."""
+    song_part: int = 0
+    """0 = a música inteira ou a primeira parte; 1, 2… = a continuação (o contexto é da mesma)."""
 
 
 class Mention(Model):

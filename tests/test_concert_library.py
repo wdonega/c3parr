@@ -10,12 +10,13 @@ from test_pipeline import Env, place
 
 from c3parr.concert import detect
 from c3parr.core.bible import Bible, Title
-from c3parr.core.job import ComponentSpec
+from c3parr.core.job import ComponentSpec, JobParams
 from c3parr.interfaces.metadata import MetadataResult
 from c3parr.library.store import AppConfig
 from c3parr.pipeline.decide import Decision, ItemState, MainSub, OurOutput, decide
 from c3parr.pipeline.naming import output_file, work_file
 from c3parr.pipeline.reconcile import concert_state, reconcile
+from c3parr.recipes.full import _translate_key, concert_songs
 
 # --- é um show? ---
 
@@ -245,6 +246,13 @@ def test_a_video_in_the_concert_folder_gets_lyrics_a_translation_and_the_origina
     assert media is not None and (media.main_lang, media.main_source) == ("fr", "show")
     detail = env.catalog.steps(media.id)[("show", "")].detail or ""
     assert detail.startswith("1 songs, 8 lyric lines, 2 heard only")
+    # as músicas ficam ao lado da principal, para a tradução ler cada uma como um contexto
+    params = JobParams(recipe="legenda", video=str(video), src="fr", dst="pt-BR", ref=str(main))
+    (found,) = concert_songs(params)
+    assert (found.title, found.artist) == (ALFA.title, ALFA.artist) and found.start < found.end
+    assert "songs" in _translate_key(params)
+    main.write_text(main.read_text(encoding="utf-8") + "\n", encoding="utf-8")  # outra principal
+    assert concert_songs(params) == () and "songs" not in _translate_key(params)
 
 
 def test_turning_concerts_on_redoes_the_concerts_that_were_already_in_the_library(

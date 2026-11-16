@@ -470,8 +470,8 @@ def _report(song: Played) -> SongReport:
     return SongReport(
         title=song.title,
         artist=song.artist,
-        start=round(song.first, 1),
-        end=round(song.last, 1),
+        start=round(min(a for a, _ in _sung(song)), 1),
+        end=round(max(b for _, b in _sung(song)), 1),
         lines=len(song.lines),
         accepted=sum(proofs.values()),
         proofs=proofs,

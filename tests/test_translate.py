@@ -7,7 +7,7 @@ from c3parr.core.errors import InvalidInput
 from c3parr.core.models import Segment
 from c3parr.interfaces.translation import TranslationRequest
 from c3parr.llm.client import ChatUsage, OpenAICompatibleClient
-from c3parr.translate.blocks import build_blocks
+from c3parr.translate.blocks import BlockRules, SongSpan, build_blocks
 from c3parr.translate.llm_context import LLMContextConfig, merge
 from c3parr.translate.llm_translator import LLMTranslator, LLMTranslatorConfig, format_block
 
@@ -46,9 +46,11 @@ class FakeClient:
     def __init__(self, replies: list[Any]) -> None:
         self.replies = replies
         self.calls = 0
+        self.asked: list[tuple[str, str]] = []  # (sistema, pedido) de cada chamada
 
     def chat_json(self, system: str, user: str, schema: dict[str, Any], name: str = "") -> Any:
         self.calls += 1
+        self.asked.append((system, user))
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -126,6 +128,66 @@ def test_too_long_translation_is_condensed_by_the_llm() -> None:
     assert client.calls == 2
     assert result.lines[0].texto == "Não."
     assert result.usage.calls == 2
+
+
+# --- show: cada música é um contexto (letra inventada) ---
+
+SHOW = [
+    seg(0, 1.0, 3.0, "Good evening everybody"),
+    seg(1, 60.0, 63.0, "♪ Amber river cold lantern ♪"),
+    seg(2, 64.0, 67.0, "♪ Window paper harbor silver ♪"),
+    seg(3, 120.0, 123.0, "Sing it with me"),  # o cantor fala no meio da música, depois do solo
+    seg(4, 124.0, 127.0, "♪ Engine morning quiet thunder ♪"),
+    seg(5, 200.0, 203.0, "Thank you so much"),
+    seg(6, 260.0, 263.0, "♪ Garden shadow copper winter ♪"),
+]
+SONGS = (SongSpan(title="Alfa", artist="Banda Teste", start=55.0, end=130.0),
+         SongSpan(title="Beta", start=255.0, end=300.0))  # fmt: skip
+
+
+def test_each_song_of_a_concert_is_one_block_whatever_the_pauses() -> None:
+    blocks = build_blocks(SHOW, Bible(), songs=SONGS)
+    assert [[ln.id for ln in b.lines] for b in blocks] == [[0], [1, 2, 3, 4], [5], [6]]
+    assert [b.song for b in blocks] == [None, "Alfa, de Banda Teste", None, "Beta"]
+    shown = format_block(blocks[1], "fr")
+    assert "[MÚSICA: Alfa, de Banda Teste]" in shown  # o solo de 53 s não corta a música
+    # sem as músicas (filme, série), nada muda: a pausa de 53 s corta a cena
+    assert [[ln.id for ln in b.lines] for b in build_blocks(SHOW, Bible())][1] == [1, 2]
+
+
+def test_a_long_song_goes_in_parts_that_know_they_are_the_same_song() -> None:
+    blocks = build_blocks(SHOW, Bible(), rules=BlockRules(max_lines=2), songs=SONGS)
+    alfa = [b for b in blocks if b.song and b.song.startswith("Alfa")]
+    assert [(tuple(ln.id for ln in b.lines), b.song_part) for b in alfa] == [
+        ((1, 2), 0),
+        ((3, 4), 1),
+    ]
+    second = format_block(alfa[1], "fr")
+    assert "[MÚSICA: Alfa, de Banda Teste (parte 2)]" in second
+    assert "versos anteriores da mesma música" in second and "outra cena" not in second
+    assert blocks[-1].song == "Beta" and blocks[-1].song_part == 0  # outra música: recomeça
+
+
+def test_in_a_concert_the_lyrics_are_translated_and_none_of_them_vanishes() -> None:
+    blocks = build_blocks(SHOW[:3], Bible(), songs=SONGS)
+    tr, client = translator([
+        {"falas": [line(0, "Boa noite a todos")]},
+        {"falas": [line(1, "Rio âmbar, lanterna fria"), line(2, "")]},  # o modelo calou um verso
+    ])  # fmt: skip
+    got = tr.translate(blocks, Bible(), REQ, lambda *_: None)
+    assert [ln.texto for ln in got.lines] == [
+        "Boa noite a todos", "♪ Rio âmbar, lanterna fria ♪", "♪ Window paper harbor silver ♪"]  # fmt: skip
+    assert got.lines[2].fallback and not got.lines[1].fallback
+    system = client.asked[0][0]
+    assert "Este vídeo é um show" in system and "Música, avisos e créditos" not in system
+
+
+def test_a_film_keeps_the_rule_that_background_music_is_not_speech() -> None:
+    tr, client = translator([{"falas": [line(0, "Bonsoir"), line(1, "")]}])
+    blocks = build_blocks([seg(0, 1.0, 2.0, "Bonsoir"), seg(1, 2.5, 4.0, "♪ la la la ♪")], Bible())
+    got = tr.translate(blocks, Bible(), REQ, lambda *_: None)
+    assert got.lines[1].texto == ""  # filme: música de fundo continua sem legenda
+    assert "Música, avisos e créditos" in client.asked[0][0]
 
 
 def test_bible_merge_keeps_known_data() -> None:

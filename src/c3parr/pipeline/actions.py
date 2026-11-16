@@ -7,6 +7,7 @@ reconciliado para enfileirar o próximo passo com a mesma prioridade.
 """
 
 import errno
+import json
 import logging
 import os
 import shutil
@@ -21,6 +22,7 @@ from c3parr.concert.models import Assembled
 from c3parr.core.errors import InvalidInput, ProviderError, Unavailable
 from c3parr.core.job import JobParams
 from c3parr.core.models import Cue, Model, Segment, Subtitle, Transcript
+from c3parr.engine.cache import file_sha256
 from c3parr.engine.engine import Recipe, RunResult, StepReport
 from c3parr.interfaces.metadata import MetadataRequest, MetadataResult
 from c3parr.interfaces.subtitle_source import SubtitleRequest
@@ -28,7 +30,7 @@ from c3parr.interfaces.sync import SyncRequest
 from c3parr.jobs.queue import Job
 from c3parr.library.store import AppConfig
 from c3parr.pipeline.catalog import Media, StepState, sha_of
-from c3parr.pipeline.naming import output_file, work_file
+from c3parr.pipeline.naming import output_file, songs_file, work_file
 from c3parr.pipeline.reconcile import PipelineContext, reconcile, work_files
 from c3parr.recipes import show as show_recipe
 from c3parr.recipes.pipeline import asr_recipe, metadata_step, subtitle_recipe
@@ -210,6 +212,12 @@ def do_show(ctx: PipelineContext, m: Media, job: Job, cfg: AppConfig, p: Progres
     for old in work_files(Path(m.video), "main").values():
         if Path(old) != dest:  # a gerada antes pelo ASR, em outro idioma: não vale mais
             Path(old).unlink(missing_ok=True)
+    # todas as músicas achadas, mesmo a que ficou só com o que foi ouvido: o contexto vale igual
+    spans = [{"title": s.title, "artist": s.artist, "start": s.start, "end": s.end}
+             for s in done.songs]  # fmt: skip
+    songs_file(Path(m.video)).write_text(
+        json.dumps({"main_sha256": file_sha256(dest), "songs": spans}), encoding="utf-8"
+    )
     official = done.counts.get("lyric", 0) + done.counts.get("lyric-heard", 0)
     warn = f"; {len(result.degradations)} warnings" if result.degradations else ""
     detail = (f"{len(done.songs)} songs, {official} lyric lines, "

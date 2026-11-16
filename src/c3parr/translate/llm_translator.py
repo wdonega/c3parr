@@ -82,6 +82,15 @@ Responda só com o JSON pedido, uma entrada por fala do bloco, com o mesmo id.
 Bíblia do filme:
 {bible}"""
 
+MUSIC_RULE = '- Música, avisos e créditos não são fala: devolva "texto" vazio para eles.'
+CONCERT_RULE = """- Este vídeo é um show. Cada bloco marcado com [MÚSICA: …] é uma música inteira
+  (ou uma parte dela). As falas que começam e terminam com ♪ são versos cantados: traduza o
+  sentido de cada verso, lendo a música como um todo (um verso continua no seguinte; o refrão
+  repetido sai igual), sem rimar à força, e mantenha o ♪ no começo e no fim. Nunca devolva
+  "texto" vazio para um verso. As falas sem ♪ são ditas, não cantadas (o cantor falando com o
+  público): traduza normalmente. Avisos e créditos não são fala: devolva "texto" vazio para eles."""
+SUNG = "♪"
+
 CONDENSE = """Encurte cada fala para caber no máximo de caracteres indicado, em {dst}, mantendo o
 sentido, o gênero e o tratamento. Responda só com o JSON pedido."""
 
@@ -117,16 +126,34 @@ def format_line(line: BlockLine, src: str) -> str:
 
 def format_block(block: Block, src: str) -> str:
     parts = []
+    same_song = block.song is not None and block.song_part > 0
     if block.previous:
-        parts.append("[CONTEXTO: outra cena, não traduzir]")
+        parts.append("[CONTEXTO: versos anteriores da mesma música, não traduzir de novo]"
+                     if same_song else "[CONTEXTO: outra cena, não traduzir]")  # fmt: skip
         parts += [
             f'  {_label(ln.speaker, ln.speaker_gender)} : "{ln.text}"' for ln in block.previous
         ]
-    if block.pause_before is not None:
+    if block.pause_before is not None and not same_song:
         parts.append(f"[--- pausa de {block.pause_before:.0f} s: outra cena ---]")
+    if block.song:
+        more = f" (parte {block.song_part + 1})" if same_song else ""
+        parts.append(f"[MÚSICA: {block.song}{more}]")
     parts.append(f"[BLOCO {block.index}]")
     parts += [format_line(ln, src) for ln in block.lines]
     return "\n".join(parts)
+
+
+def _sung(src: BlockLine, got: TranslatedLine) -> TranslatedLine:
+    """Num show, nenhum verso some: o que voltou vazio fica no original (o modelo às vezes ainda
+    trata letra como "música de fundo"), e o verso traduzido sai com o ♪ dos dois lados."""
+    if not src.text.strip().startswith(SUNG):
+        return got
+    text = got.texto.strip().strip(SUNG).strip()
+    if not text:
+        return got.model_copy(update={
+            "texto": src.text, "incerto": True, "fallback": True,
+            "motivo": "the model returned no text for a sung line; kept the original"})  # fmt: skip
+    return got.model_copy(update={"texto": f"{SUNG} {text} {SUNG}"})
 
 
 class LLMTranslator:
@@ -152,11 +179,15 @@ class LLMTranslator:
     ) -> Translation:
         dst = language_name(request.dst)
         bible_json = bible.model_dump_json(exclude_defaults=True)
-        system = SYSTEM.format(dst=dst, bible=bible_json)
+        concert = any(b.song for b in blocks)
+        template = SYSTEM.replace(MUSIC_RULE, CONCERT_RULE) if concert else SYSTEM
+        system = template.format(dst=dst, bible=bible_json)
         usage = TranslationUsage()
         out: list[TranslatedLine] = []
         for n, block in enumerate(blocks):
             lines, usage = self._block(system, block, request.src, dst, usage)
+            if concert:
+                lines = [_sung(src, got) for src, got in zip(block.lines, lines, strict=True)]
             out.extend(lines)
             progress((n + 1) / max(1, len(blocks)), f"block {n + 1} of {len(blocks)}")
         return Translation(lines=tuple(out), dst=request.dst, usage=usage)

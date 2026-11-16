@@ -4,12 +4,15 @@ Só vídeo, transcrição e tradução impedem o resultado completo. Sem traduç
 idioma original com os tempos certos, e a CLI termina com código diferente de zero.
 """
 
+import json
 from pathlib import Path
+from typing import Any
 
 from c3parr.core.bible import Bible
 from c3parr.core.errors import InvalidInput
 from c3parr.core.job import JobParams
 from c3parr.core.models import Subtitle, Transcript
+from c3parr.engine.cache import file_sha256
 from c3parr.engine.engine import Recipe, Step, StepContext
 from c3parr.interfaces import (
     context,
@@ -26,11 +29,12 @@ from c3parr.interfaces.sync import SyncResult
 from c3parr.interfaces.transcription import AudioRef, TranscriptionRequest
 from c3parr.interfaces.translation import Translation, TranslationRequest
 from c3parr.metadata.names import NamesResult, correct_names, hotwords
+from c3parr.pipeline.naming import songs_file
 from c3parr.recipes.sync import bridge_step, fetch_reference, sync_against_audio
 from c3parr.recipes.transcribe import WrittenFile, audio_step, output_stem
 from c3parr.store.memory import EpisodeKey, MemoryRecord, record_translation
 from c3parr.subtitle.format import FormatRules, cues_from_segments, cues_from_translation
-from c3parr.translate.blocks import BlockRules, build_blocks
+from c3parr.translate.blocks import BlockRules, SongSpan, build_blocks
 from c3parr.translate.languages import foreign_tag
 
 
@@ -145,8 +149,9 @@ def make_translate(block_rules: BlockRules) -> Step:
         transcript = current_transcript(ctx)
         bible = current_bible(ctx)
         blocks = build_blocks(
-            transcript.segments, bible, ref_texts(_sync(ctx), transcript), block_rules
-        )
+            transcript.segments, bible, ref_texts(_sync(ctx), transcript), block_rules,
+            concert_songs(ctx.params),
+        )  # fmt: skip
         request = TranslationRequest(dst=ctx.params.dst, src=transcript.language)
         result: Translation = ctx.component.translate(blocks, bible, request, ctx.progress)
         missing = {"contexto", "incerteza", "genero"} - ctx.component.info.capabilities
@@ -159,8 +164,29 @@ def make_translate(block_rules: BlockRules) -> Step:
         interface=translation.INTERFACE,
         required=True,
         needs=("transcricao", "nomes", "sincronizacao", "biblia", "contexto", "metadados"),
-        key_params=lambda p: {"dst": p.dst},
+        key_params=_translate_key,
     )
+
+
+def _translate_key(p: JobParams) -> dict[str, Any]:
+    """As músicas só entram na chave quando existem: a tradução de um filme não muda."""
+    found = concert_songs(p)
+    return {"dst": p.dst, **({"songs": [s.model_dump() for s in found]} if found else {})}
+
+
+def concert_songs(p: JobParams) -> tuple[SongSpan, ...]:
+    """As músicas do show cuja legenda principal está sendo traduzida (`p.ref`), quando a etapa
+    do show as deixou ao lado do vídeo; senão, nada (filme, série, show sem letra)."""
+    path = songs_file(Path(p.video))
+    if not p.ref or not path.exists():
+        return ()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("main_sha256") != file_sha256(Path(p.ref)):
+            return ()  # a principal mudou desde então (outra fonte, legenda editada)
+        return tuple(SongSpan.model_validate(s) for s in data.get("songs", []))
+    except (OSError, ValueError):
+        return ()
 
 
 def make_format(rules: FormatRules) -> Step:

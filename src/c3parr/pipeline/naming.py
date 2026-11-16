@@ -25,6 +25,12 @@ def work_file(video: Path, kind: str, lang: str | None = None) -> Path:
     return video.with_name(f"{video.stem}.{kind}{tail}{WORK_EXT}")
 
 
+def songs_file(video: Path) -> Path:
+    """As músicas de um show (título e de onde até onde), para a tradução ler cada uma como um
+    contexto. Guarda o hash da legenda principal de que saiu: com outra principal, não vale."""
+    return work_file(video, "songs")
+
+
 def output_file(video: Path, lang: str) -> Path:
     return video.with_name(f"{video.stem}.{lang}.{OURS_TAG}.srt")
 
