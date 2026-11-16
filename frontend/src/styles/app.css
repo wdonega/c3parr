@@ -1109,6 +1109,12 @@ button {
   white-space: nowrap;
 }
 
+/* A coluna do estado guarda os 150px para os botões das linhas ficarem alinhados. Numa lista em
+   que nenhuma linha tem o que pôr nela (tudo completo), ela some em vez de deixar um vão. */
+.rows:not(:has(.ep-state > *)) .ep-state {
+  display: none;
+}
+
 /* --- fila --- */
 
 .queue-layout {
