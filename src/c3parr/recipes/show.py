@@ -356,7 +356,8 @@ def hear_speech(ctx: StepContext) -> Spoken:
     fitted = _fitted(ctx)
     fallback = _base(transcript.language)
     taken = [(f.start, f.end) for s in fitted.songs for f in s.fits if f.accepted]
-    chunks = speech.outside(speech.free_chunks(voice.spans, taken), _windows(fitted))
+    spans = speech.union(voice.spans, speech.loud(Path(voice.path)))  # fala e canto
+    chunks = speech.outside(speech.free_chunks(spans, taken), _windows(fitted))
     long = [c for c in chunks if c[1] - c[0] >= speech.DETECT_MIN_S]
     short = [c for c in chunks if c[1] - c[0] < speech.DETECT_MIN_S]
     known: dict[speech.Chunk, str] = {}

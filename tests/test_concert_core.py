@@ -1,7 +1,11 @@
 """Legenda de show, a lógica sem modelos: palavras, músicas, provas, segunda escuta, fala e
 montagem. Tudo com letra inventada (`concertkit`)."""
 
+import math
+import struct
+import wave
 from itertools import pairwise
+from pathlib import Path
 
 from concertkit import catalogue, fit, played, song, sung, talk
 
@@ -304,6 +308,43 @@ def test_voice_already_covered_by_a_fitted_line_is_not_heard_again() -> None:
 
 def test_a_leftover_too_short_to_be_a_word_is_dropped() -> None:
     assert speech.free_chunks([(10.0, 13.0)], [(10.2, 12.9)]) == []
+
+
+def _voice_file(path: Path, stretches: list[tuple[float, float, float]], seconds: float) -> Path:
+    """Uma faixa de voz de mentira: um tom com o volume dado (0 a 1) em cada trecho, mudo fora."""
+    rate = 16000
+    samples = [0] * int(seconds * rate)
+    for start, end, level in stretches:
+        for n in range(int(start * rate), int(end * rate)):
+            samples[n] = int(32767 * level * math.sin(2 * math.pi * 220 * n / rate))
+    with wave.open(str(path), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+    return path
+
+
+def test_singing_the_voice_detector_misses_is_found_by_how_loud_the_voice_is(
+    tmp_path: Path,
+) -> None:
+    """Um verso de 10 s bem audível, um grito de 1 s e um resto de guitarra baixinho."""
+    voice = _voice_file(tmp_path / "voice.wav",
+                        [(5.0, 15.0, 0.1), (20.0, 21.0, 0.1), (30.0, 40.0, 0.002)], 45.0)  # fmt: skip
+    assert speech.loud(voice) == [(5.0, 15.0)]  # o grito é curto demais; o resto, baixo demais
+    # com o que o detector já tinha achado, sem repetir o que os dois cobrem
+    assert speech.union([(2.0, 6.0), (41.0, 43.0)], speech.loud(voice)) == [
+        (2.0, 15.0),
+        (41.0, 43.0),
+    ]
+
+
+def test_a_long_loud_stretch_comes_in_pieces_one_whisper_window_long(tmp_path: Path) -> None:
+    voice = _voice_file(tmp_path / "voice.wav", [(1.0, 71.0, 0.1)], 75.0)
+    got = speech.loud(voice)
+    assert got[0][0] == 1.0 and got[-1][1] == 71.0 and len(got) >= 3
+    assert all(b - a <= speech.MAX_S for a, b in got)
+    assert all(a == b for (_, a), (b, _) in pairwise(got))  # emendados, sem buraco
 
 
 def test_close_stretches_go_together_but_never_past_one_whisper_window() -> None:
