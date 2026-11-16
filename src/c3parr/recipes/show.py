@@ -104,9 +104,32 @@ def _fitted(ctx: StepContext) -> Fitted:
     return Fitted()
 
 
+SUNG_GAP_S = 45.0  # sem canto por mais que isto, dentro da música: solo ou conversa com o público
+
+
+def _sung(song: Played) -> list[tuple[float, float]]:
+    """Os trechos em que a música é cantada: o que a transcrição mostrou (do primeiro ao último
+    indício) e as linhas que o encaixe pôs com nota razoável, juntos quando ficam perto. Um verso
+    depois de um solo de minutos é outro trecho: o que há no meio (o cantor falando com o
+    público) não é letra."""
+    placed = sorted((f.start, f.end) for f in song.fits if f.accepted or f.score >= again.FIT)
+    out = [(song.first, song.last)]
+    for a, b in placed:
+        near = [
+            k for k, (lo, hi) in enumerate(out) if a <= hi + SUNG_GAP_S and b >= lo - SUNG_GAP_S
+        ]
+        if near:
+            lo = min([a, *(out[k][0] for k in near)])
+            hi = max([b, *(out[k][1] for k in near)])
+            out = [x for k, x in enumerate(out) if k not in near] + [(lo, hi)]
+        else:
+            out.append((a, b))
+    return sorted(out)
+
+
 def _windows(fitted: Fitted) -> list[tuple[float, float]]:
     """Onde vale a primeira transcrição (dentro de uma música com a letra encaixada)."""
-    return [(s.first - 10, s.last + 10) for s in fitted.songs if s.fits]
+    return [(a - 10, b + 10) for s in fitted.songs if s.fits for a, b in _sung(s)]
 
 
 def _phrase(start: float, end: float, text: str, confs: list[float | None]) -> Phrase:
@@ -233,8 +256,9 @@ def hear_again(ctx: StepContext) -> SecondListen:
     jobs: list[tuple[int, again.Ask]] = []
     for n, song in enumerate(fitted.songs):
         if song.fits:
-            window = (max(song.start, song.first - 15), min(song.end, song.last + 30))
-            jobs += [(n, ask) for ask in again.asks(song.lines, heard, song.fits, window)]
+            for a, b in _sung(song):  # a segunda escuta vai até onde a letra foi posta
+                window = (max(song.start, a - 15), min(song.end, b + 30))
+                jobs += [(n, ask) for ask in again.asks(song.lines, heard, song.fits, window)]
     memo_file = ctx.workdir / MEMO  # o que o Whisper já ouviu com cada dica: não pergunta de novo
     memo: dict[str, str] = {}
     if memo_file.exists():
@@ -506,22 +530,26 @@ def steps(rules: FormatRules, metadata_step: Step) -> tuple[Step, ...]:
              failure_effect="no official lyrics: the subtitle has only what was heard"),
         Step(name="transcricao", run=hear, output=Transcript, interface=transcription.INTERFACE,
              needs=("voz", "metadados", "letras"), key_params=lambda p: {"src": p.src}),
-        Step(name="musicas", run=set_list, output=Fitted, needs=("transcricao", "letras")),
-        Step(name="encaixe", run=fit_lines, output=Fitted, interface=lyric_fit.INTERFACE,
+        Step(name="musicas", version="2", run=set_list, output=Fitted,
+             needs=("transcricao", "letras")),
+        Step(name="encaixe", version="2", run=fit_lines, output=Fitted,
+             interface=lyric_fit.INTERFACE,
              required=False, needs=("voz", "transcricao", "musicas"),
              failure_effect="lyrics not fitted to the singing: only lines the transcript heard "
                             "show the official text"),
-        Step(name="segunda_escuta", run=hear_again, output=SecondListen,
+        Step(name="segunda_escuta", version="2", run=hear_again, output=SecondListen,
              interface=transcription.INTERFACE, required=False,
              needs=("voz", "transcricao", "encaixe"),
              failure_effect="repeated choruses keep what the first listen heard"),
-        Step(name="repetidas", run=fit_again, output=Fitted, interface=lyric_fit.INTERFACE,
+        Step(name="repetidas", version="2", run=fit_again, output=Fitted,
+             interface=lyric_fit.INTERFACE,
              required=False, needs=("voz", "encaixe", "segunda_escuta"),
              failure_effect="repeated choruses keep what the first listen heard"),
-        Step(name="fala", run=hear_speech, output=Spoken, interface=transcription.INTERFACE,
+        Step(name="fala", version="2", run=hear_speech, output=Spoken,
+             interface=transcription.INTERFACE,
              required=False, needs=("voz", "transcricao", "musicas", "encaixe", "repetidas"),
              failure_effect="speech between songs comes from the first listen, less reliable"),
-        Step(name="montagem", run=assemble, output=Assembled,
+        Step(name="montagem", version="2", run=assemble, output=Assembled,
              needs=("transcricao", "letras", "musicas", "encaixe", "segunda_escuta", "repetidas",
                     "fala"),
              key_params=lambda p: {"src": p.src}),

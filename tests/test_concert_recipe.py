@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from concertkit import song
+from concertkit import fit, played, song
 
 from c3parr.concert.fake import FakePlacer, FakePlacerConfig, FakeSeparator, FakeSeparatorConfig
 from c3parr.concert.fit import Fitted
@@ -210,6 +210,20 @@ def test_speech_outside_the_songs_is_heard_where_there_is_voice_in_its_own_langu
     assert spoken.languages == {"ja": 2, "en": 1}
     assert [r.language for _, r in whisper.requests] == [None, "ja", "en"]
     assert all(r.vad is False for _, r in whisper.requests)
+
+
+def test_a_verse_after_a_long_solo_is_its_own_sung_stretch() -> None:
+    """A música vai de 100 a 180 s na transcrição; o encaixe pôs mais três linhas aos 400 s. O
+    que há no meio (o solo, o cantor falando com o público) não é trecho cantado."""
+    lines = song("Alfa", 1, lines=8).lines
+    fits = [fit(n, 100.0 + 10.0 * n, 104.0 + 10.0 * n, 0.8, lines[n]) for n in range(5)]
+    fits += [fit(5, 400.0, 404.0, 0.8, lines[5]), fit(6, 405.0, 409.0, 0.3, lines[6]),
+             fit(7, 250.0, 254.0, 0.1, lines[7])]  # fmt: skip
+    fits = [f.model_copy(update={"accepted": f.score >= 0.5}) for f in fits]
+    played_song = played(lines, fits, 100.0, 180.0).model_copy(update={"start": 0.0, "end": 600.0})
+    # a linha de nota razoável (a 6) conta; a de nota baixa (a 7, no meio do solo), não
+    assert show._sung(played_song) == [(100.0, 180.0), (400.0, 409.0)]
+    assert show._windows(Fitted(songs=(played_song,))) == [(90.0, 190.0), (390.0, 419.0)]
 
 
 def test_a_long_stretch_of_talk_becomes_cues_that_fit_the_screen() -> None:

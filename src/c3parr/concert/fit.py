@@ -26,6 +26,8 @@ NEAR = 3  # linhas provadas de cada lado que dizem quanto o show está deslocado
 FAR_S = 60.0  # … a no máximo tanto tempo (no disco) da linha
 SAME_BARS_S = 3.0  # o deslocamento antes e depois difere mais que isso: o arranjo ali é outro
 STUDIO_S = 1.5  # folga entre onde a linha coube e onde o disco diz
+EDGE_PROOFS = 2  # linhas provadas de um lado só que bastam na ponta de um bloco da letra
+EDGE_WORDS = 3  # … para uma linha com pelo menos tantas palavras (linha curta cabe por acaso)
 SAME_TEXT = 85
 
 Why = Literal["", "forte", "ouvida", "vizinhas", "disco", "som", "primeira_escuta", "duracao"]
@@ -108,26 +110,56 @@ def studio(fits: Sequence[Fit], synced: Sequence[tuple[float, str]]) -> list[Fit
     depois (a banda toca ali os mesmos compassos do disco) e a linha coube nesse horário, vale.
     Medido em três shows: 92% a 96% das linhas provadas ficam a até 1,5 s do horário do disco, e
     com o horário de outra música no lugar do certo passa 1 de 237.
+
+    Na ponta de um bloco da letra (ver `_edge`) a prova vem de um lado só, e cada linha aceita
+    serve de prova às vizinhas. Medido em quatro shows: de 1 a 10 linhas a mais por show; com o
+    horário de outra música, de 0 a 4 a mais (em 49 a 124 candidatas).
     """
     out = list(fits)
     if not synced or len(synced) != max((f.line for f in fits), default=-1) + 1:
         return out
     at = [stamp for stamp, _ in synced]
-    proven = sorted((f for f in fits if f.accepted), key=lambda f: f.line)
-    for n, fit in enumerate(out):
-        if fit.accepted or fit.why or fit.score < WEAK:
-            continue
-        if fuzz.ratio(norm(synced[fit.line][1]), norm(fit.text)) < SAME_TEXT:
-            continue  # a letra com horário não é a mesma linha
-        before = [p.start - at[p.line] for p in reversed(proven)
-                  if p.line < fit.line and at[fit.line] - at[p.line] <= FAR_S][:NEAR]  # fmt: skip
-        after = [p.start - at[p.line] for p in proven
-                 if p.line > fit.line and at[p.line] - at[fit.line] <= FAR_S][:NEAR]  # fmt: skip
-        if not before or not after or abs(median(before) - median(after)) > SAME_BARS_S:
-            continue
-        if abs(fit.start - at[fit.line] - median(before + after)) <= STUDIO_S:
-            out[n] = fit.model_copy(update={"accepted": True, "why": "disco"})
+    changed = True
+    while changed:  # uma linha aceita vira prova para as vizinhas: repete até nada mudar
+        changed = False
+        proven = sorted((f for f in out if f.accepted), key=lambda f: f.line)
+        for n, fit in enumerate(out):
+            if fit.accepted or fit.why or fit.score < WEAK:
+                continue
+            if fuzz.ratio(norm(synced[fit.line][1]), norm(fit.text)) < SAME_TEXT:
+                continue  # a letra com horário não é a mesma linha
+            reach = [p for p in proven if abs(at[p.line] - at[fit.line]) <= FAR_S]
+            before = [p.start - at[p.line] for p in reversed(reach) if p.line < fit.line][:NEAR]
+            after = [p.start - at[p.line] for p in reach if p.line > fit.line][:NEAR]
+            if before and after:
+                if abs(median(before) - median(after)) > SAME_BARS_S:
+                    continue
+                shift = median(before + after)
+            else:
+                edge = _edge(fit.line, at, before, after)
+                if edge is None or len(fit.text.split()) < EDGE_WORDS:
+                    continue
+                shift = edge
+            if abs(fit.start - at[fit.line] - shift) <= STUDIO_S:
+                out[n] = fit.model_copy(update={"accepted": True, "why": "disco"})
+                changed = True
     return out
+
+
+def _edge(line: int, at: Sequence[float], before: Sequence[float],
+          after: Sequence[float]) -> float | None:  # fmt: skip
+    """O deslocamento para a linha na ponta de um bloco da letra: do outro lado dela o disco não
+    tem linha nenhuma por perto (começo ou fim da música, ou um solo de minutos), então a prova
+    só pode vir de um lado. Vale com duas linhas provadas desse lado dizendo o mesmo. Sem isso, o
+    verso que volta depois de um solo longo ficava sem prova: a primeira linha dele nunca tem
+    vizinha antes."""
+    side = before or after
+    if len(side) < EDGE_PROOFS or max(side) - min(side) > STUDIO_S:
+        return None
+    others = range(line) if not before else range(line + 1, len(at))
+    if any(abs(at[k] - at[line]) <= FAR_S for k in others):
+        return None  # há linha do disco desse lado: ela é que tinha de estar provada
+    return median(side)
 
 
 def studio_check(fits: Sequence[Fit], synced: Sequence[tuple[float, str]]) -> tuple[int, int]:

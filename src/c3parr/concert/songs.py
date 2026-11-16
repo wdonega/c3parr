@@ -25,6 +25,11 @@ MIN_WEIGHT = 4.0
 SAME_SONG_S = 480.0  # a mesma música de novo, sem outra no meio: é ela ainda (solo longo)
 NEAR_S = 45.0  # distância para uma ocorrência ser "colada" na vizinha
 ABSORB = 0.6  # fração dos trios dela que a letra da vizinha também tem
+BEFORE_S = 120.0  # janela mínima antes do primeiro indício e depois do último
+AFTER_S = 90.0
+STRETCH = 1.3  # ao vivo a música dura mais que no disco (solo estendido, conversa no meio)
+SLACK_S = 60.0
+LAST_LINE_S = 15.0  # o disco dá o começo de cada linha; a última ainda dura isto
 
 Trio = tuple[str, ...]
 
@@ -41,6 +46,7 @@ class Found:
     weight: float = 0.0
     start: float = 0.0  # janela para o encaixe: até onde a música pode se estender
     end: float = 0.0
+    first_line: int = 0  # a linha da letra do primeiro indício
     line_ids: set[int] = field(default_factory=set, repr=False)
     shingles: set[Trio] = field(default_factory=set, repr=False)
 
@@ -147,6 +153,7 @@ def find(words: Sequence[Heard], songs: Sequence[Song]) -> list[Found]:
         mine = [h for b in owned for h in hits[b][s]]
         cand = Found(s, songs[s].title, songs[s].artist, min(h[0] for h in mine),
                      max(h[0] for h in mine))  # fmt: skip
+        cand.first_line = min(min(mine, key=lambda h: h[0])[2])
         cand.shingles = {h[1] for h in mine}
         cand.line_ids = set().union(*(h[2] for h in mine))
         cand.hits, cand.lines = len(cand.shingles), len(cand.line_ids)
@@ -170,6 +177,7 @@ def find(words: Sequence[Heard], songs: Sequence[Song]) -> list[Found]:
                 if near_by and shared >= ABSORB * len(cand.shingles):
                     cand.song, cand.title, cand.artist = other.song, other.title, other.artist
                     cand.line_ids = set()
+                    cand.first_line = 0  # a linha era da outra letra: vale a música toda
                     changed = True
                     break
         merged = _join(merged, weight)
@@ -177,6 +185,20 @@ def find(words: Sequence[Heard], songs: Sequence[Song]) -> list[Found]:
     for n, cand in enumerate(merged):
         before = merged[n - 1].last + 5 if n else 0.0
         after = merged[n + 1].first - 5 if n + 1 < len(merged) else total
-        cand.start = max(before, cand.first - 120)
-        cand.end = min(after, cand.last + 90)
+        lead, tail = _studio(songs[cand.song], cand.first_line)
+        cand.start = max(before, cand.first - max(BEFORE_S, lead))
+        cand.end = min(after, max(cand.last + AFTER_S, cand.first + tail))
     return merged
+
+
+def _studio(song: Song, line: int) -> tuple[float, float]:
+    """Quanto de música o disco tem antes e depois da linha `line`, já com a folga do ao vivo:
+    até onde a janela precisa ir para caber a letra que ainda não foi ouvida. Um verso depois
+    de um solo de minutos, que a transcrição não pegou, ficava fora da janela e sem legenda.
+    Sem horários do disco, (0, 0): valem os mínimos."""
+    if not song.synced or len(song.synced) != len(song.lines) or line >= len(song.synced):
+        return 0.0, 0.0
+    at = song.synced[line][0]
+    lead = (at - song.synced[0][0]) * STRETCH + SLACK_S
+    tail = (song.synced[-1][0] + LAST_LINE_S - at) * STRETCH + SLACK_S
+    return lead, tail

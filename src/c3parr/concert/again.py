@@ -68,6 +68,8 @@ def regions(heard: Sequence[Phrase], taken: Sequence[Region], window: Region) ->
     free: list[Region] = []
     at = window[0]
     for a, b in sorted(taken):
+        if b <= window[0] or a >= window[1]:  # linha fora da janela: não abre trecho além dela
+            continue
         if a - at >= MIN_S:
             free.append((at, a))
         at = max(at, b)

@@ -93,6 +93,22 @@ def test_a_weak_fit_needs_the_transcript_to_have_heard_the_line() -> None:
     assert [(f.accepted, f.why) for f in got] == [(True, "ouvida"), (False, "")]
 
 
+def test_the_window_reaches_a_verse_the_record_has_after_a_long_solo() -> None:
+    """No disco, as dez últimas linhas vêm 4 minutos depois; no show só o começo foi ouvido."""
+    a = song("Alfa", 1, lines=30)
+    late = tuple((at + (240.0 if n >= 20 else 0.0), text) for n, (at, text) in enumerate(a.synced))
+    a = a.model_copy(update={"synced": late})
+    heard = sung(a.lines[:20], 100) + talk("thank you all good night", 900, 900)  # o show segue
+    (found,) = songs.find(heard, [a, song("Beta", 2)])
+    assert found.last < 185 and found.end > found.last + 300  # antes: só 90 s depois do último
+    # sem horário do disco, o mínimo de sempre; e a música seguinte continua sendo o limite
+    plain = a.model_copy(update={"synced": ()})
+    assert songs.find(heard, [plain])[0].end == songs.find(heard, [plain])[0].last + songs.AFTER_S
+    b = song("Beta", 2)
+    first, second = songs.find(heard + sung(b.lines, 300, segment=200), [a, b])
+    assert first.end == second.first - 5
+
+
 def test_a_line_between_two_proven_ones_is_accepted() -> None:
     got = rules.accept([fit(0, 10, 13, 0.8), fit(1, 14, 17, 0.3), fit(2, 18, 21, 0.8),
                         fit(3, 60, 63, 0.3)], [])  # fmt: skip
@@ -123,6 +139,48 @@ def test_the_studio_timing_proves_nothing_where_the_band_plays_another_arrangeme
     assert not rules.studio(live([0.8, 0.8, 0.3, 0.8, 0.8, 0.8], late=late), STUDIO)[2].accepted
 
 
+BLOCKS = tuple((10.0 + 4.0 * n + (280.0 if n >= 3 else 0.0), text) for n, text in enumerate(TEXTS))
+"""Três linhas, um solo de quase 5 minutos no disco, e as outras três."""
+
+
+def after_the_solo(scores: list[float], late: dict[int, float] | None = None,
+                   texts: tuple[str, ...] = TEXTS) -> list[rules.Fit]:  # fmt: skip
+    """No show o primeiro bloco está 100 s depois do disco, e o segundo, 150 s (solo estendido)."""
+    at = [BLOCKS[n][0] + (150.0 if n >= 3 else 100.0) + (late or {}).get(n, 0.0) for n in range(6)]
+    return rules.accept([fit(n, at[n], at[n] + 3.0, x, texts[n]) for n, x in enumerate(scores)], [])
+
+
+def test_the_first_line_after_a_long_solo_is_proven_by_the_lines_after_it() -> None:
+    """A linha 3 abre o bloco: antes dela o disco não tem linha por perto, só depois."""
+    got = rules.studio(after_the_solo([0.8, 0.8, 0.8, 0.3, 0.8, 0.8]), BLOCKS)
+    assert got[3].accepted and got[3].why == "disco"
+    # fora do horário do disco, ou com uma prova só do lado dela, não vale
+    assert not rules.studio(after_the_solo([0.8, 0.8, 0.8, 0.3, 0.8, 0.8], late={3: 4.0}), BLOCKS)[
+        3
+    ].accepted
+    assert not rules.studio(after_the_solo([0.8, 0.8, 0.8, 0.3, 0.8, 0.3]), BLOCKS)[3].accepted
+    # linha curta cabe em qualquer lugar: na ponta não é prova
+    short = (*TEXTS[:3], "amber river", *TEXTS[4:])
+    blocks = tuple((at, text) for (at, _), text in zip(BLOCKS, short, strict=True))
+    assert not rules.studio(after_the_solo([0.8, 0.8, 0.8, 0.3, 0.8, 0.8], texts=short), blocks)[
+        3
+    ].accepted
+
+
+def test_a_line_proven_at_the_edge_proves_the_ones_next_to_it() -> None:
+    """Só as duas últimas do bloco soam forte: a ponta (linha 3) vale por elas, e a 4 fica então
+    entre duas provadas."""
+    texts = (*TEXTS, "signal marble hollow ember")
+    blocks = (*BLOCKS, (BLOCKS[-1][0] + 4.0, texts[-1]))
+    at = [blocks[n][0] + (150.0 if n >= 3 else 100.0) for n in range(7)]
+    scores = [0.8, 0.8, 0.8, 0.3, 0.3, 0.8, 0.8]
+    fits = rules.accept([fit(n, at[n], at[n] + 3.0, x, texts[n]) for n, x in enumerate(scores)], [])
+    fits[4] = fits[4].model_copy(update={"accepted": False, "why": ""})  # sem a prova "vizinhas"
+    fits[3] = fits[3].model_copy(update={"accepted": False, "why": ""})
+    got = rules.studio(fits, blocks)
+    assert [(f.accepted, f.why) for f in got[3:5]] == [(True, "disco"), (True, "disco")]
+
+
 def test_the_studio_timing_needs_a_fit_and_the_same_lines() -> None:
     weak = [0.8, 0.8, 0.3, 0.8, 0.8, 0.8]
     assert not rules.studio(live([0.8, 0.8, 0.1, 0.8, 0.8, 0.8]), STUDIO)[2].accepted  # nada soa
@@ -151,6 +209,12 @@ def test_looks_only_where_something_was_heard_and_no_fitted_line_covers() -> Non
 def test_a_phrase_that_overlaps_a_fitted_line_keeps_only_the_part_outside() -> None:
     heard = [(42.0, 50.0, "metade na linha", 0.9)]
     assert again.regions(heard, [(40.0, 44.0)], (30.0, 80.0)) == [(44.0, 51.0)]
+
+
+def test_a_line_fitted_after_the_window_does_not_stretch_what_is_heard_again() -> None:
+    """Uma linha aceita minutos depois (o verso depois do solo) não abre trecho até ela."""
+    heard = [(42.0, 50.0, "na janela", 0.9), (120.0, 130.0, "no solo", 0.9)]
+    assert again.regions(heard, [(300.0, 304.0)], (30.0, 80.0)) == [(41.0, 51.0)]
 
 
 def test_neighbours_go_together_and_no_region_passes_one_whisper_window() -> None:
